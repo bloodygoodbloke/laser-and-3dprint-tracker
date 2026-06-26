@@ -32,3 +32,15 @@ model Material {
   updatedAt     DateTime @updatedAt
   jobs          Job[]
 }
+
+model JobCost {
+  id              String  @id @default(cuid())
+  jobId           String  @unique
+  materialCost    Float
+  electricityCost Float
+  labourCost      Float
+  overheadCost    Float
+  totalCost       Float
+  createdAt       DateTime @default(now())
+  job             Job     @relation(fields: [jobId], references: [id])
+}

@@ -14,3 +14,14 @@ Files changed in this release:
 
 Notes:
 - This is the initial release for documentation and does not reflect any API or database schema versioning beyond repository state.
+
+## [0.1.1] - 2026-06-26 21:43:52Z
+- Backend: added `JobCost` Prisma model and persisted cost calculations.
+- Backend: added `POST /api/jobs/:id/calculate-cost` to compute and store job costs (3D & laser examples).
+- Backend: added `POST /api/jobs/:id/upload` to update a job's `filePath`.
+- Added `.env.example` with cost calculation defaults.
+
+Files changed in this release:
+- `backend/prisma/schema.prisma` — added `JobCost` model.
+- `backend/src/routes/jobs.ts` — added upload and calculate-cost endpoints.
+- `.env.example` — example environment variables for rates.
