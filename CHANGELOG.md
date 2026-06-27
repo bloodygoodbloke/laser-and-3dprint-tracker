@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- No unreleased changes.
+
+## [0.4.0] - 2026-06-27
 - Added `IMPLEMENTATION_TRACKER.md` to track implemented, in-progress, and planned work.
 - Added `Last updated` and `Next 3 Tasks` sections to keep immediate priorities visible.
 - Updated `README.md` with a direct link to the implementation tracker.
@@ -18,6 +21,25 @@ All notable changes to this project will be documented in this file.
 - Wired job machine selectors to use managed machine profiles, seeded from existing default machine definitions and saved billing settings.
 - Updated README feature list to reflect Machines tab, workshop-cost billing language, and Admin backup tooling.
 - Added local run/health/restart guidance to README for faster recovery when frontend or backend services are not responding.
+- Added direct clickable local run links in README for app UI and API health endpoints.
+- Updated app naming in the UI/browser title to `Fabrication Workshop Tracker`.
+- Added delete-job action from expanded job cards in the Jobs tab.
+- Fixed billing numeric input behavior so fields can be cleared while editing instead of forcing `0` immediately.
+- Improved machine-profile lookup in cost calculation so depreciation settings still apply when saved machine names differ by casing/spacing.
+- Updated Jobs tab edit flow so the edit form renders directly under the expanded job card instead of in the side panel.
+- Added materials CSV import in Admin tools and grouped import/export controls by data type (jobs, materials, full backup).
+- Added business personalization settings (business name, logo URL, address) in Billing Rules and surfaced them in invoice output.
+- Added CRM Lite customer management with customer records (name, address, email, phone, notes) and per-customer order history.
+- Added backend customers API and backup/restore support for customer records in full snapshot workflows.
+- Fixed Help guide bug by adding a direct changelog reference link.
+- Updated invoice totals layout to use `SubTotal`, `Delivery`, and `VAT`, with Grand total calculated from all three.
+- Added configurable invoice add-ons in Billing Rules for delivery amount and VAT percent.
+- Updated job card breakdown to show separated internal cost lines for materials, electricity, depreciation, workshop, labour, and customer total.
+- Moved Business personalization out of Billing Rules into a dedicated Admin section.
+- Removed duplicate Add Material form from Admin and kept material create/edit flows in the Materials tab.
+- Updated app header to prefix title with business name, render business logo in the top-right, and moved jobs/materials status lozenge to Dashboard.
+- Added business contact fields (email, phone, website) to business settings and surfaced address/email/phone/website in both app footer and invoice footer.
+- Updated README and in-app Help content to reflect rename, job deletion workflow, and numeric input behavior.
 - Cleaned changelog release ordering by normalizing the initial release heading to `0.1.0` and placing `0.1.1` before it.
 - Updated in-app Help guide content to reflect current job creation, machine profile management, workshop-cost billing, invoice flow, backup options, and service health troubleshooting.
 
