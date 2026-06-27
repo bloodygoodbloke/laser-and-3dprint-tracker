@@ -1,11 +1,13 @@
 {
   "name": "laser-and-3dprint-frontend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:release": "node ../scripts/check-release-notes.js",
+    "preversion": "npm run check:release"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -15,7 +17,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "@tailwindcss/postcss7-compat": "^2.2.19",
+    "@tailwindcss/postcss7-compat": "^2.2.17",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.35",
     "tailwindcss": "^2.2.19",

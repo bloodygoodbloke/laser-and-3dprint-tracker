@@ -1,0 +1,161 @@
+import { Router } from "express";
+import prisma from "../prisma";
+
+const router = Router();
+
+router.get("/backup", async (_req, res) => {
+  const [jobs, materials, billingSettings, jobCosts] = await Promise.all([
+    prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
+    prisma.material.findMany(),
+    prisma.billingSetting.findMany(),
+    prisma.jobCost.findMany(),
+  ]);
+
+  res.json({ jobs, materials, billingSettings, jobCosts });
+});
+
+router.post("/backup", async (req, res) => {
+  const { jobs = [], materials = [] } = req.body || {};
+
+  await prisma.$transaction(async (tx) => {
+    await tx.jobCost.deleteMany();
+    await tx.job.deleteMany();
+    await tx.material.deleteMany();
+
+    for (const material of materials) {
+      await tx.material.create({
+        data: {
+          name: material.name,
+          type: material.type,
+          unit: material.unit,
+          color: material.color || "",
+          costPerUnit: Number(material.costPerUnit || 0),
+          stockLevel: Number(material.stockLevel || 0),
+          reorderThreshold: Number(material.reorderThreshold || 0),
+        },
+      });
+    }
+
+    for (const job of jobs) {
+      await tx.job.create({
+        data: {
+          jobNumber: job.jobNumber || `JOB-${String((jobs as Array<any>).indexOf(job) + 1).padStart(4, "0")}`,
+          name: job.name,
+          customer: job.customer,
+          machineType: job.machineType,
+          estTimeMinutes: Number(job.estTimeMinutes || 0),
+          machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
+          labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          status: job.status,
+        },
+      });
+    }
+  });
+
+  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length });
+});
+
+router.get("/backup/full", async (_req, res) => {
+  const [jobs, materials, billingSettings, jobCosts] = await Promise.all([
+    prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
+    prisma.material.findMany(),
+    prisma.billingSetting.findMany(),
+    prisma.jobCost.findMany(),
+  ]);
+
+  res.json({ jobs, materials, billingSettings, jobCosts });
+});
+
+router.post("/backup/full", async (req, res) => {
+  const { jobs = [], materials = [], billingSettings = [], jobCosts = [] } = req.body || {};
+
+  await prisma.$transaction(async (tx) => {
+    await tx.jobCost.deleteMany();
+    await tx.job.deleteMany();
+    await tx.material.deleteMany();
+    await tx.billingSetting.deleteMany();
+
+    const materialIdMap = new Map<string, string>();
+
+    for (const material of materials) {
+      const created = await tx.material.create({
+        data: {
+          name: material.name,
+          type: material.type,
+          unit: material.unit,
+          color: material.color || "",
+          costPerUnit: Number(material.costPerUnit || 0),
+          stockLevel: Number(material.stockLevel || 0),
+          reorderThreshold: Number(material.reorderThreshold || 0),
+        },
+      });
+      if (material.id) {
+        materialIdMap.set(material.id, created.id);
+      }
+    }
+
+    const billingSettingPayload = Array.isArray(billingSettings) ? billingSettings[0] : billingSettings;
+    if (billingSettingPayload) {
+      await tx.billingSetting.create({
+        data: {
+          ...billingSettingPayload,
+          id: undefined,
+          createdAt: undefined,
+          updatedAt: undefined,
+          machineElectricitySettings: JSON.stringify(billingSettingPayload.machineElectricitySettings || {}),
+        },
+      });
+    }
+
+    for (const job of jobs) {
+      const createdJob = await tx.job.create({
+        data: {
+          jobNumber: job.jobNumber || `JOB-${String((jobs as Array<any>).indexOf(job) + 1).padStart(4, "0")}`,
+          name: job.name,
+          customer: job.customer,
+          machineType: job.machineType,
+          estTimeMinutes: Number(job.estTimeMinutes || 0),
+          machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
+          labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          status: job.status,
+        },
+      });
+
+      if (Array.isArray(job.materials)) {
+        for (const entry of job.materials) {
+          const materialId = entry.materialId ? materialIdMap.get(entry.materialId) ?? null : null;
+          if (materialId) {
+            await tx.jobMaterial.create({
+              data: {
+                jobId: createdJob.id,
+                materialId,
+                usageQuantity: Number(entry.usageQuantity || 0),
+                usageUnit: entry.usageUnit || "g",
+                usageUnitCost: Number(entry.usageUnitCost || 0),
+              },
+            });
+          }
+        }
+      }
+
+      const jobCost = job.cost || jobCosts.find((cost: any) => cost.jobId === job.id);
+      if (jobCost) {
+        await tx.jobCost.create({
+          data: {
+            jobId: createdJob.id,
+            materialCost: Number(jobCost.materialCost || 0),
+            electricityCost: Number(jobCost.electricityCost || 0),
+            labourCost: Number(jobCost.labourCost || 0),
+            overheadCost: Number(jobCost.overheadCost || 0),
+            totalCost: Number(jobCost.totalCost || 0),
+            customerCharge: Number(jobCost.customerCharge || 0),
+          },
+        });
+      }
+    }
+  });
+
+  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, billingSettingsCount: Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0 });
+});
+
+export default router;
