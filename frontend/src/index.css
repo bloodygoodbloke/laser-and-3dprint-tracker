@@ -11,3 +11,14 @@ body {
   font-family: Inter, system-ui, sans-serif;
   background: #020617;
 }
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

@@ -7,40 +7,81 @@ datasource db {
   url      = "file:./dev.db"
 }
 
+model BillingSetting {
+  id                      String   @id @default(cuid())
+  materialMarkupPercent   Float    @default(0)
+  materialMarkupAmount    Float    @default(0)
+  materialTypeMarkups     String   @default("{}")
+  electricityMarkupPercent Float   @default(0)
+  electricityMarkupAmount  Float    @default(0)
+  labourMarkupPercent     Float    @default(0)
+  labourMarkupAmount      Float    @default(0)
+  overheadMarkupPercent   Float    @default(0)
+  overheadMarkupAmount    Float    @default(0)
+  electricityCostPerKwh   Float    @default(0.2)
+  depreciationCost        Float    @default(0)
+  depreciationHours       Float    @default(0)
+  labourRate              Float    @default(20)
+  workshopHourlyRate      Float    @default(0)
+  overheadPercent         Float    @default(0.15)
+  machineElectricitySettings String @default("{}")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
 model Job {
-  id           String   @id @default(cuid())
-  title        String
-  description  String?
-  type         String
-  status       String   @default("PENDING")
-  materialId   String?
-  material     Material? @relation(fields: [materialId], references: [id])
-  costCents    Int      @default(0)
-  estimatedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String            @id @default(cuid())
+  jobNumber       String            @unique @default("")
+  name            String
+  customer        String?
+  filePath        String?
+  machineType     String
+  estTimeMinutes  Int
+  machineRunTimeMinutes Int         @default(0)
+  labourTimeMinutes Int             @default(0)
+  status          String            @default("Pending")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  materials       JobMaterial[]
+  cost            JobCost?
 }
 
 model Material {
-  id            String   @id @default(cuid())
-  name          String
-  category      String
-  unitCostCents Int
-  quantity      Float
-  unit          String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  jobs          Job[]
+  id               String         @id @default(cuid())
+  name             String
+  type             String
+  unit             String
+  color            String         @default("")
+  costPerUnit      Float
+  stockLevel       Float
+  reorderThreshold Float
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  jobs             JobMaterial[]
+}
+
+model JobMaterial {
+  id                 String   @id @default(cuid())
+  jobId              String
+  materialId         String
+  usageQuantity      Float    @default(0)
+  usageUnit          String   @default("g")
+  usageUnitCost      Float    @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  job                Job      @relation(fields: [jobId], references: [id])
+  material           Material @relation(fields: [materialId], references: [id])
 }
 
 model JobCost {
-  id              String  @id @default(cuid())
-  jobId           String  @unique
-  materialCost    Float
-  electricityCost Float
-  labourCost      Float
-  overheadCost    Float
-  totalCost       Float
-  createdAt       DateTime @default(now())
-  job             Job     @relation(fields: [jobId], references: [id])
+  id               String   @id @default(cuid())
+  jobId            String   @unique
+  materialCost     Float
+  electricityCost  Float
+  labourCost       Float
+  overheadCost     Float
+  totalCost        Float
+  customerCharge   Float    @default(0)
+  createdAt        DateTime @default(now())
+  job              Job      @relation(fields: [jobId], references: [id])
 }

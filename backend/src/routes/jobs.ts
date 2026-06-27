@@ -1,38 +1,50 @@
 import { Router } from "express";
 import prisma from "../prisma";
+import { upload } from "../upload";
 
 const router = Router();
 
 router.get("/", async (_req, res) => {
-  const jobs = await prisma.job.findMany({ include: { material: true } });
+  const jobs = await prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } });
   res.json(jobs);
 });
 
 router.post("/", async (req, res) => {
-  const { title, description, type, status, materialId, costCents, estimatedAt } = req.body;
+  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
+
+  const jobsCount = await prisma.job.count();
+  const generatedNumber = jobNumber || `JOB-${String(jobsCount + 1).padStart(4, "0")}`;
 
   const job = await prisma.job.create({
     data: {
-      title,
-      description,
-      type,
-      status,
-      materialId,
-      costCents,
-      estimatedAt: estimatedAt ? new Date(estimatedAt) : null,
+      jobNumber: generatedNumber,
+      name,
+      customer,
+      machineType,
+      estTimeMinutes: Number(estTimeMinutes || 0),
+      machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
+      labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+      status: status || "Pending",
+      materials: {
+        create: materials.map((entry: any) => ({
+          materialId: entry.materialId,
+          usageQuantity: Number(entry.usageQuantity || 0),
+          usageUnit: entry.usageUnit || "g",
+          usageUnitCost: Number(entry.usageUnitCost || 0),
+        })),
+      },
     },
-    include: { material: true },
+    include: { materials: { include: { material: true } }, cost: true },
   });
 
   res.status(201).json(job);
 });
 
-// Simple file upload/update endpoint (accepts filePath in JSON body)
-router.post('/:id/upload', async (req, res) => {
+router.post('/:id/upload', upload.single('file'), async (req, res) => {
   const { id } = req.params;
-  const { filePath } = req.body;
 
   try {
+    const filePath = req.file ? `/uploads/${req.file.filename}` : null;
     const job = await prisma.job.update({ where: { id }, data: { filePath } });
     res.json(job);
   } catch (error) {
@@ -44,7 +56,7 @@ router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const job = await prisma.job.findUnique({
     where: { id },
-    include: { material: true },
+    include: { materials: { include: { material: true } }, cost: true },
   });
 
   if (!job) {
@@ -56,21 +68,32 @@ router.get("/:id", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { title, description, type, status, materialId, costCents, estimatedAt } = req.body;
+  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
 
   try {
+    await prisma.jobMaterial.deleteMany({ where: { jobId: id } });
+
     const job = await prisma.job.update({
       where: { id },
       data: {
-        title,
-        description,
-        type,
+        jobNumber: jobNumber || undefined,
+        name,
+        customer,
+        machineType,
+        estTimeMinutes: Number(estTimeMinutes || 0),
+        machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
+        labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
         status,
-        materialId,
-        costCents,
-        estimatedAt: estimatedAt ? new Date(estimatedAt) : null,
+        materials: {
+          create: materials.map((entry: any) => ({
+            materialId: entry.materialId,
+            usageQuantity: Number(entry.usageQuantity || 0),
+            usageUnit: entry.usageUnit || "g",
+            usageUnitCost: Number(entry.usageUnitCost || 0),
+          })),
+        },
       },
-      include: { material: true },
+      include: { materials: { include: { material: true } }, cost: true },
     });
 
     res.json(job);
@@ -90,83 +113,108 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Calculate cost for a job and store result in JobCost (creates or updates)
 router.post('/:id/calculate-cost', async (req, res) => {
   const { id } = req.params;
   const payload = req.body || {};
 
-  // configurable rates via env with sensible defaults
-  const KWH_RATE = parseFloat(process.env.KWH_RATE || '0.20');
-  const LABOUR_RATE = parseFloat(process.env.LABOUR_RATE || '20');
-  const OVERHEAD_PERCENT = parseFloat(process.env.OVERHEAD_PERCENT || '0.15');
+  const billingSettings = await prisma.billingSetting.findMany();
+  const settings = billingSettings[0];
+  const KWH_RATE = settings?.electricityCostPerKwh ?? parseFloat(process.env.KWH_RATE || '0.20');
+  const LABOUR_RATE = settings?.labourRate ?? parseFloat(process.env.LABOUR_RATE || '20');
+  const WORKSHOP_HOURLY_RATE = settings?.workshopHourlyRate ?? 0;
+  const MATERIAL_MARKUP_PERCENT = Number(settings?.materialMarkupPercent) > 0 ? Number(settings?.materialMarkupPercent) : 25;
+  const ELECTRICITY_MARKUP_PERCENT = Number(settings?.electricityMarkupPercent) > 0 ? Number(settings?.electricityMarkupPercent) : 25;
+  const DEPRECIATION_COST = settings?.depreciationCost ?? 0;
+  const DEPRECIATION_HOURS = settings?.depreciationHours ?? 0;
 
   try {
-    const job = await prisma.job.findUnique({ where: { id }, include: { material: true } });
+    const job = await prisma.job.findUnique({ where: { id }, include: { materials: { include: { material: true } } } });
     if (!job) return res.status(404).json({ error: 'Job not found' });
 
-    // Determine calculation mode: '3d' or 'laser'
     const mode = payload.mode || '3d';
+    const machineName = String(payload.machineName || job.machineType || 'Other');
+    const machineSettings = settings?.machineElectricitySettings ? JSON.parse(String(settings.machineElectricitySettings || '{}')) : {};
+    const selectedMachine = machineSettings[machineName] || {};
+    const machineWattage = Number(selectedMachine?.wattage ?? payload.wattage ?? process.env.PRINTER_WATTAGE ?? (mode === 'laser' ? process.env.LASER_WATTAGE : process.env.PRINTER_WATTAGE) ?? 120);
+    const machineDepreciationCost = Number(selectedMachine?.depreciationCost ?? DEPRECIATION_COST ?? 0);
+    const machineReplacementRunHours = Number(selectedMachine?.replacementRunHours ?? DEPRECIATION_HOURS ?? 0);
+    const materialTypeMarkups = settings?.materialTypeMarkups ? JSON.parse(String(settings.materialTypeMarkups || '{}')) : {};
+    const materialTypeById = new Map(job.materials.map((entry) => [entry.materialId, entry.material?.type || 'Other']));
 
     let materialCost = 0;
     let electricityCost = 0;
     let labourCost = 0;
 
+    const machineRunTimeMinutes = Number(payload.machineRunTimeMinutes ?? payload.printTimeMinutes ?? payload.laserMinutes ?? job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
+    const labourTimeMinutes = Number(payload.labourTimeMinutes ?? job.labourTimeMinutes ?? machineRunTimeMinutes);
+    const depreciationCost = machineReplacementRunHours > 0 ? (machineRunTimeMinutes / 60) * (machineDepreciationCost / machineReplacementRunHours) : 0;
+    let materialTypeMarkupCharge = 0;
+
     if (mode === '3d') {
-      const gramsUsed = Number(payload.gramsUsed || 0);
-      const costPerGram = Number(payload.costPerGram ?? (job.material ? job.material.unitCostCents / 100 : 0));
-      const printTimeMinutes = Number(payload.printTimeMinutes || 0);
-      const printerWattage = Number(payload.printerWattage || process.env.PRINTER_WATTAGE || 120);
+      const materialEntries = Array.isArray(payload.materials) ? payload.materials : [];
 
-      materialCost = gramsUsed * costPerGram;
-      electricityCost = (printTimeMinutes / 60) * KWH_RATE * (printerWattage / 1000);
-      labourCost = (printTimeMinutes / 60) * LABOUR_RATE;
+      if (materialEntries.length) {
+        materialCost = materialEntries.reduce((sum: number, entry: any) => sum + (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)), 0);
+        materialTypeMarkupCharge = materialEntries.reduce((sum: number, entry: any) => {
+          const materialType = String(entry?.material?.type || entry?.type || materialTypeById.get(String(entry.materialId || '')) || 'Other');
+          const typeRule = materialTypeMarkups[materialType] || { percent: 25 };
+          const lineBase = Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0);
+          const typeMarkupPercent = Number(typeRule.percent) > 0 ? Number(typeRule.percent) : 25;
+          return sum + (lineBase * (typeMarkupPercent / 100));
+        }, 0);
+      } else {
+        const gramsUsed = Number(payload.gramsUsed || 0);
+        const costPerGram = Number(payload.costPerGram ?? (job.materials[0]?.material?.costPerUnit || 0));
+        materialCost = gramsUsed * costPerGram;
+      }
+      electricityCost = ((machineRunTimeMinutes / 60) * KWH_RATE * (machineWattage / 1000)) + depreciationCost;
+      labourCost = (labourTimeMinutes / 60) * LABOUR_RATE;
     } else if (mode === 'laser') {
-      const areaUsed = Number(payload.areaUsed || 0);
-      const costPerArea = Number(payload.costPerArea || 0);
-      const sheetCost = Number(payload.sheetCost || 0);
-      const laserMinutes = Number(payload.laserMinutes || 0);
-      const laserWattage = Number(payload.laserWattage || process.env.LASER_WATTAGE || 40);
+      const materialEntries = Array.isArray(payload.materials) ? payload.materials : [];
 
-      materialCost = sheetCost > 0 ? sheetCost : areaUsed * costPerArea;
-      electricityCost = (laserMinutes / 60) * (laserWattage / 1000) * KWH_RATE;
-      labourCost = (laserMinutes / 60) * LABOUR_RATE;
+      if (materialEntries.length) {
+        materialCost = materialEntries.reduce((sum: number, entry: any) => sum + (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)), 0);
+        materialTypeMarkupCharge = materialEntries.reduce((sum: number, entry: any) => {
+          const materialType = String(entry?.material?.type || entry?.type || materialTypeById.get(String(entry.materialId || '')) || 'Other');
+          const typeRule = materialTypeMarkups[materialType] || { percent: 25 };
+          const lineBase = Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0);
+          const typeMarkupPercent = Number(typeRule.percent) > 0 ? Number(typeRule.percent) : 25;
+          return sum + (lineBase * (typeMarkupPercent / 100));
+        }, 0);
+      } else {
+        const areaUsed = Number(payload.areaUsed || 0);
+        const costPerArea = Number(payload.costPerArea || 0);
+        const sheetCost = Number(payload.sheetCost || 0);
+        materialCost = sheetCost > 0 ? sheetCost : areaUsed * costPerArea;
+      }
+      electricityCost = ((machineRunTimeMinutes / 60) * (machineWattage / 1000) * KWH_RATE) + depreciationCost;
+      labourCost = (labourTimeMinutes / 60) * LABOUR_RATE;
     }
 
     const subtotal = materialCost + electricityCost + labourCost;
-    const overheadCost = subtotal * OVERHEAD_PERCENT;
+    const overheadCost = (machineRunTimeMinutes / 60) * WORKSHOP_HOURLY_RATE;
     const totalCost = subtotal + overheadCost;
 
-    // persist JobCost (create or update)
+    const materialCharge = materialCost + materialTypeMarkupCharge + (materialCost * (MATERIAL_MARKUP_PERCENT / 100));
+    const electricityCharge = electricityCost + (electricityCost * (ELECTRICITY_MARKUP_PERCENT / 100));
+    const labourCharge = labourCost;
+    const overheadCharge = overheadCost;
+    const customerCharge = materialCharge + electricityCharge + labourCharge + overheadCharge;
+
     const existing = await prisma.jobCost.findUnique({ where: { jobId: id } });
 
     if (existing) {
       await prisma.jobCost.update({
         where: { jobId: id },
-        data: {
-          materialCost,
-          electricityCost,
-          labourCost,
-          overheadCost,
-          totalCost,
-        },
+        data: { materialCost, electricityCost, labourCost, overheadCost, totalCost, customerCharge },
       });
     } else {
       await prisma.jobCost.create({
-        data: {
-          jobId: id,
-          materialCost,
-          electricityCost,
-          labourCost,
-          overheadCost,
-          totalCost,
-        },
+        data: { jobId: id, materialCost, electricityCost, labourCost, overheadCost, totalCost, customerCharge },
       });
     }
 
-    // update job summary costCents
-    await prisma.job.update({ where: { id }, data: { costCents: Math.round(totalCost * 100) } });
-
-    res.json({ materialCost, electricityCost, labourCost, overheadCost, totalCost });
+    res.json({ materialCost, electricityCost, labourCost, overheadCost, totalCost, customerCharge });
   } catch (error) {
     console.error('calculate-cost error', error);
     res.status(500).json({ error: 'Calculation failed' });

@@ -9,15 +9,17 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, category, unitCostCents, quantity, unit } = req.body;
+  const { name, type, unit, color, costPerUnit, stockLevel, reorderThreshold } = req.body;
 
   const material = await prisma.material.create({
     data: {
       name,
-      category,
-      unitCostCents,
-      quantity,
+      type,
       unit,
+      color: color || "",
+      costPerUnit: Number(costPerUnit || 0),
+      stockLevel: Number(stockLevel || 0),
+      reorderThreshold: Number(reorderThreshold || 0),
     },
     include: { jobs: true },
   });
@@ -41,17 +43,19 @@ router.get("/:id", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, category, unitCostCents, quantity, unit } = req.body;
+  const { name, type, unit, color, costPerUnit, stockLevel, reorderThreshold } = req.body;
 
   try {
     const material = await prisma.material.update({
       where: { id },
       data: {
         name,
-        category,
-        unitCostCents,
-        quantity,
+        type,
         unit,
+        color: color || "",
+        costPerUnit: Number(costPerUnit || 0),
+        stockLevel: Number(stockLevel || 0),
+        reorderThreshold: Number(reorderThreshold || 0),
       },
       include: { jobs: true },
     });
@@ -71,6 +75,60 @@ router.delete("/:id", async (req, res) => {
   } catch (error) {
     res.status(404).json({ error: "Material not found" });
   }
+});
+
+router.post("/backup", async (req, res) => {
+  const { jobs = [], materials = [] } = req.body || {};
+
+  await prisma.job.deleteMany();
+  await prisma.material.deleteMany();
+
+  for (const material of materials) {
+    await prisma.material.create({
+      data: {
+        name: material.name,
+        type: material.type,
+        unit: material.unit,
+        color: material.color || "",
+        costPerUnit: Number(material.costPerUnit || 0),
+        stockLevel: Number(material.stockLevel || 0),
+        reorderThreshold: Number(material.reorderThreshold || 0),
+      },
+    });
+  }
+
+  for (const job of jobs) {
+    await prisma.job.create({
+      data: {
+        jobNumber: job.jobNumber || `JOB-${String((jobs as Array<any>).indexOf(job) + 1).padStart(4, "0")}`,
+        name: job.name,
+        customer: job.customer,
+        machineType: job.machineType,
+        estTimeMinutes: Number(job.estTimeMinutes || 0),
+        status: job.status,
+      },
+    });
+  }
+
+  res.json({ restored: true });
+});
+
+router.post("/seed", async (_req, res) => {
+  const starterMaterials = [
+    { name: "PLA", type: "Filament", unit: "g", color: "Red", costPerUnit: 0.025, stockLevel: 1000, reorderThreshold: 200 },
+    { name: "PLA", type: "Filament", unit: "g", color: "Blue", costPerUnit: 0.025, stockLevel: 1000, reorderThreshold: 200 },
+    { name: "PLA", type: "Filament", unit: "g", color: "White", costPerUnit: 0.025, stockLevel: 1000, reorderThreshold: 200 },
+    { name: "PLA", type: "Filament", unit: "g", color: "Black", costPerUnit: 0.025, stockLevel: 1000, reorderThreshold: 200 },
+    { name: "PETG", type: "Filament", unit: "g", color: "Red", costPerUnit: 0.03, stockLevel: 1000, reorderThreshold: 200 },
+    { name: "PETG", type: "Filament", unit: "g", color: "Blue", costPerUnit: 0.03, stockLevel: 1000, reorderThreshold: 200 },
+    { name: "PETG", type: "Filament", unit: "g", color: "White", costPerUnit: 0.03, stockLevel: 1000, reorderThreshold: 200 },
+    { name: "PETG", type: "Filament", unit: "g", color: "Black", costPerUnit: 0.03, stockLevel: 1000, reorderThreshold: 200 },
+  ];
+
+  await prisma.material.deleteMany();
+  const created = await Promise.all(starterMaterials.map((material) => prisma.material.create({ data: material })));
+
+  res.json({ created: created.length });
 });
 
 export default router;
