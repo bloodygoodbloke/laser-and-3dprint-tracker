@@ -1,4 +1,4 @@
-import { BillingSettings, Job, Material } from "./types";
+import { BillingSettings, Customer, Job, Material } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
@@ -27,6 +27,12 @@ const api = {
     if (!res.ok) throw new Error("Failed to update job");
     return res.json();
   },
+  async deleteJob(id: string) {
+    const res = await fetch(`/api/jobs/${id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete job");
+  },
   async getMaterials(): Promise<Material[]> {
     const res = await fetch("/api/materials");
     if (!res.ok) throw new Error("Failed to load materials");
@@ -35,6 +41,40 @@ const api = {
   async seedMaterials() {
     const res = await fetch("/api/materials/seed", { method: "POST" });
     if (!res.ok) throw new Error("Failed to seed materials");
+    return res.json();
+  },
+  async getCustomers(): Promise<Customer[]> {
+    const res = await fetch("/api/customers");
+    if (!res.ok) throw new Error("Failed to load customers");
+    return res.json();
+  },
+  async createCustomer(payload: Partial<Customer>) {
+    const res = await fetch("/api/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to create customer");
+    return res.json();
+  },
+  async updateCustomer(id: string, payload: Partial<Customer>) {
+    const res = await fetch(`/api/customers/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to update customer");
+    return res.json();
+  },
+  async deleteCustomer(id: string) {
+    const res = await fetch(`/api/customers/${id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error("Failed to delete customer");
+  },
+  async getCustomerOrders(id: string): Promise<{ customer: Customer; jobs: Job[] }> {
+    const res = await fetch(`/api/customers/${id}/orders`);
+    if (!res.ok) throw new Error("Failed to load customer orders");
     return res.json();
   },
   async createMaterial(payload: Partial<Material>) {
@@ -84,6 +124,15 @@ const api = {
   async exportMaterialsCsv(materials: Material[]) {
     const rows = materials.map((material) => [material.name, material.type, material.unit, String(material.costPerUnit), String(material.stockLevel), String(material.reorderThreshold), material.color || ""].join(","));
     return `${materialsCsvHeader}${rows.join("\n")}`;
+  },
+  async importMaterialsCsv(payload: { materials: Partial<Material>[] }) {
+    const res = await fetch("/api/materials/import-csv", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to import materials CSV");
+    return res.json();
   },
   async importBackup(payload: { jobs: Job[]; materials: Material[] }) {
     const res = await fetch("/api/admin/backup", {

@@ -4,14 +4,15 @@ import prisma from "../prisma";
 const router = Router();
 
 router.get("/backup", async (_req, res) => {
-  const [jobs, materials, billingSettings, jobCosts] = await Promise.all([
+  const [jobs, materials, billingSettings, jobCosts, customers] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
     prisma.billingSetting.findMany(),
     prisma.jobCost.findMany(),
+    prisma.customer.findMany(),
   ]);
 
-  res.json({ jobs, materials, billingSettings, jobCosts });
+  res.json({ jobs, materials, billingSettings, jobCosts, customers });
 });
 
 router.post("/backup", async (req, res) => {
@@ -56,23 +57,25 @@ router.post("/backup", async (req, res) => {
 });
 
 router.get("/backup/full", async (_req, res) => {
-  const [jobs, materials, billingSettings, jobCosts] = await Promise.all([
+  const [jobs, materials, billingSettings, jobCosts, customers] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
     prisma.billingSetting.findMany(),
     prisma.jobCost.findMany(),
+    prisma.customer.findMany(),
   ]);
 
-  res.json({ jobs, materials, billingSettings, jobCosts });
+  res.json({ jobs, materials, billingSettings, jobCosts, customers });
 });
 
 router.post("/backup/full", async (req, res) => {
-  const { jobs = [], materials = [], billingSettings = [], jobCosts = [] } = req.body || {};
+  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [] } = req.body || {};
 
   await prisma.$transaction(async (tx) => {
     await tx.jobCost.deleteMany();
     await tx.job.deleteMany();
     await tx.material.deleteMany();
+    await tx.customer.deleteMany();
     await tx.billingSetting.deleteMany();
 
     const materialIdMap = new Map<string, string>();
@@ -103,6 +106,18 @@ router.post("/backup/full", async (req, res) => {
           createdAt: undefined,
           updatedAt: undefined,
           machineElectricitySettings: JSON.stringify(billingSettingPayload.machineElectricitySettings || {}),
+        },
+      });
+    }
+
+    for (const customer of customers) {
+      await tx.customer.create({
+        data: {
+          name: String(customer.name || "").trim(),
+          address: String(customer.address || "").trim(),
+          email: String(customer.email || "").trim(),
+          phone: String(customer.phone || "").trim(),
+          notes: String(customer.notes || "").trim(),
         },
       });
     }
@@ -155,7 +170,7 @@ router.post("/backup/full", async (req, res) => {
     }
   });
 
-  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, billingSettingsCount: Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0 });
+  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, billingSettingsCount: Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0, customersCount: customers.length });
 });
 
 export default router;

@@ -9,6 +9,12 @@ datasource db {
 
 model BillingSetting {
   id                      String   @id @default(cuid())
+  businessName            String   @default("")
+  businessLogoUrl         String   @default("")
+  businessAddress         String   @default("")
+  businessEmail           String   @default("")
+  businessPhone           String   @default("")
+  businessWebsite         String   @default("")
   materialMarkupPercent   Float    @default(0)
   materialMarkupAmount    Float    @default(0)
   materialTypeMarkups     String   @default("{}")
@@ -21,12 +27,26 @@ model BillingSetting {
   electricityCostPerKwh   Float    @default(0.2)
   depreciationCost        Float    @default(0)
   depreciationHours       Float    @default(0)
+  depreciationMarkupPercent Float  @default(0)
   labourRate              Float    @default(20)
   workshopHourlyRate      Float    @default(0)
+  deliveryAmount          Float    @default(0)
+  vatPercent              Float    @default(0)
   overheadPercent         Float    @default(0.15)
   machineElectricitySettings String @default("{}")
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  address     String   @default("")
+  email       String   @default("")
+  phone       String   @default("")
+  notes       String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Job {

@@ -3,7 +3,13 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
-- No unreleased changes.
+- Fixed invoice print/PDF action by rendering a dedicated print view window before invoking browser print.
+- Added an explicit Close invoice action in the invoice panel so users can exit invoice mode without changing tabs.
+- Added customer-capture popup during job creation when a new customer name is entered, allowing immediate CRM Lite record creation.
+- Updated material-type markup defaults so customer material charge is calculated as global material markup plus only configured material-type markup (no implicit extra default type markup).
+- Updated in-app Help content for the job customer popup and invoice action flow.
+- Updated invoice opening behavior so Create invoice now opens directly under the selected expanded job card (matching Edit job placement).
+- Simplified invoice line copy by removing extra Materials and Production-cost description text and moving labour minutes into the Labour line label.
 
 ## [0.4.0] - 2026-06-27
 - Added `IMPLEMENTATION_TRACKER.md` to track implemented, in-progress, and planned work.
@@ -39,6 +45,7 @@ All notable changes to this project will be documented in this file.
 - Removed duplicate Add Material form from Admin and kept material create/edit flows in the Materials tab.
 - Updated app header to prefix title with business name, render business logo in the top-right, and moved jobs/materials status lozenge to Dashboard.
 - Added business contact fields (email, phone, website) to business settings and surfaced address/email/phone/website in both app footer and invoice footer.
+- Expanded business personalization to include name, logo, address, email, phone, and website, and applied those details across header branding, invoice identity/footer, and app footer contact display.
 - Updated README and in-app Help content to reflect rename, job deletion workflow, and numeric input behavior.
 - Cleaned changelog release ordering by normalizing the initial release heading to `0.1.0` and placing `0.1.1` before it.
 - Updated in-app Help guide content to reflect current job creation, machine profile management, workshop-cost billing, invoice flow, backup options, and service health troubleshooting.

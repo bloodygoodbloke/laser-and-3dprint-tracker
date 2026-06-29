@@ -5,6 +5,7 @@ import jobsRouter from "./routes/jobs";
 import materialsRouter from "./routes/materials";
 import billingRouter from "./routes/billing";
 import adminRouter from "./routes/admin";
+import customersRouter from "./routes/customers";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use("/api/jobs", jobsRouter);
 app.use("/api/materials", materialsRouter);
 app.use("/api/billing-settings", billingRouter);
+app.use("/api/customers", customersRouter);
 app.use("/api/admin", adminRouter);
 app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
 

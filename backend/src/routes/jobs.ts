@@ -106,10 +106,15 @@ router.delete("/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    await prisma.job.delete({ where: { id } });
+    // Delete dependent records first because JobMaterial and JobCost relations are restrictive.
+    await prisma.$transaction(async (tx) => {
+      await tx.jobMaterial.deleteMany({ where: { jobId: id } });
+      await tx.jobCost.deleteMany({ where: { jobId: id } });
+      await tx.job.delete({ where: { id } });
+    });
     res.status(204).send();
   } catch (error) {
-    res.status(404).json({ error: "Job not found" });
+    res.status(404).json({ error: "Job not found or could not be deleted" });
   }
 });
 
@@ -124,6 +129,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
   const WORKSHOP_HOURLY_RATE = settings?.workshopHourlyRate ?? 0;
   const MATERIAL_MARKUP_PERCENT = Number(settings?.materialMarkupPercent) > 0 ? Number(settings?.materialMarkupPercent) : 25;
   const ELECTRICITY_MARKUP_PERCENT = Number(settings?.electricityMarkupPercent) > 0 ? Number(settings?.electricityMarkupPercent) : 25;
+  const DEPRECIATION_MARKUP_PERCENT = Number(settings?.depreciationMarkupPercent) > 0 ? Number(settings?.depreciationMarkupPercent) : 0;
   const DEPRECIATION_COST = settings?.depreciationCost ?? 0;
   const DEPRECIATION_HOURS = settings?.depreciationHours ?? 0;
 
@@ -134,11 +140,20 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const mode = payload.mode || '3d';
     const machineName = String(payload.machineName || job.machineType || 'Other');
     const machineSettings = settings?.machineElectricitySettings ? JSON.parse(String(settings.machineElectricitySettings || '{}')) : {};
-    const selectedMachine = machineSettings[machineName] || {};
+    const normalizeMachineName = (value: unknown) => String(value || "").trim().toLowerCase();
+    const normalizedMachineName = normalizeMachineName(machineName);
+    const selectedMachineEntry = Object.entries(machineSettings).find(([savedName]) => normalizeMachineName(savedName) === normalizedMachineName);
+    const selectedMachine = machineSettings[machineName] || selectedMachineEntry?.[1] || {};
     const machineWattage = Number(selectedMachine?.wattage ?? payload.wattage ?? process.env.PRINTER_WATTAGE ?? (mode === 'laser' ? process.env.LASER_WATTAGE : process.env.PRINTER_WATTAGE) ?? 120);
     const machineDepreciationCost = Number(selectedMachine?.depreciationCost ?? DEPRECIATION_COST ?? 0);
     const machineReplacementRunHours = Number(selectedMachine?.replacementRunHours ?? DEPRECIATION_HOURS ?? 0);
     const materialTypeMarkups = settings?.materialTypeMarkups ? JSON.parse(String(settings.materialTypeMarkups || '{}')) : {};
+    const normalizedMaterialTypeMarkups = new Map(
+      Object.entries(materialTypeMarkups || {}).map(([typeName, rule]) => [
+        String(typeName || '').trim().toLowerCase(),
+        rule,
+      ]),
+    );
     const materialTypeById = new Map(job.materials.map((entry) => [entry.materialId, entry.material?.type || 'Other']));
 
     let materialCost = 0;
@@ -157,9 +172,10 @@ router.post('/:id/calculate-cost', async (req, res) => {
         materialCost = materialEntries.reduce((sum: number, entry: any) => sum + (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)), 0);
         materialTypeMarkupCharge = materialEntries.reduce((sum: number, entry: any) => {
           const materialType = String(entry?.material?.type || entry?.type || materialTypeById.get(String(entry.materialId || '')) || 'Other');
-          const typeRule = materialTypeMarkups[materialType] || { percent: 25 };
+          const normalizedMaterialType = materialType.trim().toLowerCase();
+          const typeRule = (normalizedMaterialTypeMarkups.get(normalizedMaterialType) as { percent?: number } | undefined) || { percent: 0 };
           const lineBase = Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0);
-          const typeMarkupPercent = Number(typeRule.percent) > 0 ? Number(typeRule.percent) : 25;
+          const typeMarkupPercent = Number(typeRule.percent) > 0 ? Number(typeRule.percent) : 0;
           return sum + (lineBase * (typeMarkupPercent / 100));
         }, 0);
       } else {
@@ -167,7 +183,8 @@ router.post('/:id/calculate-cost', async (req, res) => {
         const costPerGram = Number(payload.costPerGram ?? (job.materials[0]?.material?.costPerUnit || 0));
         materialCost = gramsUsed * costPerGram;
       }
-      electricityCost = ((machineRunTimeMinutes / 60) * KWH_RATE * (machineWattage / 1000)) + depreciationCost;
+      const electricityOnlyCost = (machineRunTimeMinutes / 60) * KWH_RATE * (machineWattage / 1000);
+      electricityCost = electricityOnlyCost + depreciationCost;
       labourCost = (labourTimeMinutes / 60) * LABOUR_RATE;
     } else if (mode === 'laser') {
       const materialEntries = Array.isArray(payload.materials) ? payload.materials : [];
@@ -176,9 +193,10 @@ router.post('/:id/calculate-cost', async (req, res) => {
         materialCost = materialEntries.reduce((sum: number, entry: any) => sum + (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)), 0);
         materialTypeMarkupCharge = materialEntries.reduce((sum: number, entry: any) => {
           const materialType = String(entry?.material?.type || entry?.type || materialTypeById.get(String(entry.materialId || '')) || 'Other');
-          const typeRule = materialTypeMarkups[materialType] || { percent: 25 };
+          const normalizedMaterialType = materialType.trim().toLowerCase();
+          const typeRule = (normalizedMaterialTypeMarkups.get(normalizedMaterialType) as { percent?: number } | undefined) || { percent: 0 };
           const lineBase = Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0);
-          const typeMarkupPercent = Number(typeRule.percent) > 0 ? Number(typeRule.percent) : 25;
+          const typeMarkupPercent = Number(typeRule.percent) > 0 ? Number(typeRule.percent) : 0;
           return sum + (lineBase * (typeMarkupPercent / 100));
         }, 0);
       } else {
@@ -187,19 +205,22 @@ router.post('/:id/calculate-cost', async (req, res) => {
         const sheetCost = Number(payload.sheetCost || 0);
         materialCost = sheetCost > 0 ? sheetCost : areaUsed * costPerArea;
       }
-      electricityCost = ((machineRunTimeMinutes / 60) * (machineWattage / 1000) * KWH_RATE) + depreciationCost;
+      const electricityOnlyCost = (machineRunTimeMinutes / 60) * (machineWattage / 1000) * KWH_RATE;
+      electricityCost = electricityOnlyCost + depreciationCost;
       labourCost = (labourTimeMinutes / 60) * LABOUR_RATE;
     }
 
     const subtotal = materialCost + electricityCost + labourCost;
     const overheadCost = (machineRunTimeMinutes / 60) * WORKSHOP_HOURLY_RATE;
     const totalCost = subtotal + overheadCost;
+    const electricityOnlyCost = Math.max(0, electricityCost - depreciationCost);
 
     const materialCharge = materialCost + materialTypeMarkupCharge + (materialCost * (MATERIAL_MARKUP_PERCENT / 100));
-    const electricityCharge = electricityCost + (electricityCost * (ELECTRICITY_MARKUP_PERCENT / 100));
+    const electricityCharge = electricityOnlyCost + (electricityOnlyCost * (ELECTRICITY_MARKUP_PERCENT / 100));
+    const depreciationCharge = depreciationCost + (depreciationCost * (DEPRECIATION_MARKUP_PERCENT / 100));
     const labourCharge = labourCost;
     const overheadCharge = overheadCost;
-    const customerCharge = materialCharge + electricityCharge + labourCharge + overheadCharge;
+    const customerCharge = materialCharge + electricityCharge + depreciationCharge + labourCharge + overheadCharge;
 
     const existing = await prisma.jobCost.findUnique({ where: { jobId: id } });
 
@@ -214,7 +235,19 @@ router.post('/:id/calculate-cost', async (req, res) => {
       });
     }
 
-    res.json({ materialCost, electricityCost, labourCost, overheadCost, totalCost, customerCharge });
+    res.json({
+      materialCost,
+      electricityCost,
+      labourCost,
+      overheadCost,
+      totalCost,
+      customerCharge,
+      materialCharge,
+      electricityCharge,
+      depreciationCharge,
+      labourCharge,
+      overheadCharge,
+    });
   } catch (error) {
     console.error('calculate-cost error', error);
     res.status(500).json({ error: 'Calculation failed' });

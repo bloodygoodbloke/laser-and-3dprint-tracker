@@ -1,6 +1,6 @@
 # laser-and-3dprint-tracker
 
-Laser and 3D Print Tracker is a lightweight system for managing jobs, materials, and usage in small-scale fabrication environments such as makerspaces, fabrication labs, and small production shops.
+Fabrication Workshop Tracker is a lightweight system for managing jobs, materials, and usage in small-scale fabrication environments such as makerspaces, fabrication labs, and small production shops.
 
 **Industry context**
 - Used by makerspaces, education labs, and small manufacturers to track machine time, material consumption, and job status.
@@ -15,19 +15,31 @@ Laser and 3D Print Tracker is a lightweight system for managing jobs, materials,
 
 **Current functionality**
 - Manage jobs with customer details, machine type, machine runtime, and separate labour time.
-- Create jobs directly from the Jobs tab and edit existing jobs from expandable job cards.
+- New customer names entered during job creation can be captured immediately in a CRM Lite details popup.
+- Create jobs directly from the Jobs tab, edit existing jobs directly under the selected expanded job card, and delete jobs from expandable job card actions.
 - Add multi-material usage per job with simplified material selection plus quantity in grams.
 - Track materials with colour, grouped material-type views, and quick copy/edit workflows.
+- Material creation/editing is managed in the Materials tab (Admin no longer contains a duplicate add-material form).
+- Manage CRM Lite customer records (name, address, email, phone, notes) with recent order history lookup.
 - Manage machine profiles from a dedicated Machines tab with add/edit/remove workflows.
 - Calculate production costs for 3D and laser workflows using machine runtime electricity + depreciation plus separate labour-time charging.
-- Configure billing rules for percentage markups, electricity, labour rate, workshop hourly rate, and per-machine wattage/depreciation assumptions.
-- Preview and print a customer-facing invoice from within the selected job workflow.
-- Export/import jobs and materials, plus full backup/restore snapshots from Admin tools.
+- Configure billing rules for percentage markups, electricity, labour rate, workshop hourly rate, per-machine wattage/depreciation assumptions, and invoice add-ons (delivery + VAT).
+- Material customer pricing now applies global material markup plus configured per-material-type markup without an implicit default type markup.
+- Manage business personalization in a dedicated Admin section (name, logo, address, email, phone, website).
+- Billing numeric fields now support clearing values without immediately forcing `0` while typing.
+- Preview and print a customer-facing invoice directly under the selected expanded job card, including simplified line items and totals (`SubTotal`, `Delivery`, `VAT`, `Grand total`) plus business/customer contact details, with explicit `Print / Save PDF` and `Close invoice` actions.
+- Export/import jobs CSV, export/import materials CSV, and manage full backup/restore snapshots from Admin tools.
+- App header now prefixes the title with business name, shows business logo at top-right, and dashboard contains the jobs/materials status lozenge.
+- App footer and invoice footer both include configured business contact details (address, email, phone, website).
 
 **Running locally**
 - Backend: `cd backend && npm install && npm run dev` (API: `http://localhost:4000`)
 - Frontend: `cd frontend && npm install && npm run dev -- --host 127.0.0.1 --port 5173` (UI: `http://127.0.0.1:5173`)
 - Health check: `curl http://127.0.0.1:4000/api/health`
+
+**Local run links**
+- App UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)
+- API health: [http://127.0.0.1:4000/api/health](http://127.0.0.1:4000/api/health)
 
 If the UI appears unresponsive, verify both ports are listening (`4000` and `5173`) and restart both dev servers.
 

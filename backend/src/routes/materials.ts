@@ -27,6 +27,54 @@ router.post("/", async (req, res) => {
   res.status(201).json(material);
 });
 
+router.post("/import-csv", async (req, res) => {
+  const payload = req.body || {};
+  const importedMaterials = Array.isArray(payload.materials) ? payload.materials : [];
+
+  let created = 0;
+  let updated = 0;
+
+  for (const rawMaterial of importedMaterials) {
+    const name = String(rawMaterial?.name || "").trim();
+    if (!name) continue;
+
+    const type = String(rawMaterial?.type || "Other").trim() || "Other";
+    const unit = String(rawMaterial?.unit || "g").trim() || "g";
+    const color = String(rawMaterial?.color || "").trim();
+    const costPerUnit = Number(rawMaterial?.costPerUnit || 0);
+    const stockLevel = Number(rawMaterial?.stockLevel || 0);
+    const reorderThreshold = Number(rawMaterial?.reorderThreshold || 0);
+
+    const existing = await prisma.material.findFirst({
+      where: { name, type, unit, color },
+    });
+
+    if (existing) {
+      await prisma.material.update({
+        where: { id: existing.id },
+        data: { costPerUnit, stockLevel, reorderThreshold },
+      });
+      updated += 1;
+      continue;
+    }
+
+    await prisma.material.create({
+      data: {
+        name,
+        type,
+        unit,
+        color,
+        costPerUnit,
+        stockLevel,
+        reorderThreshold,
+      },
+    });
+    created += 1;
+  }
+
+  res.json({ imported: importedMaterials.length, created, updated });
+});
+
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   const material = await prisma.material.findUnique({

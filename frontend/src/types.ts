@@ -33,6 +33,12 @@ export interface MaterialTypeMarkupSetting {
 
 export interface BillingSettings {
   id?: string;
+  businessName?: string;
+  businessLogoUrl?: string;
+  businessAddress?: string;
+  businessEmail?: string;
+  businessPhone?: string;
+  businessWebsite?: string;
   materialMarkupPercent: number;
   materialMarkupAmount: number;
   electricityMarkupPercent: number;
@@ -45,10 +51,24 @@ export interface BillingSettings {
   electricityCostPerKwh: number;
   depreciationCost: number;
   depreciationHours: number;
+  depreciationMarkupPercent: number;
   labourRate: number;
   workshopHourlyRate: number;
+  deliveryAmount: number;
+  vatPercent: number;
   overheadPercent: number;
   machineElectricitySettings: Record<string, MachineElectricitySetting>;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface JobCost {

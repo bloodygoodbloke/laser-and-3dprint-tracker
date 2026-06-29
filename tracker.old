@@ -1,0 +1,168 @@
+# Implementation Tracker
+
+This file tracks what is already implemented and what is planned next.
+run against copilot with process next 3 tasks. 
+
+
+Last updated: 2026-06-27
+
+## Next 3 Tasks
+- [ ] Add business personalization settings (business name, logo, address) and populate them in invoices.
+- [ ] CRM Lite customer mangement customer database with name, address, email, contact number order history, notes which feeds into invoices and auto populate job forms.
+- [ ] Quote to job workflow (quote status, approval, convert to job) then once job is complete automate the invoice generation. 
+
+## How to Use
+- Mark items complete as features are finished and verified.
+- Add date notes under each item when a major change lands.
+- Keep this file updated with every feature pass so roadmap and delivery stay aligned.
+- Prioritize bug fixes before Next 3 Tasks, feature requests, or other planned items.
+- Prefix all bug entries with `BUG:`.
+
+## Execution Limits (Hard Rules)
+- `MAX_ACTIVE_TASKS = 3`
+- `MAX_ACTIVE_BUGS_BATCH = 3`
+- Never have more than 3 tasks in progress at one time.
+- If Bug Fixes contains more than 3 open bugs, only the first 3 bugs are worked as the active batch.
+- Move to the next bug batch only after the current bug batch is completed and marked off.
+- Process all open BUG items first.
+- If total open BUG items across Bug Fixes and Next 3 Tasks is 3 or more, Next 3 Tasks must be bug-only (first 3 open BUG items).
+- If total open BUG items across Bug Fixes and Next 3 Tasks is less than 3, fill the remaining Next 3 slots with highest-priority non-bug planned work.
+- Do not start non-bug planned work or feature requests while 3 or more open BUG items exist.
+- Next 3 Tasks must always contain exactly 3 items.
+
+## Automatic Documentation Rules (Always On)
+For every item implemented from this tracker, complete the following in the same pass:
+- Update CHANGELOG.md (Unreleased) with user-visible and technical changes.
+- Update README.md when functionality, workflow, naming, or setup behavior changes.
+- Update in-app Help content when UI flows, forms, billing logic, or operational steps change.
+- Update this tracker: move completed items to Implemented, adjust priorities, and refresh Last updated date.
+
+These rules are the default definition of done for all tracker-driven work and should be applied automatically every time.
+
+## Implemented
+- [x] Jobs tab with add flow, edit flow, and expandable job cards.
+- [x] Invoice creation and print/PDF flow from job context.
+- [x] Multi-material jobs with usage-based costing.
+- [x] Material colour support and seeded starter materials.
+- [x] Central billing settings with electricity, labour, overhead controls.
+- [x] Machine runtime and labour time split in job costing.
+- [x] Depreciation support in billing and runtime costing model.
+- [x] Materials tab grouped by material type with quick edit/copy.
+- [x] Materials form supports buying in kg and using in grams (automatic conversion).
+- [x] Backup/export/import tools for jobs, materials, and full data snapshots.
+- [x] Billing rules redesign into clear sections (Electricity, Materials, Labour).
+- [x] Per-material-type markup controls in billing rules.
+- [x] Per-machine depreciation and replacement runtime fields in billing rules.
+- [x] Dedicated Machines tab with add/edit/remove machine profile workflows.
+- [x] Job machine selectors now use managed machine profiles from billing settings.
+- [x] Workshop-cost model introduced with workshop hourly rate (replacing overhead billing flow).
+- [x] Markups simplified to percentage-only pricing with 25% default behavior.
+- [x] Backend file upload endpoint for job file paths (`POST /api/jobs/:id/upload`).
+- [x] Dashboard summaries for pending jobs and low-stock materials.
+- [x] In-app Help guide updated with current job, billing, invoice, backup, and health-check guidance.
+- [x] Renamed app-facing UI labels/title to `Fabrication Workshop Tracker`.
+- [x] Added delete-job action in Jobs tab expanded card actions.
+- [x] Jobs tab edit form now opens directly under the selected expanded job card.
+- [x] Admin tools now include materials CSV import and paired export/import controls for jobs, materials, and full backups.
+
+## Completed Bug Fixes
+- [x] BUG: Fixed entry-field formatting so numeric billing inputs can be cleared without immediately forcing `0`.
+- [x] BUG: Fixed machine depreciation lookup in cost calculation so configured machine depreciation is applied reliably.
+- [x] BUG: Fixed Jobs edit placement so editing opens under the selected expanded job card.
+
+## In Progress
+- [ ] No active in-progress items.
+
+## Bug Fixes (Priority 1)
+- [ ] No additional open BUG items outside the active Next 3 BUG batch.
+
+## Feature Requests
+- [ ] No additional feature requests pending outside Next 3.
+
+## Planned Next (Priority)
+- [ ] Pricing guardrails (minimum charge, setup fee, rush fee, waste factor).
+- [ ] Invoice finance completeness (tax/VAT, deposits, payment status, terms).
+- [ ] Jobs list filters/search and stronger status-badge workflow controls.
+- [ ] Confirm and harden full Dockerized runtime workflow for backend/frontend/database in day-to-day use.
+
+## Planned Next (Operations)
+- [ ] Machine queue and schedule with due-date risk indicators.
+- [ ] QA checklist and rework tracking with cost impact.
+- [ ] Supplier management and purchase history for materials.
+- [ ] File preview support in job detail (SVG/STL viewer and related file types).
+- [ ] job scheduling / calendar view  whast printing what queued estimated completion date and time based on print times and working hours. 
+
+
+## Planned Next (Insights)
+- [ ] Margin reporting by machine, material type, and customer.
+- [ ] On-time delivery and utilization dashboards.
+- [ ] Audit log for billing and invoice edits.
+- [ ] machine use tracking, Print hours, Laser hours, Maintenance intervals Consumables (nozzles, lenses, filters), all auto calculating with manual update fucntion. 
+- [ ] Reports page (monthly totals, profit vs cost, material usage).
+- [ ] proper time tracking including setup, post processing, actual manufacture time
+- [ ] tracker for failed prints, reason for failire, fix implimented, material wasted time effort fixing to give a cost of failure.
+
+## Planned Next (Integrations)
+- [ ] update electricity costs from api that can be setup via the gui.  test with https://api.octopus.energy/v1/products/INTELLIGENT_OCTOPUS_GO/
+- [ ] import infromation from makerworld which will help calculate materials used and time to print.
+- [ ] integrate into my Sumup api to pull in information, Call SumUp API, Create a payment link Attach it to the invoice, pull in sales and outstanding payments.
+
+## Planned Next (New Additions)
+- [ ] Customer portal for file uploads, quote requests, approvals, and invoice payments.
+- [ ] Automated payment reconciliation: match SumUp transactions to job IDs and invoice IDs.
+- [ ] Automated purchase order generation for low-stock materials (supplier + cost + ETA).
+- [ ] Material batch tracking (batch number, supplier lot, QC notes).
+- [ ] Print failure analytics dashboard (failure rate %, cost of failures, top failure causes).
+- [ ] Machine health scoring (based on hours, failures, maintenance logs).
+- [ ] Predictive maintenance alerts (nozzle wear, laser lens cleaning, filter replacement).
+- [ ] Multi-machine job load balancer (auto-assign jobs to the best available machine).
+- [ ] Customer preference memory (preferred materials, colours, finishes, turnaround times).
+- [ ] Post-processing workflow tracking (sanding, painting, curing, assembly) with time + cost.
+- [ ] Automated job time prediction using historical data (AI-assisted estimation).
+- [ ] Energy-aware scheduling (run long prints during off-peak Octopus Go windows).
+- [ ] Automated invoice emailing with PDF attachment and payment link.
+- [ ] Full audit trail for job lifecycle (created → quoted → approved → printed → invoiced).
+- [ ] Material usage forecasting (predict when filament/sheets will run out based on trends).
+- [ ] Supplier performance tracking (delivery times, cost changes, reliability scoring).
+- [ ] Customer lifetime value reporting (total spend, repeat orders, margin contribution).
+- [ ] Job profitability scoring (margin %, cost breakdown, machine utilisation impact).
+- [ ] Workshop capacity planning (predict workload vs available machine hours).
+- [ ] SLA / due-date risk engine (alerts when jobs are likely to miss deadlines).
+- [ ] Automated backup-to-cloud (OneDrive/Dropbox) with versioned snapshots.
+- [ ] Multi-user support with roles (Admin, Operator, Finance).
+- [ ] API access layer for external integrations (MakerWorld, SumUp, Octopus).
+- [ ] Barcode/QR code job labels for physical tracking of prints and materials.
+- [ ] Packaging & shipping workflow (labels, weight, courier integration).
+- [ ] Customer satisfaction tracking (ratings, feedback, repeat order likelihood).
+- [ ] Job tagging system (urgent, prototype, repeat, bulk order).
+- [ ] Automated reminders (payment overdue, job ready for pickup, material low).
+- [ ] Export to accounting systems (Xero, QuickBooks) via CSV or API.
+
+## Planned Next (Machine Integrations)
+- [ ] Bambu Lab local API integration for live machine status (temps, progress, chamber, AMS).
+- [ ] Auto-update job status based on Bambu printer events (start, finish, fail).
+- [ ] Auto-log actual print time and material usage directly from Bambu AMS data.
+- [ ] Auto-deduct filament usage from AMS spool readings.
+- [ ] Machine dashboard showing live Bambu data, queued jobs, and machine health.
+- [ ] Predictive maintenance engine using Bambu-reported machine hours and error logs.
+- [ ] Auto-failure logging when Bambu reports an error or print abort state.
+
+## Planned Next (MakerWorld Integrations)
+- [ ] MakerWorld metadata integration (model preview, tags, estimated print time, estimated grams).
+- [ ] MakerWorld auto-fill job creation from a model URL.
+- [ ] MakerWorld print profile import to pre-populate cost estimates.
+- [ ] MakerWorld material usage + time estimation sync for cost prediction.
+
+## Planned Next (Laser & LightBurn Integrations)
+- [ ] LightBurn file parser (LBRN/LBRN2) to extract layers, power, speed, passes, and estimated runtime.
+- [ ] LightBurn G-code parser for runtime estimation and material mapping.
+- [ ] Auto-generate laser job cost from LightBurn file analysis.
+- [ ] Creality Falcon job estimator (power, speed, passes, material type).
+- [ ] Creality Cloud metadata integration for model info and print estimates.
+
+## Planned Next (Cross-System Automation)
+- [ ] Auto-generate job costing using combined data from MakerWorld + LightBurn + Bambu.
+- [ ] Energy-aware scheduling using Octopus Go off-peak windows for long prints.
+- [ ] Auto-update job progress and completion timestamps from machine telemetry.
+- [ ] Auto-tag jobs with material type, machine type, and complexity based on imported file metadata.
+- [ ] Multi-machine load balancer to assign jobs to the best available printer or laser.
