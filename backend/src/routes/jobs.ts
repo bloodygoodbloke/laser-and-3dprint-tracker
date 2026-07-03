@@ -11,6 +11,7 @@ router.get("/", async (_req, res) => {
 
 router.post("/", async (req, res) => {
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
+    const { isRush, paymentStatus, depositPaidAmount } = req.body;
 
   const jobsCount = await prisma.job.count();
   const generatedNumber = jobNumber || `JOB-${String(jobsCount + 1).padStart(4, "0")}`;
@@ -24,6 +25,9 @@ router.post("/", async (req, res) => {
       estTimeMinutes: Number(estTimeMinutes || 0),
       machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
       labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+        isRush: Boolean(isRush),
+        paymentStatus: String(paymentStatus || "Unpaid"),
+        depositPaidAmount: Number(depositPaidAmount || 0),
       status: status || "Pending",
       materials: {
         create: materials.map((entry: any) => ({
@@ -69,6 +73,7 @@ router.get("/:id", async (req, res) => {
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
+    const { isRush, paymentStatus, depositPaidAmount } = req.body;
 
   try {
     await prisma.jobMaterial.deleteMany({ where: { jobId: id } });
@@ -83,6 +88,9 @@ router.put("/:id", async (req, res) => {
         estTimeMinutes: Number(estTimeMinutes || 0),
         machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
         labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+          isRush: Boolean(isRush),
+          paymentStatus: String(paymentStatus || "Unpaid"),
+          depositPaidAmount: Number(depositPaidAmount || 0),
         status,
         materials: {
           create: materials.map((entry: any) => ({
@@ -127,6 +135,10 @@ router.post('/:id/calculate-cost', async (req, res) => {
   const KWH_RATE = settings?.electricityCostPerKwh ?? parseFloat(process.env.KWH_RATE || '0.20');
   const LABOUR_RATE = settings?.labourRate ?? parseFloat(process.env.LABOUR_RATE || '20');
   const WORKSHOP_HOURLY_RATE = settings?.workshopHourlyRate ?? 0;
+  const MINIMUM_CHARGE = Number(settings?.minimumCharge ?? 0);
+  const SETUP_FEE = Number(settings?.setupFee ?? 0);
+  const RUSH_FEE_PERCENT = Number(settings?.rushFeePercent ?? 0);
+  const WASTE_FACTOR_PERCENT = Number(settings?.wasteFactorPercent ?? 0);
   const MATERIAL_MARKUP_PERCENT = Number(settings?.materialMarkupPercent) > 0 ? Number(settings?.materialMarkupPercent) : 25;
   const ELECTRICITY_MARKUP_PERCENT = Number(settings?.electricityMarkupPercent) > 0 ? Number(settings?.electricityMarkupPercent) : 25;
   const DEPRECIATION_MARKUP_PERCENT = Number(settings?.depreciationMarkupPercent) > 0 ? Number(settings?.depreciationMarkupPercent) : 0;
@@ -140,7 +152,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const mode = payload.mode || '3d';
     const machineName = String(payload.machineName || job.machineType || 'Other');
     const machineSettings = settings?.machineElectricitySettings ? JSON.parse(String(settings.machineElectricitySettings || '{}')) : {};
-    const normalizeMachineName = (value: unknown) => String(value || "").trim().toLowerCase();
+    const normalizeMachineName = (value: unknown) => String(value || '').trim().toLowerCase();
     const normalizedMachineName = normalizeMachineName(machineName);
     const selectedMachineEntry = Object.entries(machineSettings).find(([savedName]) => normalizeMachineName(savedName) === normalizedMachineName);
     const selectedMachine = machineSettings[machineName] || selectedMachineEntry?.[1] || {};
@@ -162,6 +174,8 @@ router.post('/:id/calculate-cost', async (req, res) => {
 
     const machineRunTimeMinutes = Number(payload.machineRunTimeMinutes ?? payload.printTimeMinutes ?? payload.laserMinutes ?? job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
     const labourTimeMinutes = Number(payload.labourTimeMinutes ?? job.labourTimeMinutes ?? machineRunTimeMinutes);
+    const isRushJob = Boolean(payload.isRush ?? job.isRush);
+    const wasteFactorMultiplier = 1 + (Math.max(0, WASTE_FACTOR_PERCENT) / 100);
     const depreciationCost = machineReplacementRunHours > 0 ? (machineRunTimeMinutes / 60) * (machineDepreciationCost / machineReplacementRunHours) : 0;
     let materialTypeMarkupCharge = 0;
 
@@ -169,19 +183,19 @@ router.post('/:id/calculate-cost', async (req, res) => {
       const materialEntries = Array.isArray(payload.materials) ? payload.materials : [];
 
       if (materialEntries.length) {
-        materialCost = materialEntries.reduce((sum: number, entry: any) => sum + (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)), 0);
+        materialCost = materialEntries.reduce((sum: number, entry: any) => sum + ((Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)) * wasteFactorMultiplier), 0);
         materialTypeMarkupCharge = materialEntries.reduce((sum: number, entry: any) => {
           const materialType = String(entry?.material?.type || entry?.type || materialTypeById.get(String(entry.materialId || '')) || 'Other');
           const normalizedMaterialType = materialType.trim().toLowerCase();
           const typeRule = (normalizedMaterialTypeMarkups.get(normalizedMaterialType) as { percent?: number } | undefined) || { percent: 0 };
-          const lineBase = Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0);
+          const lineBase = (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)) * wasteFactorMultiplier;
           const typeMarkupPercent = Number(typeRule.percent) > 0 ? Number(typeRule.percent) : 0;
           return sum + (lineBase * (typeMarkupPercent / 100));
         }, 0);
       } else {
         const gramsUsed = Number(payload.gramsUsed || 0);
         const costPerGram = Number(payload.costPerGram ?? (job.materials[0]?.material?.costPerUnit || 0));
-        materialCost = gramsUsed * costPerGram;
+        materialCost = gramsUsed * costPerGram * wasteFactorMultiplier;
       }
       const electricityOnlyCost = (machineRunTimeMinutes / 60) * KWH_RATE * (machineWattage / 1000);
       electricityCost = electricityOnlyCost + depreciationCost;
@@ -190,12 +204,12 @@ router.post('/:id/calculate-cost', async (req, res) => {
       const materialEntries = Array.isArray(payload.materials) ? payload.materials : [];
 
       if (materialEntries.length) {
-        materialCost = materialEntries.reduce((sum: number, entry: any) => sum + (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)), 0);
+        materialCost = materialEntries.reduce((sum: number, entry: any) => sum + ((Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)) * wasteFactorMultiplier), 0);
         materialTypeMarkupCharge = materialEntries.reduce((sum: number, entry: any) => {
           const materialType = String(entry?.material?.type || entry?.type || materialTypeById.get(String(entry.materialId || '')) || 'Other');
           const normalizedMaterialType = materialType.trim().toLowerCase();
           const typeRule = (normalizedMaterialTypeMarkups.get(normalizedMaterialType) as { percent?: number } | undefined) || { percent: 0 };
-          const lineBase = Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0);
+          const lineBase = (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)) * wasteFactorMultiplier;
           const typeMarkupPercent = Number(typeRule.percent) > 0 ? Number(typeRule.percent) : 0;
           return sum + (lineBase * (typeMarkupPercent / 100));
         }, 0);
@@ -203,7 +217,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
         const areaUsed = Number(payload.areaUsed || 0);
         const costPerArea = Number(payload.costPerArea || 0);
         const sheetCost = Number(payload.sheetCost || 0);
-        materialCost = sheetCost > 0 ? sheetCost : areaUsed * costPerArea;
+        materialCost = (sheetCost > 0 ? sheetCost : areaUsed * costPerArea) * wasteFactorMultiplier;
       }
       const electricityOnlyCost = (machineRunTimeMinutes / 60) * (machineWattage / 1000) * KWH_RATE;
       electricityCost = electricityOnlyCost + depreciationCost;
@@ -220,7 +234,12 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const depreciationCharge = depreciationCost + (depreciationCost * (DEPRECIATION_MARKUP_PERCENT / 100));
     const labourCharge = labourCost;
     const overheadCharge = overheadCost;
-    const customerCharge = materialCharge + electricityCharge + depreciationCharge + labourCharge + overheadCharge;
+    const preGuardrailCustomerCharge = materialCharge + electricityCharge + depreciationCharge + labourCharge + overheadCharge;
+    const setupFeeAmount = Math.max(0, SETUP_FEE);
+    const rushFeeAmount = isRushJob ? (preGuardrailCustomerCharge + setupFeeAmount) * (Math.max(0, RUSH_FEE_PERCENT) / 100) : 0;
+    const guardrailSubtotal = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount;
+    const minimumChargeApplied = Math.max(0, Math.max(0, MINIMUM_CHARGE) - guardrailSubtotal);
+    const customerCharge = guardrailSubtotal + minimumChargeApplied;
 
     const existing = await prisma.jobCost.findUnique({ where: { jobId: id } });
 
@@ -247,6 +266,11 @@ router.post('/:id/calculate-cost', async (req, res) => {
       depreciationCharge,
       labourCharge,
       overheadCharge,
+      setupFeeAmount,
+      rushFeeAmount,
+      minimumChargeApplied,
+      wasteFactorPercent: Math.max(0, WASTE_FACTOR_PERCENT),
+      isRush: isRushJob,
     });
   } catch (error) {
     console.error('calculate-cost error', error);

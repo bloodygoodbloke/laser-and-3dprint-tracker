@@ -42,8 +42,14 @@ const blankBillingSettings = (): BillingSettings => ({
   depreciationMarkupPercent: 0,
   labourRate: 20,
   workshopHourlyRate: 0,
+  minimumCharge: 0,
+  setupFee: 0,
+  rushFeePercent: 0,
+  wasteFactorPercent: 0,
   deliveryAmount: 0,
   vatPercent: 0,
+  depositPercent: 0,
+  paymentTermsDays: 0,
   overheadPercent: 0.15,
   machineElectricitySettings: getDefaultMachineRuntimeSettings(),
 });
@@ -60,6 +66,8 @@ const normalizeOptionalMarkupPercent = (value: unknown) => {
 
 const toClearableNumberInput = (value: number) => (value === 0 ? "" : String(value));
 const parseNumberInput = (value: string) => (value.trim() === "" ? 0 : Number(value));
+const jobStatusOptions = ["Quote Draft", "Quote Sent", "Quote Approved", "Pending", "In Progress", "Completed", "Invoiced"];
+const paymentStatusOptions = ["Unpaid", "Partially Paid", "Paid", "Overdue"];
 
 function App() {
   const KG_TO_G = 1000;
@@ -67,16 +75,16 @@ function App() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "materials" | "machines" | "customers" | "admin" | "help">("dashboard");
-  const [jobForm, setJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", status: "Pending" });
+  const [jobForm, setJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(blankBillingSettings());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
-  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", status: "Pending" });
+  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
-  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", status: "Pending" });
+  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [showMaterialEditor, setShowMaterialEditor] = useState(false);
@@ -135,8 +143,14 @@ function App() {
       depreciationMarkupPercent: Number((settings as BillingSettings).depreciationMarkupPercent ?? 0),
       labourRate: Number(settings.labourRate ?? 20),
       workshopHourlyRate: Number((settings as BillingSettings).workshopHourlyRate ?? 0),
+      minimumCharge: Number((settings as BillingSettings).minimumCharge ?? 0),
+      setupFee: Number((settings as BillingSettings).setupFee ?? 0),
+      rushFeePercent: Number((settings as BillingSettings).rushFeePercent ?? 0),
+      wasteFactorPercent: Number((settings as BillingSettings).wasteFactorPercent ?? 0),
       deliveryAmount: Number((settings as BillingSettings).deliveryAmount ?? 0),
       vatPercent: Number((settings as BillingSettings).vatPercent ?? 0),
+      depositPercent: Number((settings as BillingSettings).depositPercent ?? 0),
+      paymentTermsDays: Number((settings as BillingSettings).paymentTermsDays ?? 0),
       businessName: String((settings as BillingSettings).businessName ?? ""),
       businessLogoUrl: String((settings as BillingSettings).businessLogoUrl ?? ""),
       businessAddress: String((settings as BillingSettings).businessAddress ?? ""),
@@ -188,13 +202,16 @@ function App() {
       machineType: selectedJob.machineType || machineOptions[0],
       machineRunTimeMinutes: String(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
       labourTimeMinutes: String(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
+      isRush: Boolean(selectedJob.isRush),
+      paymentStatus: selectedJob.paymentStatus || "Unpaid",
+      depositPaidAmount: String(selectedJob.depositPaidAmount ?? 0),
       status: selectedJob.status || "Pending",
     });
     setSelectedJobMaterialEntries((selectedJob.materials || []).map((entry) => ({
       materialId: entry.materialId,
       usageQuantity: String(entry.usageQuantity || 0),
     })));
-  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.status, selectedJob?.materials]);
+  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.isRush, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
 
   useEffect(() => {
     if (!newJobMaterialEntries.length && materials.length) {
@@ -285,10 +302,13 @@ function App() {
       estTimeMinutes: Number(jobForm.machineRunTimeMinutes),
       machineRunTimeMinutes: Number(jobForm.machineRunTimeMinutes || 0),
       labourTimeMinutes: Number(jobForm.labourTimeMinutes || 0),
+      isRush: jobForm.isRush,
+      paymentStatus: jobForm.paymentStatus,
+      depositPaidAmount: Number(jobForm.depositPaidAmount || 0),
       status: jobForm.status,
       materials: toApiJobMaterials(jobMaterialEntries),
     });
-    setJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", status: "Pending" });
+    setJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setJobMaterialEntries([]);
     await loadData();
 
@@ -367,7 +387,7 @@ function App() {
 
   const openNewJobEditor = () => {
     setJobEditorMode("create");
-    setNewJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", status: "Pending" });
+    setNewJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "100" }] : []);
   };
 
@@ -461,12 +481,21 @@ function App() {
       estTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
       machineRunTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
       labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
+      isRush: newJobForm.isRush,
+      paymentStatus: newJobForm.paymentStatus,
+      depositPaidAmount: Number(newJobForm.depositPaidAmount || 0),
       status: newJobForm.status,
       materials: toApiJobMaterials(newJobMaterialEntries),
     });
     await loadData();
     setSelectedJobId(created.id);
-    setJobEditorMode("edit");
+    if (created.status === "Completed") {
+      await calculateJobCost(created);
+      setExpandedJobId(created.id);
+      setJobEditorMode("invoice");
+    } else {
+      setJobEditorMode("edit");
+    }
 
     if (rawCustomerName && !existingCustomer) {
       setCustomerCaptureForm({ name: rawCustomerName, address: "", email: "", phone: "", notes: "" });
@@ -521,6 +550,7 @@ function App() {
     await api.calculateCost(job.id, {
       mode: getJobMode(job.machineType),
       machineName: job.machineType,
+      isRush: Boolean(job.isRush),
       machineRunTimeMinutes,
       labourTimeMinutes,
       materials: (job.materials || []).map((entry) => ({
@@ -533,9 +563,35 @@ function App() {
     await loadData();
   };
 
+  const updateJobStatusQuick = async (job: Job, status: string) => {
+    await api.updateJob(job.id, {
+      name: job.name,
+      customer: job.customer || null,
+      machineType: job.machineType,
+      estTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
+      machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
+      labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+      isRush: Boolean(job.isRush),
+      paymentStatus: job.paymentStatus || "Unpaid",
+      depositPaidAmount: Number(job.depositPaidAmount || 0),
+      status,
+      materials: toApiJobMaterials((job.materials || []).map((entry) => ({ materialId: entry.materialId, usageQuantity: String(entry.usageQuantity || 0) }))),
+    });
+    await loadData();
+    setSelectedJobId(job.id);
+    setExpandedJobId(job.id);
+    if (status === "Completed") {
+      await calculateJobCost({ ...job, status });
+      setJobEditorMode("invoice");
+      return;
+    }
+    setJobEditorMode("edit");
+  };
+
   const saveSelectedJob = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedJob) return;
+    const nextStatus = selectedJobForm.status;
     await api.updateJob(selectedJob.id, {
       name: selectedJobForm.name,
       customer: selectedJobForm.customer || null,
@@ -543,10 +599,21 @@ function App() {
       estTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
       machineRunTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
       labourTimeMinutes: Number(selectedJobForm.labourTimeMinutes || 0),
+      isRush: selectedJobForm.isRush,
+      paymentStatus: selectedJobForm.paymentStatus,
+      depositPaidAmount: Number(selectedJobForm.depositPaidAmount || 0),
       status: selectedJobForm.status,
       materials: toApiJobMaterials(selectedJobMaterialEntries),
     });
     await loadData();
+    if (nextStatus === "Completed") {
+      await calculateJobCost({ ...selectedJob, status: nextStatus, isRush: selectedJobForm.isRush });
+      setExpandedJobId(selectedJob.id);
+      setSelectedJobId(selectedJob.id);
+      setJobEditorMode("invoice");
+      return;
+    }
+    setJobEditorMode("none");
   };
 
   const addSelectedJobMaterialEntry = () => {
@@ -668,6 +735,7 @@ function App() {
     return Number.isFinite(percent) && percent > 0 ? percent : 0;
   };
   const getInvoiceChargeBreakdown = (job: Job) => {
+    const wasteFactorMultiplier = 1 + (Math.max(0, Number(billingSettings.wasteFactorPercent || 0)) / 100);
     const baseMaterialCost = Number(job.cost?.materialCost ?? 0);
     const runtimeBreakdown = calculateRuntimeBreakdown(job);
     const baseElectricityCost = Number(runtimeBreakdown.electricityCost ?? 0);
@@ -679,7 +747,7 @@ function App() {
     const depreciationMarkupPercent = Number(billingSettings.depreciationMarkupPercent || 0);
 
     const materialTypeMarkupCharge = (job.materials || []).reduce((sum, entry) => {
-      const lineBase = Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0);
+      const lineBase = (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)) * wasteFactorMultiplier;
       const materialType = entry.material?.type || "Other";
       const typeMarkupPercent = getMaterialTypeMarkupPercent(materialType);
       return sum + (lineBase * (typeMarkupPercent / 100));
@@ -690,7 +758,14 @@ function App() {
     const depreciationCharge = baseDepreciationCost + (baseDepreciationCost * (depreciationMarkupPercent / 100));
     const labourCharge = baseLabourCost;
     const overheadCharge = baseOverheadCost;
-    const customerCharge = materialCharge + electricityCharge + depreciationCharge + labourCharge + overheadCharge;
+    const preGuardrailCustomerCharge = materialCharge + electricityCharge + depreciationCharge + labourCharge + overheadCharge;
+    const setupFeeAmount = Math.max(0, Number(billingSettings.setupFee || 0));
+    const rushFeeAmount = job.isRush
+      ? (preGuardrailCustomerCharge + setupFeeAmount) * (Math.max(0, Number(billingSettings.rushFeePercent || 0)) / 100)
+      : 0;
+    const guardrailSubtotal = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount;
+    const minimumChargeApplied = Math.max(0, Math.max(0, Number(billingSettings.minimumCharge || 0)) - guardrailSubtotal);
+    const customerCharge = guardrailSubtotal + minimumChargeApplied;
 
     return {
       materialCharge,
@@ -698,6 +773,9 @@ function App() {
       depreciationCharge,
       labourCharge,
       overheadCharge,
+      setupFeeAmount,
+      rushFeeAmount,
+      minimumChargeApplied,
       customerCharge,
     };
   };
@@ -769,6 +847,11 @@ function App() {
     const vatPercent = Number(billingSettings.vatPercent || 0);
     const vatAmount = (subTotal + deliveryAmount) * (vatPercent / 100);
     const grandTotal = subTotal + deliveryAmount + vatAmount;
+    const suggestedDepositAmount = grandTotal * (Math.max(0, Number(billingSettings.depositPercent || 0)) / 100);
+    const depositPaidAmount = Number(job.depositPaidAmount || 0);
+    const balanceDue = Math.max(0, grandTotal - depositPaidAmount);
+    const paymentTermsDays = Number(billingSettings.paymentTermsDays || 0);
+    const dueLabel = paymentTermsDays > 0 ? `Due in ${paymentTermsDays} days` : "Due on receipt";
 
     const printMarkup = `<!doctype html>
 <html>
@@ -804,7 +887,7 @@ function App() {
       <div style="text-align:right;">
         <p><strong>#${safe(job.jobNumber || "TBC")}</strong></p>
         <p class="muted">Issued ${safe(new Date().toLocaleDateString())}</p>
-        <p class="muted">Due on receipt</p>
+        <p class="muted">${safe(dueLabel)}</p>
       </div>
     </div>
 
@@ -834,7 +917,10 @@ function App() {
       <div class="row"><span class="muted">SubTotal</span><span class="muted">${safe(formatCurrency(subTotal))}</span></div>
       <div class="row"><span class="muted">Delivery</span><span class="muted">${safe(formatCurrency(deliveryAmount))}</span></div>
       <div class="row"><span class="muted">VAT (${safe(vatPercent.toFixed(0))}%)</span><span class="muted">${safe(formatCurrency(vatAmount))}</span></div>
+      <div class="row"><span class="muted">Suggested deposit (${safe(Number(billingSettings.depositPercent || 0).toFixed(0))}%)</span><span class="muted">${safe(formatCurrency(suggestedDepositAmount))}</span></div>
+      <div class="row"><span class="muted">Deposit paid</span><span class="muted">${safe(formatCurrency(depositPaidAmount))}</span></div>
       <div class="row"><span>Grand total</span><span>${safe(formatCurrency(grandTotal))}</span></div>
+      <div class="row"><span>Balance due</span><span>${safe(formatCurrency(balanceDue))}</span></div>
     </div>
 
     ${(billingSettings.businessAddress || billingSettings.businessEmail || billingSettings.businessPhone || billingSettings.businessWebsite) ? `<div class="footer">
@@ -1004,18 +1090,19 @@ function App() {
           ) : null}
         </header>
 
-        <nav className="mb-8 flex gap-3 no-print">
-          {(["dashboard", "jobs", "materials", "machines", "customers", "admin", "help"] as const).map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
-              {tab}
-            </button>
-          ))}
-        </nav>
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
+          <nav className="flex flex-wrap gap-3">
+            {(["dashboard", "jobs", "materials", "machines", "customers", "admin", "help"] as const).map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
+                {tab}
+              </button>
+            ))}
+          </nav>
+          <div className="rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-300 inline-flex">{jobs.length} jobs</div>
+        </div>
 
         {activeTab === "dashboard" && (
           <div className="space-y-6">
-            <div className="rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-300 no-print inline-flex">{jobs.length} jobs • {materials.length} materials</div>
-
             <div className="grid gap-6 lg:grid-cols-3">
               <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
                 <h2 className="text-xl font-semibold">Pending jobs</h2>
@@ -1053,7 +1140,36 @@ function App() {
                     <span className="mb-2 block">Labour time (mins)</span>
                     <input value={jobForm.labourTimeMinutes} onChange={(e) => setJobForm({ ...jobForm, labourTimeMinutes: e.target.value })} placeholder="Minutes" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                   </label>
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-2 block">Status</span>
+                    <select value={jobForm.status} onChange={(e) => setJobForm({ ...jobForm, status: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                      {jobStatusOptions.map((statusOption) => (
+                        <option key={statusOption} value={statusOption}>{statusOption}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-2 block">Payment status</span>
+                    <select value={jobForm.paymentStatus} onChange={(e) => setJobForm({ ...jobForm, paymentStatus: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                      {paymentStatusOptions.map((paymentStatusOption) => (
+                        <option key={paymentStatusOption} value={paymentStatusOption}>{paymentStatusOption}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-2 block">Deposit paid (£)</span>
+                    <input type="number" step="0.01" value={jobForm.depositPaidAmount} onChange={(e) => setJobForm({ ...jobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                  </label>
                 </div>
+                <label className="flex items-center gap-3 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={jobForm.isRush}
+                    onChange={(e) => setJobForm({ ...jobForm, isRush: e.target.checked })}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-950"
+                  />
+                  Apply rush fee for this job
+                </label>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-white">Materials used</h3>
@@ -1144,6 +1260,9 @@ function App() {
                           <p><span className="text-slate-500">Machine runtime:</span> {job.machineRunTimeMinutes ?? job.estTimeMinutes} mins</p>
                           <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
                           <p><span className="text-slate-500">Status:</span> {job.status}</p>
+                          <p><span className="text-slate-500">Payment:</span> {job.paymentStatus || "Unpaid"}</p>
+                          <p><span className="text-slate-500">Rush:</span> {job.isRush ? "Yes" : "No"}</p>
+                          <p><span className="text-slate-500">Deposit paid:</span> {formatCurrency(Number(job.depositPaidAmount || 0))}</p>
                           <p><span className="text-slate-500">Materials:</span> {job.materials?.length || 0}</p>
                         </div>
                         {job.cost ? (
@@ -1194,6 +1313,15 @@ function App() {
                           </div>
                         ) : null}
                         <div className="mt-3 flex flex-wrap gap-2">
+                          {(job.status === "Quote Draft" || job.status === "Quote Sent") ? (
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Approved")} className="rounded-full border border-emerald-700 px-3 py-1 text-sm text-emerald-300">Approve quote</button>
+                          ) : null}
+                          {job.status === "Quote Draft" ? (
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Sent")} className="rounded-full border border-sky-700 px-3 py-1 text-sm text-sky-300">Send quote</button>
+                          ) : null}
+                          {job.status === "Quote Approved" ? (
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="rounded-full border border-emerald-700 px-3 py-1 text-sm text-emerald-300">Convert to job</button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => {
@@ -1254,9 +1382,9 @@ function App() {
                               <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Status</span>
                                 <select value={selectedJobForm.status} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, status: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                                  <option value="Pending">Pending</option>
-                                  <option value="In Progress">In Progress</option>
-                                  <option value="Completed">Completed</option>
+                                  {jobStatusOptions.map((statusOption) => (
+                                    <option key={statusOption} value={statusOption}>{statusOption}</option>
+                                  ))}
                                 </select>
                               </label>
                             </div>
@@ -1270,7 +1398,29 @@ function App() {
                                 <span className="mb-2 block">Labour time (mins)</span>
                                 <input value={selectedJobForm.labourTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, labourTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Payment status</span>
+                                <select value={selectedJobForm.paymentStatus} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, paymentStatus: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                                  {paymentStatusOptions.map((paymentStatusOption) => (
+                                    <option key={paymentStatusOption} value={paymentStatusOption}>{paymentStatusOption}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Deposit paid (£)</span>
+                                <input type="number" step="0.01" value={selectedJobForm.depositPaidAmount} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
                             </div>
+
+                            <label className="flex items-center gap-3 text-sm text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={selectedJobForm.isRush}
+                                onChange={(e) => setSelectedJobForm({ ...selectedJobForm, isRush: e.target.checked })}
+                                className="h-4 w-4 rounded border-slate-600 bg-slate-950"
+                              />
+                              Apply rush fee for this job
+                            </label>
 
                             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                               <div className="mb-3 flex items-center justify-between">
@@ -1328,7 +1478,7 @@ function App() {
                                     {billingSettings.businessLogoUrl ? <img src={billingSettings.businessLogoUrl} alt="Business logo" className="mb-2 ml-auto h-12 w-12 rounded-full object-cover" /> : null}
                                     <p className="font-medium text-white">#{selectedJob.jobNumber || "TBC"}</p>
                                     <p>Issued {new Date().toLocaleDateString()}</p>
-                                    <p>Due on receipt</p>
+                                    <p>{Number(billingSettings.paymentTermsDays || 0) > 0 ? `Due in ${Number(billingSettings.paymentTermsDays || 0)} days` : "Due on receipt"}</p>
                                   </div>
                                 </div>
 
@@ -1345,6 +1495,7 @@ function App() {
                                     <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Job summary</p>
                                     <p className="mt-2 font-medium text-white">{selectedJob.status}</p>
                                     <p className="text-sm text-slate-400">Runtime {selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes} mins • Labour {selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins</p>
+                                    <p className="text-sm text-slate-400">Payment {selectedJob.paymentStatus || "Unpaid"}</p>
                                   </div>
                                 </div>
 
@@ -1383,6 +1534,9 @@ function App() {
                                       const deliveryAmount = Number(billingSettings.deliveryAmount || 0);
                                       const vatAmount = (subTotal + deliveryAmount) * (Number(billingSettings.vatPercent || 0) / 100);
                                       const grandTotal = subTotal + deliveryAmount + vatAmount;
+                                      const suggestedDepositAmount = grandTotal * (Math.max(0, Number(billingSettings.depositPercent || 0)) / 100);
+                                      const depositPaidAmount = Number(selectedJob.depositPaidAmount || 0);
+                                      const balanceDue = Math.max(0, grandTotal - depositPaidAmount);
 
                                       return (
                                         <>
@@ -1398,9 +1552,21 @@ function App() {
                                             <span>VAT ({Number(billingSettings.vatPercent || 0).toFixed(0)}%)</span>
                                             <span>{formatCurrency(vatAmount)}</span>
                                           </div>
+                                          <div className="flex items-center justify-between text-slate-400">
+                                            <span>Suggested deposit ({Number(billingSettings.depositPercent || 0).toFixed(0)}%)</span>
+                                            <span>{formatCurrency(suggestedDepositAmount)}</span>
+                                          </div>
+                                          <div className="flex items-center justify-between text-slate-400">
+                                            <span>Deposit paid</span>
+                                            <span>{formatCurrency(depositPaidAmount)}</span>
+                                          </div>
                                           <div className="flex items-center justify-between border-t border-slate-800 pt-2 text-base font-semibold text-white">
                                             <span>Grand total</span>
                                             <span>{formatCurrency(grandTotal)}</span>
+                                          </div>
+                                          <div className="flex items-center justify-between text-base font-semibold text-cyan-200">
+                                            <span>Balance due</span>
+                                            <span>{formatCurrency(balanceDue)}</span>
                                           </div>
                                         </>
                                       );
@@ -1470,9 +1636,17 @@ function App() {
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Status</span>
                         <select value={newJobForm.status} onChange={(e) => setNewJobForm({ ...newJobForm, status: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-                          <option value="Pending">Pending</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Completed">Completed</option>
+                          {jobStatusOptions.map((statusOption) => (
+                            <option key={statusOption} value={statusOption}>{statusOption}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Payment status</span>
+                        <select value={newJobForm.paymentStatus} onChange={(e) => setNewJobForm({ ...newJobForm, paymentStatus: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
+                          {paymentStatusOptions.map((paymentStatusOption) => (
+                            <option key={paymentStatusOption} value={paymentStatusOption}>{paymentStatusOption}</option>
+                          ))}
                         </select>
                       </label>
                     </div>
@@ -1486,7 +1660,21 @@ function App() {
                         <span className="mb-2 block">Labour time (mins)</span>
                         <input value={newJobForm.labourTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, labourTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Deposit paid (£)</span>
+                        <input type="number" step="0.01" value={newJobForm.depositPaidAmount} onChange={(e) => setNewJobForm({ ...newJobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
                     </div>
+
+                    <label className="flex items-center gap-3 text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={newJobForm.isRush}
+                        onChange={(e) => setNewJobForm({ ...newJobForm, isRush: e.target.checked })}
+                        className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                      />
+                      Apply rush fee for this job
+                    </label>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
                       <div className="mb-3 flex items-center justify-between">
@@ -1910,7 +2098,7 @@ function App() {
                       {billingMaterialTypes.map((materialType) => (
                         <div key={materialType} className="grid grid-cols-[1.4fr_1fr] items-center gap-3 px-4 py-3 text-sm">
                           <div className="font-medium text-white">{materialType}</div>
-                          <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.materialTypeMarkups?.[materialType]?.percent ?? 0)} onChange={(e) => updateMaterialTypeMarkup(materialType, parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                          <input type="number" step="0.01" aria-label={`Markup percent for ${materialType}`} value={toClearableNumberInput(billingSettings.materialTypeMarkups?.[materialType]?.percent ?? 0)} onChange={(e) => updateMaterialTypeMarkup(materialType, parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                         </div>
                       ))}
                     </div>
@@ -1944,8 +2132,33 @@ function App() {
 
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
                   <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-white">Pricing guardrails</h3>
+                    <p className="mt-1 text-sm text-slate-400">Apply minimum charge, setup fee, rush multiplier, and waste factor controls.</p>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-4 text-sm text-slate-300">
+                      <span className="w-56 shrink-0">Minimum charge (£)</span>
+                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.minimumCharge)} onChange={(e) => updateBilling("minimumCharge", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    <label className="flex items-center gap-4 text-sm text-slate-300">
+                      <span className="w-56 shrink-0">Setup fee (£)</span>
+                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.setupFee)} onChange={(e) => updateBilling("setupFee", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    <label className="flex items-center gap-4 text-sm text-slate-300">
+                      <span className="w-56 shrink-0">Rush fee %</span>
+                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.rushFeePercent)} onChange={(e) => updateBilling("rushFeePercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    <label className="flex items-center gap-4 text-sm text-slate-300">
+                      <span className="w-56 shrink-0">Waste factor %</span>
+                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.wasteFactorPercent)} onChange={(e) => updateBilling("wasteFactorPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <div className="mb-4">
                     <h3 className="text-lg font-semibold text-white">Invoice add-ons</h3>
-                    <p className="mt-1 text-sm text-slate-400">Set delivery and VAT values shown in invoice totals.</p>
+                    <p className="mt-1 text-sm text-slate-400">Set delivery, VAT, deposits, and payment terms shown in invoice totals.</p>
                   </div>
                   <div className="space-y-3">
                     <label className="flex items-center gap-4 text-sm text-slate-300">
@@ -1955,6 +2168,14 @@ function App() {
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">VAT %</span>
                       <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.vatPercent)} onChange={(e) => updateBilling("vatPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    <label className="flex items-center gap-4 text-sm text-slate-300">
+                      <span className="w-56 shrink-0">Suggested deposit %</span>
+                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.depositPercent)} onChange={(e) => updateBilling("depositPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    </label>
+                    <label className="flex items-center gap-4 text-sm text-slate-300">
+                      <span className="w-56 shrink-0">Payment terms (days)</span>
+                      <input type="number" step="1" value={toClearableNumberInput(billingSettings.paymentTermsDays)} onChange={(e) => updateBilling("paymentTermsDays", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                   </div>
                 </div>
@@ -1970,15 +2191,19 @@ function App() {
             <div className="mt-6 space-y-4 text-sm text-slate-300">
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Creating a job</h3>
-                <p className="mt-2">Use Dashboard quick add or Jobs &gt; Add job. Enter customer, machine type, machine runtime, labour time, and one or more materials. Each new job receives an automatic job number. If the customer name is new, a popup appears so you can add customer details into CRM Lite right away.</p>
+                <p className="mt-2">Use Dashboard quick add or Jobs &gt; Add job. Enter customer, machine type, machine runtime, labour time, status, payment status, optional deposit paid, and one or more materials. Use Quote Draft/Quote Sent/Quote Approved statuses when preparing quotes before production. Each new job receives an automatic job number. If the customer name is new, a popup appears so you can add customer details into CRM Lite right away.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Calculating costs</h3>
-                <p className="mt-2">Use Calculate cost from Dashboard or Jobs. Costing uses material usage, machine runtime electricity/depreciation, labour time, and workshop hourly rate. Job cards show internal breakdown lines; invoices show customer-facing totals.</p>
+                <p className="mt-2">Use Calculate cost from Dashboard or Jobs. Costing uses material usage, machine runtime electricity/depreciation, labour time, and workshop hourly rate, plus guardrails from Billing Rules (minimum charge, setup fee, rush fee %, waste factor %). Mark a job as Rush to apply rush-fee logic. Job cards show internal breakdown lines; invoices show customer-facing totals.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="font-semibold text-white">Quote to job workflow</h3>
+                <p className="mt-2">Open a quote in Jobs and use quick actions to move it through Quote Draft → Quote Sent → Quote Approved. Use Convert to job to set it to Pending and begin production. When a job is changed to Completed, the app refreshes costs and opens invoice mode automatically.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Machines and billing rules</h3>
-                <p className="mt-2">Manage machine profiles in Machines (add/edit/remove wattage, depreciation, replacement runtime). In Admin &gt; Billing rules, set markups, electricity rate, labour rate, workshop hourly rate, delivery amount, and VAT percent.</p>
+                <p className="mt-2">Manage machine profiles in Machines (add/edit/remove wattage, depreciation, replacement runtime). In Admin &gt; Billing rules, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, setup fee, rush fee %, waste factor %), and invoice finance settings (delivery, VAT, suggested deposit %, payment terms days).</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Business and customers</h3>
@@ -1986,7 +2211,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Invoices and backup</h3>
-                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoice totals include SubTotal, Delivery, VAT, and Grand total, plus business contact footer details. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, and full JSON backup download/restore.</p>
+                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoice totals include SubTotal, Delivery, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, and full JSON backup download/restore.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">If the app is not responding</h3>
@@ -1994,7 +2219,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Release notes and change history</h3>
-                <p className="mt-2">Review project updates and release notes in the changelog: <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer">CHANGELOG.md</a>.</p>
+                <p className="mt-2">Review project updates and release notes in the changelog: <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">CHANGELOG.md</a>.</p>
               </div>
             </div>
             <div className="mt-6 text-left text-xs text-slate-500">Version {APP_VERSION}</div>

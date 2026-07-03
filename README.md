@@ -15,6 +15,7 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 
 **Current functionality**
 - Manage jobs with customer details, machine type, machine runtime, and separate labour time.
+- Support quote lifecycle and conversion with statuses (`Quote Draft`, `Quote Sent`, `Quote Approved`) and one-click conversion to active jobs.
 - New customer names entered during job creation can be captured immediately in a CRM Lite details popup.
 - Create jobs directly from the Jobs tab, edit existing jobs directly under the selected expanded job card, and delete jobs from expandable job card actions.
 - Add multi-material usage per job with simplified material selection plus quantity in grams.
@@ -24,10 +25,12 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Manage machine profiles from a dedicated Machines tab with add/edit/remove workflows.
 - Calculate production costs for 3D and laser workflows using machine runtime electricity + depreciation plus separate labour-time charging.
 - Configure billing rules for percentage markups, electricity, labour rate, workshop hourly rate, per-machine wattage/depreciation assumptions, and invoice add-ons (delivery + VAT).
+- Configure pricing guardrails including minimum charge, setup fee, rush fee %, and waste factor %.
 - Material customer pricing now applies global material markup plus configured per-material-type markup without an implicit default type markup.
 - Manage business personalization in a dedicated Admin section (name, logo, address, email, phone, website).
 - Billing numeric fields now support clearing values without immediately forcing `0` while typing.
-- Preview and print a customer-facing invoice directly under the selected expanded job card, including simplified line items and totals (`SubTotal`, `Delivery`, `VAT`, `Grand total`) plus business/customer contact details, with explicit `Print / Save PDF` and `Close invoice` actions.
+- Preview and print a customer-facing invoice directly under the selected expanded job card, including simplified line items and totals (`SubTotal`, `Delivery`, `VAT`, `Grand total`) plus deposits (`Suggested deposit`, `Deposit paid`, `Balance due`) and business/customer contact details, with explicit `Print / Save PDF` and `Close invoice` actions.
+- Invoice finance completeness now includes payment terms (days), per-job payment status, and per-job deposit tracking.
 - Export/import jobs CSV, export/import materials CSV, and manage full backup/restore snapshots from Admin tools.
 - App header now prefixes the title with business name, shows business logo at top-right, and dashboard contains the jobs/materials status lozenge.
 - App footer and invoice footer both include configured business contact details (address, email, phone, website).

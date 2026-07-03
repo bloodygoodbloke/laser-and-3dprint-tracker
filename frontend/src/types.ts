@@ -54,8 +54,14 @@ export interface BillingSettings {
   depreciationMarkupPercent: number;
   labourRate: number;
   workshopHourlyRate: number;
+  minimumCharge: number;
+  setupFee: number;
+  rushFeePercent: number;
+  wasteFactorPercent: number;
   deliveryAmount: number;
   vatPercent: number;
+  depositPercent: number;
+  paymentTermsDays: number;
   overheadPercent: number;
   machineElectricitySettings: Record<string, MachineElectricitySetting>;
 }
@@ -92,6 +98,9 @@ export interface Job {
   estTimeMinutes: number;
   machineRunTimeMinutes?: number;
   labourTimeMinutes?: number;
+  isRush?: boolean;
+  paymentStatus?: string;
+  depositPaidAmount?: number;
   status: string;
   materials?: JobMaterial[];
   cost?: JobCost | null;

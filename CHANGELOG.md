@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Added quote-to-job workflow statuses (`Quote Draft`, `Quote Sent`, `Quote Approved`) with quick actions to send, approve, and convert quotes from expanded job cards.
+- Added auto-invoice workflow behavior so moving a job to `Completed` recalculates cost and opens invoice mode automatically.
+- Added pricing guardrails in billing rules: minimum charge, setup fee, rush fee %, and waste factor %, and applied them to customer charge calculations.
+- Expanded invoice finance fields with suggested deposit %, payment terms (days), per-job payment status, and per-job deposit paid amount.
+- Updated invoice preview and print layouts to show payment terms, suggested deposit, deposit paid, and balance due.
+- Added backend schema support for quote/payment job fields and billing guardrail/finance settings with migration `20260629120000_quote_guardrails_invoice_finance`.
+- Closed the Jobs edit panel automatically after Save job is submitted from an expanded job card.
+- Moved the jobs status lozenge beside the main tab list and removed the materials count from that lozenge.
 - Fixed invoice print/PDF action by rendering a dedicated print view window before invoking browser print.
 - Added an explicit Close invoice action in the invoice panel so users can exit invoice mode without changing tabs.
 - Added customer-capture popup during job creation when a new customer name is entered, allowing immediate CRM Lite record creation.

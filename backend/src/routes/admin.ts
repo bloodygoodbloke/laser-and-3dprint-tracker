@@ -47,6 +47,9 @@ router.post("/backup", async (req, res) => {
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
           labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          isRush: Boolean(job.isRush),
+          paymentStatus: String(job.paymentStatus || "Unpaid"),
+          depositPaidAmount: Number(job.depositPaidAmount || 0),
           status: job.status,
         },
       });
@@ -106,6 +109,7 @@ router.post("/backup/full", async (req, res) => {
           createdAt: undefined,
           updatedAt: undefined,
           machineElectricitySettings: JSON.stringify(billingSettingPayload.machineElectricitySettings || {}),
+          materialTypeMarkups: JSON.stringify(billingSettingPayload.materialTypeMarkups || {}),
         },
       });
     }
@@ -132,6 +136,9 @@ router.post("/backup/full", async (req, res) => {
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
           labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          isRush: Boolean(job.isRush),
+          paymentStatus: String(job.paymentStatus || "Unpaid"),
+          depositPaidAmount: Number(job.depositPaidAmount || 0),
           status: job.status,
         },
       });
