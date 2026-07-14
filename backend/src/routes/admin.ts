@@ -4,7 +4,7 @@ import prisma from "../prisma";
 const router = Router();
 
 router.get("/backup", async (_req, res) => {
-  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases] = await Promise.all([
+  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
     prisma.billingSetting.findMany(),
@@ -12,9 +12,16 @@ router.get("/backup", async (_req, res) => {
     prisma.customer.findMany(),
     prisma.supplier.findMany(),
     prisma.materialPurchase.findMany(),
+    prisma.bambuDevice.findMany(),
+    prisma.bambuMachineStatus.findMany(),
+    prisma.bambuEvent.findMany(),
+    prisma.bambuSpoolInventory.findMany(),
+    prisma.bambuUsageLog.findMany(),
+    prisma.bambuMaintenancePrediction.findMany(),
+    prisma.bambuFailureLog.findMany(),
   ]);
 
-  res.json({ jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases });
+  res.json({ jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs });
 });
 
 router.post("/backup", async (req, res) => {
@@ -68,7 +75,7 @@ router.post("/backup", async (req, res) => {
 });
 
 router.get("/backup/full", async (_req, res) => {
-  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases] = await Promise.all([
+  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
     prisma.billingSetting.findMany(),
@@ -76,15 +83,29 @@ router.get("/backup/full", async (_req, res) => {
     prisma.customer.findMany(),
     prisma.supplier.findMany(),
     prisma.materialPurchase.findMany(),
+    prisma.bambuDevice.findMany(),
+    prisma.bambuMachineStatus.findMany(),
+    prisma.bambuEvent.findMany(),
+    prisma.bambuSpoolInventory.findMany(),
+    prisma.bambuUsageLog.findMany(),
+    prisma.bambuMaintenancePrediction.findMany(),
+    prisma.bambuFailureLog.findMany(),
   ]);
 
-  res.json({ jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases });
+  res.json({ jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs });
 });
 
 router.post("/backup/full", async (req, res) => {
-  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [] } = req.body || {};
+  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [], bambuDevices = [], bambuStatuses = [], bambuEvents = [], bambuSpools = [], bambuUsageLogs = [], bambuMaintenance = [], bambuFailureLogs = [] } = req.body || {};
 
   await prisma.$transaction(async (tx) => {
+    await tx.bambuFailureLog.deleteMany();
+    await tx.bambuMaintenancePrediction.deleteMany();
+    await tx.bambuUsageLog.deleteMany();
+    await tx.bambuSpoolInventory.deleteMany();
+    await tx.bambuEvent.deleteMany();
+    await tx.bambuMachineStatus.deleteMany();
+    await tx.bambuDevice.deleteMany();
     await tx.jobCost.deleteMany();
     await tx.job.deleteMany();
     await tx.material.deleteMany();
@@ -139,6 +160,8 @@ router.post("/backup/full", async (req, res) => {
     }
 
     const supplierIdMap = new Map<string, string>();
+    const bambuDeviceIdMap = new Map<string, string>();
+    const jobIdMap = new Map<string, string>();
     for (const supplier of suppliers) {
       const createdSupplier = await tx.supplier.create({
         data: {
@@ -192,6 +215,10 @@ router.post("/backup/full", async (req, res) => {
         },
       });
 
+      if (job.id) {
+        jobIdMap.set(job.id, createdJob.id);
+      }
+
       if (Array.isArray(job.materials)) {
         for (const entry of job.materials) {
           const materialId = entry.materialId ? materialIdMap.get(entry.materialId) ?? null : null;
@@ -224,9 +251,129 @@ router.post("/backup/full", async (req, res) => {
         });
       }
     }
+
+    for (const device of bambuDevices) {
+      const createdDevice = await tx.bambuDevice.create({
+        data: {
+          name: String(device.name || "").trim() || String(device.serial || "Unknown Device"),
+          serial: String(device.serial || "").trim(),
+          ipAddress: String(device.ipAddress || "").trim(),
+          isOnline: Boolean(device.isOnline),
+          lastSeenAt: device.lastSeenAt ? new Date(String(device.lastSeenAt)) : null,
+        },
+      });
+
+      if (device.id) {
+        bambuDeviceIdMap.set(device.id, createdDevice.id);
+      }
+    }
+
+    for (const status of bambuStatuses) {
+      const mappedDeviceId = status.deviceId ? bambuDeviceIdMap.get(status.deviceId) : null;
+      if (!mappedDeviceId) continue;
+      const mappedJobId = status.jobId ? jobIdMap.get(status.jobId) : null;
+
+      await tx.bambuMachineStatus.create({
+        data: {
+          deviceId: mappedDeviceId,
+          jobId: mappedJobId || null,
+          nozzleTempC: Number(status.nozzleTempC || 0),
+          bedTempC: Number(status.bedTempC || 0),
+          chamberTempC: Number(status.chamberTempC || 0),
+          progressPct: Number(status.progressPct || 0),
+          amsSummary: String(status.amsSummary || "[]"),
+          errorCode: String(status.errorCode || ""),
+          errorMessage: String(status.errorMessage || ""),
+          reportedAt: status.reportedAt ? new Date(String(status.reportedAt)) : new Date(),
+        },
+      });
+    }
+
+    for (const event of bambuEvents) {
+      const mappedDeviceId = event.deviceId ? bambuDeviceIdMap.get(event.deviceId) : null;
+      if (!mappedDeviceId) continue;
+      const mappedJobId = event.jobId ? jobIdMap.get(event.jobId) : null;
+
+      await tx.bambuEvent.create({
+        data: {
+          deviceId: mappedDeviceId,
+          jobId: mappedJobId || null,
+          eventType: String(event.eventType || "UNKNOWN"),
+          payload: String(event.payload || "{}"),
+          createdAt: event.createdAt ? new Date(String(event.createdAt)) : new Date(),
+        },
+      });
+    }
+
+    for (const spool of bambuSpools) {
+      const mappedDeviceId = spool.deviceId ? bambuDeviceIdMap.get(spool.deviceId) : null;
+      if (!mappedDeviceId) continue;
+
+      await tx.bambuSpoolInventory.create({
+        data: {
+          deviceId: mappedDeviceId,
+          slotName: String(spool.slotName || "").trim(),
+          materialName: String(spool.materialName || "").trim(),
+          color: String(spool.color || "").trim(),
+          remainingGrams: Number(spool.remainingGrams || 0),
+        },
+      });
+    }
+
+    for (const usage of bambuUsageLogs) {
+      const mappedDeviceId = usage.deviceId ? bambuDeviceIdMap.get(usage.deviceId) : null;
+      if (!mappedDeviceId) continue;
+      const mappedJobId = usage.jobId ? jobIdMap.get(usage.jobId) : null;
+
+      await tx.bambuUsageLog.create({
+        data: {
+          deviceId: mappedDeviceId,
+          jobId: mappedJobId || null,
+          runtimeMinutes: Number(usage.runtimeMinutes || 0),
+          materialGrams: Number(usage.materialGrams || 0),
+          source: String(usage.source || "event"),
+          createdAt: usage.createdAt ? new Date(String(usage.createdAt)) : new Date(),
+        },
+      });
+    }
+
+    for (const prediction of bambuMaintenance) {
+      const mappedDeviceId = prediction.deviceId ? bambuDeviceIdMap.get(prediction.deviceId) : null;
+      if (!mappedDeviceId) continue;
+
+      await tx.bambuMaintenancePrediction.create({
+        data: {
+          deviceId: mappedDeviceId,
+          component: String(prediction.component || "Unknown"),
+          currentHours: Number(prediction.currentHours || 0),
+          intervalHours: Number(prediction.intervalHours || 0),
+          predictedDueHours: Number(prediction.predictedDueHours || 0),
+          riskLevel: String(prediction.riskLevel || "Normal"),
+        },
+      });
+    }
+
+    for (const failure of bambuFailureLogs) {
+      const mappedDeviceId = failure.deviceId ? bambuDeviceIdMap.get(failure.deviceId) : null;
+      if (!mappedDeviceId) continue;
+      const mappedJobId = failure.jobId ? jobIdMap.get(failure.jobId) : null;
+
+      await tx.bambuFailureLog.create({
+        data: {
+          deviceId: mappedDeviceId,
+          jobId: mappedJobId || null,
+          errorCode: String(failure.errorCode || ""),
+          message: String(failure.message || ""),
+          severity: String(failure.severity || "Warning"),
+          isResolved: Boolean(failure.isResolved),
+          createdAt: failure.createdAt ? new Date(String(failure.createdAt)) : new Date(),
+          resolvedAt: failure.resolvedAt ? new Date(String(failure.resolvedAt)) : null,
+        },
+      });
+    }
   });
 
-  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, billingSettingsCount: Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0, customersCount: customers.length, suppliersCount: suppliers.length, purchasesCount: purchases.length });
+  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, billingSettingsCount: Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0, customersCount: customers.length, suppliersCount: suppliers.length, purchasesCount: purchases.length, bambuDevicesCount: bambuDevices.length, bambuStatusesCount: bambuStatuses.length, bambuEventsCount: bambuEvents.length, bambuSpoolsCount: bambuSpools.length, bambuUsageLogsCount: bambuUsageLogs.length, bambuMaintenanceCount: bambuMaintenance.length, bambuFailureLogsCount: bambuFailureLogs.length });
 });
 
 export default router;

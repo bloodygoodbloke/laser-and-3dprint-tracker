@@ -135,3 +135,87 @@ export interface MaterialPurchase {
   notes?: string;
   createdAt?: string;
 }
+
+export interface BambuDevice {
+  id: string;
+  name: string;
+  serial: string;
+  ipAddress?: string;
+  isOnline: boolean;
+  lastSeenAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BambuMachineStatus {
+  id: string;
+  deviceId: string;
+  jobId?: string | null;
+  nozzleTempC: number;
+  bedTempC: number;
+  chamberTempC: number;
+  progressPct: number;
+  amsSummary?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  reportedAt?: string;
+  device?: BambuDevice;
+  job?: Job;
+}
+
+export interface BambuEvent {
+  id: string;
+  deviceId: string;
+  jobId?: string | null;
+  eventType: string;
+  payload?: string;
+  createdAt?: string;
+  device?: BambuDevice;
+  job?: Job;
+}
+
+export interface BambuSpoolInventory {
+  id: string;
+  deviceId: string;
+  slotName: string;
+  materialName: string;
+  color?: string;
+  remainingGrams: number;
+  updatedAt?: string;
+  device?: BambuDevice;
+}
+
+export interface BambuMaintenancePrediction {
+  id: string;
+  deviceId: string;
+  component: string;
+  currentHours: number;
+  intervalHours: number;
+  predictedDueHours: number;
+  riskLevel: string;
+  updatedAt?: string;
+  device?: BambuDevice;
+}
+
+export interface BambuFailureLog {
+  id: string;
+  deviceId: string;
+  jobId?: string | null;
+  errorCode?: string;
+  message: string;
+  severity: string;
+  isResolved: boolean;
+  createdAt?: string;
+  resolvedAt?: string | null;
+  device?: BambuDevice;
+  job?: Job;
+}
+
+export interface BambuDashboardPayload {
+  devices: BambuDevice[];
+  latestStatuses: BambuMachineStatus[];
+  openFailures: BambuFailureLog[];
+  maintenance: BambuMaintenancePrediction[];
+  events: BambuEvent[];
+  spools: BambuSpoolInventory[];
+}

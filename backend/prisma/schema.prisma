@@ -79,6 +79,10 @@ model Job {
   updatedAt       DateTime          @updatedAt
   materials       JobMaterial[]
   cost            JobCost?
+  bambuStatuses   BambuMachineStatus[]
+  bambuEvents     BambuEvent[]
+  bambuUsageLogs  BambuUsageLog[]
+  bambuFailureLogs BambuFailureLog[]
 }
 
 model Material {
@@ -104,6 +108,111 @@ model Supplier {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   purchases     MaterialPurchase[]
+}
+
+model BambuDevice {
+  id                     String                     @id @default(cuid())
+  name                   String
+  serial                 String                     @unique
+  ipAddress              String                     @default("")
+  isOnline               Boolean                    @default(false)
+  lastSeenAt             DateTime?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+  statuses               BambuMachineStatus[]
+  events                 BambuEvent[]
+  spoolInventory         BambuSpoolInventory[]
+  usageLogs              BambuUsageLog[]
+  maintenancePredictions BambuMaintenancePrediction[]
+  failureLogs            BambuFailureLog[]
+}
+
+model BambuMachineStatus {
+  id           String      @id @default(cuid())
+  deviceId     String
+  device       BambuDevice @relation(fields: [deviceId], references: [id])
+  jobId        String?
+  job          Job?        @relation(fields: [jobId], references: [id])
+  nozzleTempC  Float       @default(0)
+  bedTempC     Float       @default(0)
+  chamberTempC Float       @default(0)
+  progressPct  Float       @default(0)
+  amsSummary   String      @default("[]")
+  errorCode    String      @default("")
+  errorMessage String      @default("")
+  reportedAt   DateTime    @default(now())
+
+  @@index([deviceId, reportedAt])
+}
+
+model BambuEvent {
+  id        String      @id @default(cuid())
+  deviceId  String
+  device    BambuDevice @relation(fields: [deviceId], references: [id])
+  jobId     String?
+  job       Job?        @relation(fields: [jobId], references: [id])
+  eventType String
+  payload   String      @default("{}")
+  createdAt DateTime    @default(now())
+
+  @@index([deviceId, createdAt])
+}
+
+model BambuSpoolInventory {
+  id             String      @id @default(cuid())
+  deviceId       String
+  device         BambuDevice @relation(fields: [deviceId], references: [id])
+  slotName       String
+  materialName   String      @default("")
+  color          String      @default("")
+  remainingGrams Float       @default(0)
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([deviceId, slotName])
+}
+
+model BambuUsageLog {
+  id             String      @id @default(cuid())
+  deviceId       String
+  device         BambuDevice @relation(fields: [deviceId], references: [id])
+  jobId          String?
+  job            Job?        @relation(fields: [jobId], references: [id])
+  runtimeMinutes Float       @default(0)
+  materialGrams  Float       @default(0)
+  source         String      @default("event")
+  createdAt      DateTime    @default(now())
+
+  @@index([deviceId, createdAt])
+}
+
+model BambuMaintenancePrediction {
+  id                String      @id @default(cuid())
+  deviceId          String
+  device            BambuDevice @relation(fields: [deviceId], references: [id])
+  component         String
+  currentHours      Float       @default(0)
+  intervalHours     Float       @default(0)
+  predictedDueHours Float       @default(0)
+  riskLevel         String      @default("Normal")
+  updatedAt         DateTime    @updatedAt
+
+  @@unique([deviceId, component])
+}
+
+model BambuFailureLog {
+  id         String      @id @default(cuid())
+  deviceId   String
+  device     BambuDevice @relation(fields: [deviceId], references: [id])
+  jobId      String?
+  job        Job?        @relation(fields: [jobId], references: [id])
+  errorCode  String      @default("")
+  message    String      @default("")
+  severity   String      @default("Warning")
+  isResolved Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  resolvedAt DateTime?
+
+  @@index([deviceId, createdAt])
 }
 
 model MaterialPurchase {

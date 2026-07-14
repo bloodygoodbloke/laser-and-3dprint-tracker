@@ -3,7 +3,13 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
-- No unreleased changes yet.
+- Added a dedicated Reports page with date-range, status, machine, and customer filters, summary metrics, detailed report rows, and CSV export.
+- Added Bambu telemetry ingestion and live status tracking for nozzle/bed/chamber temperatures, progress, and AMS summaries.
+- Added event-driven Bambu workflow automation to update linked job statuses on print start/finish/fail/cancel events.
+- Added Bambu runtime/material usage logging with linked material stock and AMS spool deduction support.
+- Added a dedicated Bambu dashboard tab showing statuses, events, spool levels, open failures, and maintenance predictions.
+- Added predictive maintenance risk scoring from machine usage-hour accumulation and recent failure frequency.
+- Added auto-failure logging from Bambu error states and failed print event telemetry.
 
 ## [0.6.0] - 2026-07-15
 - Added machine queue and schedule workflow using per-job queue position and due date with risk indicators (`On track`, `Watch`, `At risk`, `Overdue`).

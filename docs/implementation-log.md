@@ -60,6 +60,14 @@ Last updated: 2026-07-15
 | CHG-052 | Feature | P2 Medium | Implemented | Job scheduling/calendar view | 2026-07-15 | Added a 14-day schedule calendar with due-date workload visibility and machine-level projected completion timestamps based on queue order/runtime. |
 | CHG-053 | Feature | P3 Low | Implemented | Margin reporting | 2026-07-15 | Added dashboard margin reporting grouped by machine, material type, and customer using calculated customer charge versus base totals. |
 | CHG-054 | Feature | P3 Low | Implemented | Delivery/utilization dashboards | 2026-07-15 | Added delivery and utilization KPIs including on-time delivery rate, overdue open jobs, queued runtime, and per-machine weekly utilization estimates. |
+| CHG-083 | Feature | P3 Low | Implemented | New reporting page | 2026-07-15 | Added a dedicated Reports tab with date-range and dimension filters, summary metrics, detailed rows, and CSV export of filtered report data. |
+| CHG-067 | Integration | Integrations | Implemented | Bambu local API live status | 2026-07-15 | Added telemetry ingestion for live Bambu status snapshots including nozzle/bed/chamber temperatures, progress, and AMS slot summaries. |
+| CHG-068 | Integration | Integrations | Implemented | Bambu event-driven status updates | 2026-07-15 | Added Bambu event ingestion pipeline with automatic linked-job status updates on start/finish/fail/cancel telemetry events. |
+| CHG-069 | Integration | Integrations | Implemented | Bambu auto runtime/material logging | 2026-07-15 | Added runtime/material usage logs from telemetry events and linked job runtime/material tracking updates. |
+| CHG-070 | Integration | Integrations | Implemented | AMS spool auto-deduction | 2026-07-15 | Added AMS spool inventory model plus event/status-driven spool remaining deduction updates. |
+| CHG-071 | Integration | Integrations | Implemented | Live Bambu dashboard | 2026-07-15 | Added dedicated frontend Bambu tab showing live statuses, event stream, spools, failures, maintenance, and simulation controls. |
+| CHG-072 | Integration | Integrations | Implemented | Predictive maintenance engine | 2026-07-15 | Added maintenance prediction model and risk scoring based on runtime-hour accumulation and recent failure frequency. |
+| CHG-073 | Integration | Integrations | Implemented | Auto-failure logging from Bambu | 2026-07-15 | Added automatic failure log creation for Bambu error states and failed telemetry events. |
 
 ## New Entry Template
 

@@ -19,13 +19,6 @@ Last updated: 2026-07-15
 | CHG-064 | Integration | Integrations | Planned | MakerWorld metadata import | - | Import model preview/tags/estimated time/grams. |
 | CHG-065 | Integration | Integrations | Planned | MakerWorld job autofill | - | Auto-populate job creation from MakerWorld URL. |
 | CHG-066 | Integration | Integrations | Planned | MakerWorld print profile import | - | Import print profiles for costing estimation. |
-| CHG-067 | Integration | Integrations | Planned | Bambu local API live status | - | Show live temps/progress/chamber/AMS status. |
-| CHG-068 | Integration | Integrations | Planned | Bambu event-driven status updates | - | Auto-update job status on start/finish/fail events. |
-| CHG-069 | Integration | Integrations | Planned | Bambu auto runtime/material logging | - | Auto-log actual runtime and material usage from AMS data. |
-| CHG-070 | Integration | Integrations | Planned | AMS spool auto-deduction | - | Deduct filament usage based on spool readings. |
-| CHG-071 | Integration | Integrations | Planned | Live Bambu dashboard | - | Build machine dashboard for live Bambu + queued jobs. |
-| CHG-072 | Integration | Integrations | Planned | Predictive maintenance engine | - | Predict maintenance based on machine hours/error logs. |
-| CHG-073 | Integration | Integrations | Planned | Auto-failure logging from Bambu | - | Auto-create failure entries on machine error state. |
 | CHG-074 | Integration | Integrations | Planned | LightBurn file parser | - | Parse LBRN/LBRN2 for layers/power/speed/passes/runtime. |
 | CHG-075 | Integration | Integrations | Planned | LightBurn G-code parser | - | Parse laser G-code for runtime/material mapping. |
 | CHG-076 | Integration | Integrations | Planned | Laser cost auto-generation | - | Generate laser job cost from LightBurn analysis. |
@@ -35,7 +28,6 @@ Last updated: 2026-07-15
 | CHG-080 | Automation | Integrations | Planned | Telemetry progress automation | - | Auto-update progress/completion timestamps from telemetry. |
 | CHG-081 | Automation | Integrations | Planned | Metadata auto-tagging | - | Auto-tag machine/material/complexity from imported metadata. |
 | CHG-082 | Automation | Integrations | Planned | Multi-machine load balancer | - | Auto-assign jobs to best available machine. |
-| CHG-083 | Feature | P3 Low | Planned | New reporting page | - | Add a dedicated reporting page with filters, date-range views, and export-ready summaries. |
 
 ## Next 3
 - CHG-055

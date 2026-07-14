@@ -1,4 +1,4 @@
-import { BillingSettings, Customer, Job, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingSettings, Customer, Job, Material, MaterialPurchase, Supplier } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
@@ -216,6 +216,38 @@ const api = {
       body: formData,
     });
     if (!res.ok) throw new Error("Failed to upload file");
+    return res.json();
+  },
+  async getBambuDashboard(): Promise<BambuDashboardPayload> {
+    const res = await fetch("/api/bambu/dashboard");
+    if (!res.ok) throw new Error("Failed to load Bambu dashboard");
+    return res.json();
+  },
+  async ingestBambuStatus(payload: Record<string, unknown>) {
+    const res = await fetch("/api/bambu/ingest/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to ingest Bambu status");
+    return res.json();
+  },
+  async ingestBambuEvent(payload: Record<string, unknown>) {
+    const res = await fetch("/api/bambu/ingest/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to ingest Bambu event");
+    return res.json();
+  },
+  async simulateBambuTick(payload?: Record<string, unknown>) {
+    const res = await fetch("/api/bambu/simulate/tick", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    });
+    if (!res.ok) throw new Error("Failed to generate Bambu simulation tick");
     return res.json();
   },
 };

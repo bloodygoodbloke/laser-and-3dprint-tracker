@@ -1,6 +1,6 @@
 import { createElement, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import api from "./api";
-import { BillingSettings, Customer, Job, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingSettings, Customer, Job, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
 const APP_VERSION = "0.6.0";
@@ -77,13 +77,25 @@ const getPreviewType = (filePath?: string | null) => {
   if (normalized.endsWith(".stl")) return "stl";
   return "none";
 };
+const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
+const startOfDay = (value: Date) => {
+  const next = new Date(value);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+const initialReportStartDate = () => {
+  const start = new Date();
+  start.setDate(start.getDate() - 30);
+  return toIsoDate(start);
+};
+const initialReportEndDate = () => toIsoDate(new Date());
 
 function App() {
   const KG_TO_G = 1000;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "bambu" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
   const [jobForm, setJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
@@ -122,6 +134,15 @@ function App() {
   const [jobSearchTerm, setJobSearchTerm] = useState("");
   const [jobStatusFilter, setJobStatusFilter] = useState<(typeof jobWorkflowStatusOptions)[number]>("All");
   const [jobMachineFilter, setJobMachineFilter] = useState("All");
+  const [reportStartDate, setReportStartDate] = useState(initialReportStartDate);
+  const [reportEndDate, setReportEndDate] = useState(initialReportEndDate);
+  const [reportStatusFilter, setReportStatusFilter] = useState<(typeof jobWorkflowStatusOptions)[number]>("All");
+  const [reportMachineFilter, setReportMachineFilter] = useState("All");
+  const [reportCustomerFilter, setReportCustomerFilter] = useState("All");
+  const [bambuDashboard, setBambuDashboard] = useState<BambuDashboardPayload | null>(null);
+  const [bambuMessage, setBambuMessage] = useState("");
+  const [bambuSerialInput, setBambuSerialInput] = useState("BAMBU-SIM-001");
+  const [bambuJobIdInput, setBambuJobIdInput] = useState("");
   const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
   const [jobFileMessage, setJobFileMessage] = useState<Record<string, string>>({});
 
@@ -223,7 +244,17 @@ function App() {
   useEffect(() => {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
+    api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "bambu") return;
+    const timer = window.setInterval(() => {
+      api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
+    }, 10000);
+
+    return () => window.clearInterval(timer);
+  }, [activeTab]);
 
   const selectedJob = useMemo(() => jobs.find((job) => job.id === selectedJobId) ?? jobs[0] ?? null, [jobs, selectedJobId]);
 
@@ -1093,6 +1124,122 @@ function App() {
       utilizationByMachine,
     };
   }, [jobs, machineOptions, machineQueueProjections, queuedJobs]);
+  const reportCustomers = useMemo(() => {
+    const values = new Set<string>();
+    jobs.forEach((job) => {
+      const name = String(job.customer || "Walk-in customer").trim() || "Walk-in customer";
+      values.add(name);
+    });
+    return Array.from(values).sort((left, right) => left.localeCompare(right));
+  }, [jobs]);
+  const reportJobs = useMemo(() => {
+    const startDate = reportStartDate ? startOfDay(new Date(reportStartDate)) : null;
+    const endDate = reportEndDate ? startOfDay(new Date(reportEndDate)) : null;
+
+    return jobs.filter((job) => {
+      const createdAt = job.createdAt ? startOfDay(new Date(job.createdAt)) : null;
+      const dueAt = job.dueDate ? startOfDay(new Date(job.dueDate)) : null;
+      const referenceDate = createdAt || dueAt;
+      const inDateRange = !referenceDate
+        || ((!startDate || referenceDate.getTime() >= startDate.getTime())
+          && (!endDate || referenceDate.getTime() <= endDate.getTime()));
+      const matchesStatus = reportStatusFilter === "All" || job.status === reportStatusFilter;
+      const matchesMachine = reportMachineFilter === "All" || job.machineType === reportMachineFilter;
+      const customerName = String(job.customer || "Walk-in customer").trim() || "Walk-in customer";
+      const matchesCustomer = reportCustomerFilter === "All" || customerName === reportCustomerFilter;
+      return inDateRange && matchesStatus && matchesMachine && matchesCustomer;
+    });
+  }, [jobs, reportCustomerFilter, reportEndDate, reportMachineFilter, reportStartDate, reportStatusFilter]);
+  const reportJobsWithCost = useMemo(() => reportJobs.filter((job) => job.cost), [reportJobs]);
+  const reportSummary = useMemo(() => {
+    const totals = reportJobsWithCost.reduce((sum, job) => {
+      const baseCost = Number(getBaseCostTotal(job) || 0);
+      const customerCharge = Number(getInvoiceChargeBreakdown(job).customerCharge || 0);
+      sum.base += baseCost;
+      sum.revenue += customerCharge;
+      sum.margin += customerCharge - baseCost;
+      sum.runtimeMinutes += Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
+      sum.labourMinutes += Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0);
+      sum.materialLines += Number(job.materials?.length || 0);
+      return sum;
+    }, { base: 0, revenue: 0, margin: 0, runtimeMinutes: 0, labourMinutes: 0, materialLines: 0 });
+
+    return {
+      jobsCount: reportJobs.length,
+      jobsWithCostCount: reportJobsWithCost.length,
+      ...totals,
+      marginPercent: totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0,
+    };
+  }, [reportJobs, reportJobsWithCost, billingSettings]);
+  const exportReportCsv = () => {
+    const header = [
+      "jobNumber",
+      "name",
+      "customer",
+      "machineType",
+      "status",
+      "createdAt",
+      "dueDate",
+      "runtimeMinutes",
+      "labourMinutes",
+      "baseCost",
+      "customerCharge",
+      "profit",
+    ].join(",");
+
+    const rows = reportJobs.map((job) => {
+      const baseCost = Number(getBaseCostTotal(job) || 0);
+      const customerCharge = Number(getInvoiceChargeBreakdown(job).customerCharge || 0);
+      const profit = customerCharge - baseCost;
+      return [
+        job.jobNumber || "",
+        job.name,
+        job.customer || "",
+        job.machineType,
+        job.status,
+        job.createdAt ? String(job.createdAt).slice(0, 10) : "",
+        job.dueDate ? String(job.dueDate).slice(0, 10) : "",
+        String(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0)),
+        String(Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0)),
+        String(baseCost.toFixed(2)),
+        String(customerCharge.toFixed(2)),
+        String(profit.toFixed(2)),
+      ].join(",");
+    });
+
+    const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `report-${reportStartDate || "all"}-to-${reportEndDate || "all"}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+  const refreshBambuDashboard = async () => {
+    const payload = await api.getBambuDashboard();
+    setBambuDashboard(payload);
+  };
+  const simulateBambuTick = async () => {
+    await api.simulateBambuTick({ serial: bambuSerialInput || "BAMBU-SIM-001" });
+    await refreshBambuDashboard();
+    setBambuMessage("Simulated Bambu status tick ingested.");
+  };
+  const sendBambuEvent = async (eventType: "PRINT_STARTED" | "PRINT_FINISHED" | "PRINT_FAILED") => {
+    await api.ingestBambuEvent({
+      serial: bambuSerialInput || "BAMBU-SIM-001",
+      jobId: bambuJobIdInput || undefined,
+      eventType,
+      runtimeMinutes: eventType === "PRINT_FINISHED" ? 180 : 0,
+      materialGrams: eventType === "PRINT_FINISHED" ? 95 : 0,
+      spoolAdjustments: eventType === "PRINT_FINISHED"
+        ? [{ slotName: "A1", gramsUsed: 60 }, { slotName: "A2", gramsUsed: 35 }]
+        : [],
+      errorCode: eventType === "PRINT_FAILED" ? "NOZZLE_CLOG" : "",
+      message: eventType === "PRINT_FAILED" ? "Nozzle clog detected" : "",
+    });
+    await refreshBambuDashboard();
+    setBambuMessage(`${eventType} event ingested.`);
+  };
   const selectedCustomerProfile = useMemo(
     () => customers.find((customer) => customer.name.trim().toLowerCase() === String(selectedJob?.customer || "").trim().toLowerCase()) || null,
     [customers, selectedJob?.customer],
@@ -1471,7 +1618,7 @@ function App() {
 
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
           <nav className="flex flex-wrap gap-3">
-            {(["dashboard", "jobs", "materials", "machines", "customers", "suppliers", "billing", "admin", "help"] as const).map((tab) => (
+            {(["dashboard", "jobs", "reports", "bambu", "materials", "machines", "customers", "suppliers", "billing", "admin", "help"] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
                 {tab}
               </button>
@@ -1711,6 +1858,213 @@ function App() {
               </section>
             </div>
           </div>
+        )}
+
+        {activeTab === "reports" && (
+          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Reporting page</h2>
+                <p className="mt-2 text-sm text-slate-400">Filter jobs by date range, status, machine, and customer, then export report-ready data.</p>
+              </div>
+              <button type="button" onClick={exportReportCsv} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Export CSV</button>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <label className="flex items-center gap-4 text-sm text-slate-300">
+                <span className="w-40 shrink-0">Start date</span>
+                <input type="date" value={reportStartDate} onChange={(e) => setReportStartDate(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+              </label>
+              <label className="flex items-center gap-4 text-sm text-slate-300">
+                <span className="w-40 shrink-0">End date</span>
+                <input type="date" value={reportEndDate} onChange={(e) => setReportEndDate(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+              </label>
+              <label className="flex items-center gap-4 text-sm text-slate-300">
+                <span className="w-40 shrink-0">Status</span>
+                <select value={reportStatusFilter} onChange={(e) => setReportStatusFilter(e.target.value as (typeof jobWorkflowStatusOptions)[number])} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                  {jobWorkflowStatusOptions.map((statusOption) => (
+                    <option key={`report-status-${statusOption}`} value={statusOption}>{statusOption}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-4 text-sm text-slate-300">
+                <span className="w-40 shrink-0">Machine</span>
+                <select value={reportMachineFilter} onChange={(e) => setReportMachineFilter(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                  <option value="All">All</option>
+                  {machineOptions.map((option) => (
+                    <option key={`report-machine-${option}`} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-4 text-sm text-slate-300 lg:col-span-2">
+                <span className="w-40 shrink-0">Customer</span>
+                <select value={reportCustomerFilter} onChange={(e) => setReportCustomerFilter(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                  <option value="All">All customers</option>
+                  {reportCustomers.map((customerName) => (
+                    <option key={`report-customer-${customerName}`} value={customerName}>{customerName}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Jobs in scope</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{reportSummary.jobsCount}</p>
+                <p className="text-xs text-slate-400">{reportSummary.jobsWithCostCount} costed jobs</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Revenue</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(reportSummary.revenue)}</p>
+                <p className="text-xs text-slate-400">Customer-charge total</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Base cost</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(reportSummary.base)}</p>
+                <p className="text-xs text-slate-400">Internal production base</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Margin</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(reportSummary.margin)}</p>
+                <p className="text-xs text-slate-400">{reportSummary.marginPercent.toFixed(1)}% margin rate</p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Report rows</h3>
+                <span className="text-xs text-slate-400">Runtime {(reportSummary.runtimeMinutes / 60).toFixed(1)} h • Labour {(reportSummary.labourMinutes / 60).toFixed(1)} h</span>
+              </div>
+              <div className="space-y-2">
+                {reportJobs.map((job) => {
+                  const baseCost = Number(getBaseCostTotal(job) || 0);
+                  const customerCharge = Number(getInvoiceChargeBreakdown(job).customerCharge || 0);
+                  const margin = customerCharge - baseCost;
+                  return (
+                    <div key={`report-row-${job.id}`} className="grid gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr]">
+                      <span className="text-slate-200">{job.name} • {job.jobNumber || "No job number"}</span>
+                      <span className="text-slate-400">{job.customer || "Walk-in"}</span>
+                      <span className="text-slate-400">{job.machineType}</span>
+                      <span className="text-slate-400">{job.status}</span>
+                      <span className="text-slate-300">{formatCurrency(customerCharge)}</span>
+                      <span className={`${margin >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatCurrency(margin)}</span>
+                    </div>
+                  );
+                })}
+                {!reportJobs.length ? <p className="text-sm text-slate-400">No jobs match the selected report filters.</p> : null}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === "bambu" && (
+          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Live Bambu dashboard</h2>
+                <p className="mt-2 text-sm text-slate-400">Live machine status, event stream, AMS spool tracking, failure logs, and predictive maintenance risk.</p>
+              </div>
+              <button type="button" onClick={() => refreshBambuDashboard().catch(() => undefined)} className="rounded-xl border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Refresh</button>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="text-sm font-semibold text-white">Telemetry simulation controls</h3>
+                <div className="mt-3 space-y-3">
+                  <label className="flex items-center gap-4 text-sm text-slate-300">
+                    <span className="w-40 shrink-0">Device serial</span>
+                    <input value={bambuSerialInput} onChange={(e) => setBambuSerialInput(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                  </label>
+                  <label className="flex items-center gap-4 text-sm text-slate-300">
+                    <span className="w-40 shrink-0">Linked job</span>
+                    <select value={bambuJobIdInput} onChange={(e) => setBambuJobIdInput(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
+                      <option value="">No linked job</option>
+                      {jobs.map((job) => (
+                        <option key={`bambu-job-${job.id}`} value={job.id}>{job.jobNumber || "No job number"} • {job.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => simulateBambuTick().catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Simulate status tick</button>
+                    <button type="button" onClick={() => sendBambuEvent("PRINT_STARTED").catch(() => undefined)} className="rounded-full border border-emerald-700 px-3 py-1 text-xs text-emerald-300">Send PRINT_STARTED</button>
+                    <button type="button" onClick={() => sendBambuEvent("PRINT_FINISHED").catch(() => undefined)} className="rounded-full border border-sky-700 px-3 py-1 text-xs text-sky-300">Send PRINT_FINISHED</button>
+                    <button type="button" onClick={() => sendBambuEvent("PRINT_FAILED").catch(() => undefined)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Send PRINT_FAILED</button>
+                  </div>
+                  {bambuMessage ? <p className="text-xs text-cyan-300">{bambuMessage}</p> : null}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="text-sm font-semibold text-white">Live status snapshots</h3>
+                <div className="mt-3 space-y-2 text-xs">
+                  {(bambuDashboard?.latestStatuses || []).slice(0, 8).map((status) => (
+                    <div key={`status-${status.id}`} className="rounded-xl border border-slate-800 bg-slate-900 p-2">
+                      <p className="text-slate-200">{status.device?.name || status.deviceId} • {status.progressPct.toFixed(0)}%</p>
+                      <p className="text-slate-400">Nozzle {status.nozzleTempC.toFixed(1)}C • Bed {status.bedTempC.toFixed(1)}C • Chamber {status.chamberTempC.toFixed(1)}C</p>
+                      <p className="text-slate-500">{status.errorCode || "No active error"}</p>
+                    </div>
+                  ))}
+                  {!(bambuDashboard?.latestStatuses || []).length ? <p className="text-slate-500">No telemetry snapshots yet.</p> : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="text-sm font-semibold text-white">AMS spool inventory</h3>
+                <div className="mt-2 space-y-2 text-xs">
+                  {(bambuDashboard?.spools || []).slice(0, 10).map((spool) => (
+                    <div key={`spool-${spool.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-2 py-1">
+                      <span className="text-slate-300">{spool.device?.name || spool.deviceId} {spool.slotName}</span>
+                      <span className="text-slate-200">{spool.remainingGrams.toFixed(0)} g</span>
+                    </div>
+                  ))}
+                  {!(bambuDashboard?.spools || []).length ? <p className="text-slate-500">No AMS spool data yet.</p> : null}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="text-sm font-semibold text-white">Predictive maintenance</h3>
+                <div className="mt-2 space-y-2 text-xs">
+                  {(bambuDashboard?.maintenance || []).slice(0, 10).map((item) => (
+                    <div key={`maint-${item.id}`} className="rounded-xl border border-slate-800 bg-slate-900 px-2 py-1">
+                      <p className="text-slate-200">{item.device?.name || item.deviceId} • {item.component}</p>
+                      <p className="text-slate-400">{item.currentHours.toFixed(1)}h / {item.intervalHours.toFixed(0)}h • Due in {item.predictedDueHours.toFixed(1)}h</p>
+                      <p className={`${item.riskLevel === "Overdue" || item.riskLevel === "High" ? "text-rose-300" : item.riskLevel === "Watch" ? "text-amber-300" : "text-emerald-300"}`}>{item.riskLevel}</p>
+                    </div>
+                  ))}
+                  {!(bambuDashboard?.maintenance || []).length ? <p className="text-slate-500">No maintenance predictions yet.</p> : null}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="text-sm font-semibold text-white">Open failure logs</h3>
+                <div className="mt-2 space-y-2 text-xs">
+                  {(bambuDashboard?.openFailures || []).slice(0, 10).map((failure) => (
+                    <div key={`failure-${failure.id}`} className="rounded-xl border border-rose-900/70 bg-rose-950/20 px-2 py-1">
+                      <p className="text-rose-200">{failure.device?.name || failure.deviceId} • {failure.errorCode || "ERROR"}</p>
+                      <p className="text-rose-300">{failure.message}</p>
+                      <p className="text-rose-400">{failure.createdAt ? new Date(failure.createdAt).toLocaleString() : ""}</p>
+                    </div>
+                  ))}
+                  {!(bambuDashboard?.openFailures || []).length ? <p className="text-slate-500">No active failures.</p> : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <h3 className="text-sm font-semibold text-white">Event stream</h3>
+              <div className="mt-2 space-y-2 text-xs">
+                {(bambuDashboard?.events || []).slice(0, 20).map((event) => (
+                  <div key={`event-${event.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2">
+                    <span className="text-slate-200">{event.device?.name || event.deviceId} • {event.eventType}</span>
+                    <span className="text-slate-400">{event.createdAt ? new Date(event.createdAt).toLocaleString() : ""}</span>
+                  </div>
+                ))}
+                {!(bambuDashboard?.events || []).length ? <p className="text-slate-500">No Bambu events recorded yet.</p> : null}
+              </div>
+            </div>
+          </section>
         )}
 
         {activeTab === "jobs" && (
@@ -3020,6 +3374,14 @@ function App() {
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Invoices and backup</h3>
                 <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoice totals include SubTotal, Delivery, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, and full JSON backup download/restore.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="font-semibold text-white">Reporting page</h3>
+                <p className="mt-2">Use Reports to filter by date range, status, machine, and customer. The page shows summary metrics (jobs, revenue, base cost, margin) and lets you export the filtered report rows as CSV.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="font-semibold text-white">Bambu telemetry integration</h3>
+                <p className="mt-2">Use Bambu tab to monitor live status (temps/progress/AMS), event stream updates, spool levels, predictive maintenance risk, and failure logs. Simulation buttons can be used to test start/finish/fail event handling and auto-updates without live hardware.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">If the app is not responding</h3>

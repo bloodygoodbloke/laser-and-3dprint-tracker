@@ -31,6 +31,12 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Manage supplier records and material purchase history (material, quantity, cost, date, notes) from a dedicated Suppliers tab.
 - Track margin reporting by machine, material type, and customer from the Dashboard reporting area.
 - Monitor delivery and utilization KPIs including on-time rate, overdue open jobs, queued runtime, and per-machine utilization.
+- Use a dedicated Reports page with date-range, status, machine, and customer filters plus CSV export-ready report rows and summary metrics.
+- Monitor Bambu machine live status (nozzle/bed/chamber temperatures, progress, AMS summary) in a dedicated Bambu dashboard.
+- Process Bambu event-driven updates (`PRINT_STARTED`, `PRINT_FINISHED`, `PRINT_FAILED`) to auto-update linked job statuses.
+- Auto-log runtime/material telemetry usage, auto-deduct linked job material stock, and auto-adjust AMS spool levels from telemetry events.
+- Track open failure logs from Bambu error states and view an event stream for recent telemetry actions.
+- Generate predictive maintenance risk indicators from accumulated machine usage hours and recent error frequency.
 - Manage machine profiles from a dedicated Machines tab with add/edit/remove workflows.
 - Calculate production costs for 3D and laser workflows using machine runtime electricity + depreciation plus separate labour-time charging.
 - Configure billing rules for percentage markups, electricity, labour rate, workshop hourly rate, per-machine wattage/depreciation assumptions, and invoice add-ons (delivery + VAT).
