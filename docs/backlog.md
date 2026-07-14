@@ -35,6 +35,7 @@ Last updated: 2026-07-15
 | CHG-080 | Automation | Integrations | Planned | Telemetry progress automation | - | Auto-update progress/completion timestamps from telemetry. |
 | CHG-081 | Automation | Integrations | Planned | Metadata auto-tagging | - | Auto-tag machine/material/complexity from imported metadata. |
 | CHG-082 | Automation | Integrations | Planned | Multi-machine load balancer | - | Auto-assign jobs to best available machine. |
+| CHG-083 | Feature | P3 Low | Planned | New reporting page | - | Add a dedicated reporting page with filters, date-range views, and export-ready summaries. |
 
 ## Next 3
 - CHG-055
