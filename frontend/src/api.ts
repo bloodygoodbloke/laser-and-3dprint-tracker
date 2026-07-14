@@ -166,6 +166,17 @@ const api = {
     if (!res.ok) throw new Error("Failed to calculate cost");
     return res.json();
   },
+  async uploadJobFile(id: string, file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`/api/jobs/${id}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Failed to upload file");
+    return res.json();
+  },
 };
 
 export default api;

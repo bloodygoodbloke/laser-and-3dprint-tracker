@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- No unreleased changes yet.
+
+## [0.5.0] - 2026-07-14
+- Added explicit internal profit visibility on job cards and expanded cost breakdown, alongside existing base and customer totals.
+- Added a dedicated Billing tab and moved billing/personalization workflows out of Admin backup tooling.
+- Added collapsible Business personalization and Billing rules sections, including collapsible billing rule groups.
+- Added Jobs tab search with status and machine filters, plus stronger workflow status action controls (Start now, Mark complete, Mark invoiced, Reopen).
+- Added per-job SVG/STL upload support in expanded job cards with inline preview (SVG image preview and STL model preview).
+- Hardened Dockerized local runtime workflow with compose health checks, backend-first startup ordering, and explicit dev container commands.
 - Added quote-to-job workflow statuses (`Quote Draft`, `Quote Sent`, `Quote Approved`) with quick actions to send, approve, and convert quotes from expanded job cards.
 - Added auto-invoice workflow behavior so moving a job to `Completed` recalculates cost and opens invoice mode automatically.
 - Added pricing guardrails in billing rules: minimum charge, setup fee, rush fee %, and waste factor %, and applied them to customer charge calculations.

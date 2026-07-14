@@ -1,13 +1,14 @@
 {
   "name": "laser-and-3dprint-frontend",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "private": true,
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "check:release": "node ../scripts/check-release-notes.js",
-    "preversion": "npm run check:release"
+    "check:tracker": "node ../scripts/check-tracker-consistency.js",
+    "preversion": "npm run check:release && npm run check:tracker"
   },
   "dependencies": {
     "react": "^18.3.1",

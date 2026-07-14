@@ -1,6 +1,6 @@
 {
   "name": "laser-and-3dprint-backend",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "private": true,
   "main": "dist/index.js",
   "scripts": {
@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "prisma": "prisma",
     "check:release": "node ../scripts/check-release-notes.js",
-    "preversion": "npm run check:release"
+    "check:tracker": "node ../scripts/check-tracker-consistency.js",
+    "preversion": "npm run check:release && npm run check:tracker"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { createElement, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import api from "./api";
 import { BillingSettings, Customer, Job, Material } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.5.0";
 
 const defaultMachineNames = [
   "BambuLab P2S Printer",
@@ -68,13 +68,20 @@ const toClearableNumberInput = (value: number) => (value === 0 ? "" : String(val
 const parseNumberInput = (value: string) => (value.trim() === "" ? 0 : Number(value));
 const jobStatusOptions = ["Quote Draft", "Quote Sent", "Quote Approved", "Pending", "In Progress", "Completed", "Invoiced"];
 const paymentStatusOptions = ["Unpaid", "Partially Paid", "Paid", "Overdue"];
+const jobWorkflowStatusOptions = ["All", ...jobStatusOptions] as const;
+const getPreviewType = (filePath?: string | null) => {
+  const normalized = String(filePath || "").toLowerCase();
+  if (normalized.endsWith(".svg")) return "svg";
+  if (normalized.endsWith(".stl")) return "stl";
+  return "none";
+};
 
 function App() {
   const KG_TO_G = 1000;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "materials" | "machines" | "customers" | "admin" | "help">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "materials" | "machines" | "customers" | "billing" | "admin" | "help">("dashboard");
   const [jobForm, setJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
@@ -103,6 +110,11 @@ function App() {
   const [customerMessage, setCustomerMessage] = useState("");
   const [showCustomerCaptureModal, setShowCustomerCaptureModal] = useState(false);
   const [customerCaptureForm, setCustomerCaptureForm] = useState({ name: "", address: "", email: "", phone: "", notes: "" });
+  const [jobSearchTerm, setJobSearchTerm] = useState("");
+  const [jobStatusFilter, setJobStatusFilter] = useState<(typeof jobWorkflowStatusOptions)[number]>("All");
+  const [jobMachineFilter, setJobMachineFilter] = useState("All");
+  const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
+  const [jobFileMessage, setJobFileMessage] = useState<Record<string, string>>({});
 
   const loadData = async () => {
     const [jobsData, materialsData, customersData] = await Promise.all([api.getJobs(), api.getMaterials(), api.getCustomers()]);
@@ -221,6 +233,18 @@ function App() {
 
   const lowStockMaterials = useMemo(() => materials.filter((material) => material.stockLevel <= material.reorderThreshold), [materials]);
   const pendingJobs = useMemo(() => jobs.filter((job) => job.status === "Pending"), [jobs]);
+  const filteredJobs = useMemo(() => {
+    const normalizedSearch = jobSearchTerm.trim().toLowerCase();
+    return jobs.filter((job) => {
+      const matchesStatus = jobStatusFilter === "All" || job.status === jobStatusFilter;
+      const matchesMachine = jobMachineFilter === "All" || job.machineType === jobMachineFilter;
+      const matchesSearch = !normalizedSearch
+        || job.name.toLowerCase().includes(normalizedSearch)
+        || String(job.customer || "").toLowerCase().includes(normalizedSearch)
+        || String(job.jobNumber || "").toLowerCase().includes(normalizedSearch);
+      return matchesStatus && matchesMachine && matchesSearch;
+    });
+  }, [jobs, jobMachineFilter, jobSearchTerm, jobStatusFilter]);
     const machineOptions = useMemo(() => {
       const configuredMachines = Object.keys(billingSettings.machineElectricitySettings || {}).filter((name) => name && name.trim());
       const preferred = defaultMachineNames.filter((name) => configuredMachines.includes(name));
@@ -588,6 +612,41 @@ function App() {
     setJobEditorMode("edit");
   };
 
+  const getWorkflowActions = (job: Job) => {
+    const actions: Array<{ label: string; status: string; tone: string }> = [];
+    if (job.status === "Pending") actions.push({ label: "Start now", status: "In Progress", tone: "border-emerald-700 text-emerald-300" });
+    if (job.status === "In Progress") actions.push({ label: "Mark complete", status: "Completed", tone: "border-emerald-700 text-emerald-300" });
+    if (job.status === "Completed") actions.push({ label: "Mark invoiced", status: "Invoiced", tone: "border-sky-700 text-sky-300" });
+    if (job.status === "Invoiced") actions.push({ label: "Reopen", status: "Completed", tone: "border-amber-700 text-amber-300" });
+    return actions;
+  };
+
+  const uploadJobFile = async (job: Job, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const fileExtension = file.name.toLowerCase().split(".").pop();
+    if (fileExtension !== "svg" && fileExtension !== "stl") {
+      setJobFileMessage((current) => ({ ...current, [job.id]: "Only SVG and STL files are supported." }));
+      event.target.value = "";
+      return;
+    }
+
+    setUploadingJobId(job.id);
+    setJobFileMessage((current) => ({ ...current, [job.id]: "Uploading file..." }));
+    try {
+      await api.uploadJobFile(job.id, file);
+      await loadData();
+      setSelectedJobId(job.id);
+      setExpandedJobId(job.id);
+      setJobFileMessage((current) => ({ ...current, [job.id]: `Uploaded ${file.name}.` }));
+    } catch (_error) {
+      setJobFileMessage((current) => ({ ...current, [job.id]: "Upload failed. Please try again." }));
+    } finally {
+      setUploadingJobId(null);
+      event.target.value = "";
+    }
+  };
+
   const saveSelectedJob = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedJob) return;
@@ -780,6 +839,10 @@ function App() {
     };
   };
   const getBaseCostTotal = (job: Job) => Number(job.cost?.totalCost ?? 0);
+  const getProfitTotal = (job: Job) => {
+    if (!job.cost) return 0;
+    return Number(getInvoiceChargeBreakdown(job).customerCharge) - Number(getBaseCostTotal(job));
+  };
   const getCostButtonLabel = (job: Job) => (job.cost ? "Refresh costs" : "Calculate cost");
   const selectedCustomerProfile = useMemo(
     () => customers.find((customer) => customer.name.trim().toLowerCase() === String(selectedJob?.customer || "").trim().toLowerCase()) || null,
@@ -1092,7 +1155,7 @@ function App() {
 
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
           <nav className="flex flex-wrap gap-3">
-            {(["dashboard", "jobs", "materials", "machines", "customers", "admin", "help"] as const).map((tab) => (
+            {(["dashboard", "jobs", "materials", "machines", "customers", "billing", "admin", "help"] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
                 {tab}
               </button>
@@ -1226,9 +1289,40 @@ function App() {
               </div>
               <button type="button" onClick={openNewJobEditor} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Add job</button>
             </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto]">
+              <label className="block text-sm text-slate-300">
+                <span className="mb-2 block">Search jobs</span>
+                <input
+                  value={jobSearchTerm}
+                  onChange={(e) => setJobSearchTerm(e.target.value)}
+                  placeholder="Search by name, customer, or job number"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm text-slate-300">
+                <span className="mb-2 block">Status filter</span>
+                <select value={jobStatusFilter} onChange={(e) => setJobStatusFilter(e.target.value as (typeof jobWorkflowStatusOptions)[number])} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                  {jobWorkflowStatusOptions.map((statusOption) => (
+                    <option key={statusOption} value={statusOption}>{statusOption}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm text-slate-300">
+                <span className="mb-2 block">Machine filter</span>
+                <select value={jobMachineFilter} onChange={(e) => setJobMachineFilter(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                  <option value="All">All</option>
+                  {machineOptions.filter((machineName) => machineName !== "Other").map((machineName) => (
+                    <option key={machineName} value={machineName}>{machineName}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="self-end rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300">
+                {filteredJobs.length} of {jobs.length} shown
+              </div>
+            </div>
             <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="space-y-3">
-                {jobs.map((job) => (
+                {filteredJobs.map((job) => (
                   <div key={job.id} className={`w-full rounded-2xl border ${expandedJobId === job.id ? "border-cyan-500 bg-cyan-500/10" : "border-slate-800 bg-slate-950"}`}>
                     <button
                       type="button"
@@ -1244,9 +1338,14 @@ function App() {
                           <p className="text-sm text-slate-400">{job.jobNumber || "No job number"} • {job.customer || "No customer"} • {job.machineType}</p>
                         </div>
                         <div className="text-right text-sm text-slate-400">
-                          <p>{job.status}</p>
+                          <p>
+                            <span className={`rounded-full px-3 py-1 text-xs font-medium ${job.status === "Completed" || job.status === "Invoiced" ? "bg-emerald-600/20 text-emerald-300" : job.status === "In Progress" ? "bg-sky-600/20 text-sky-300" : "bg-slate-700 text-slate-200"}`}>
+                              {job.status}
+                            </span>
+                          </p>
                           <p>{job.cost ? `Base (no markups) ${formatCurrency(getBaseCostTotal(job))}` : "No cost yet"}</p>
                           {job.cost ? <p>{`Customer (with markups) ${formatCurrency(getInvoiceChargeBreakdown(job).customerCharge)}`}</p> : null}
+                          {job.cost ? <p>{`Profit ${formatCurrency(getProfitTotal(job))}`}</p> : null}
                         </div>
                       </div>
                     </button>
@@ -1264,6 +1363,51 @@ function App() {
                           <p><span className="text-slate-500">Rush:</span> {job.isRush ? "Yes" : "No"}</p>
                           <p><span className="text-slate-500">Deposit paid:</span> {formatCurrency(Number(job.depositPaidAmount || 0))}</p>
                           <p><span className="text-slate-500">Materials:</span> {job.materials?.length || 0}</p>
+                          <p className="md:col-span-2"><span className="text-slate-500">File:</span> {job.filePath || "No file uploaded"}</p>
+                        </div>
+
+                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Job file preview</p>
+                            <label className="cursor-pointer rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">
+                              <span>{uploadingJobId === job.id ? "Uploading..." : "Upload SVG/STL"}</span>
+                              <input
+                                type="file"
+                                accept=".svg,.stl"
+                                disabled={uploadingJobId === job.id}
+                                className="hidden"
+                                onChange={(event) => uploadJobFile(job, event)}
+                              />
+                            </label>
+                          </div>
+                          {jobFileMessage[job.id] ? <p className="mt-2 text-xs text-cyan-300">{jobFileMessage[job.id]}</p> : null}
+                          {job.filePath ? (
+                            <div className="mt-3 space-y-3">
+                              <div className="flex flex-wrap gap-3 text-xs">
+                                <a className="text-cyan-300 underline" href={job.filePath} target="_blank" rel="noreferrer">Open file</a>
+                                <a className="text-cyan-300 underline" href={job.filePath} download>Download file</a>
+                              </div>
+                              {getPreviewType(job.filePath) === "svg" ? (
+                                <div className="overflow-hidden rounded-xl border border-slate-800 bg-white p-2">
+                                  <img src={job.filePath} alt={`${job.name} preview`} className="max-h-72 w-full object-contain" />
+                                </div>
+                              ) : null}
+                              {getPreviewType(job.filePath) === "stl" ? (
+                                <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+                                  {createElement("model-viewer", {
+                                    src: job.filePath,
+                                    style: { width: "100%", height: "320px", backgroundColor: "#0f172a" },
+                                    "camera-controls": "",
+                                    "auto-rotate": "",
+                                    "shadow-intensity": "1",
+                                    exposure: "1",
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="mt-3 text-sm text-slate-400">Upload an SVG or STL file to preview it here.</p>
+                          )}
                         </div>
                         {job.cost ? (
                           <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
@@ -1309,10 +1453,24 @@ function App() {
                                 <span className="text-slate-300">Customer total (with markups)</span>
                                 <span className="font-semibold text-white">{formatCurrency(getInvoiceChargeBreakdown(job).customerCharge)}</span>
                               </div>
+                              <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
+                                <span className="text-slate-300">Profit (internal)</span>
+                                <span className="font-semibold text-white">{formatCurrency(getProfitTotal(job))}</span>
+                              </div>
                             </div>
                           </div>
                         ) : null}
                         <div className="mt-3 flex flex-wrap gap-2">
+                          {getWorkflowActions(job).map((action) => (
+                            <button
+                              key={`${job.id}-${action.status}`}
+                              type="button"
+                              onClick={() => updateJobStatusQuick(job, action.status)}
+                              className={`rounded-full border px-3 py-1 text-sm ${action.tone}`}
+                            >
+                              {action.label}
+                            </button>
+                          ))}
                           {(job.status === "Quote Draft" || job.status === "Quote Sent") ? (
                             <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Approved")} className="rounded-full border border-emerald-700 px-3 py-1 text-sm text-emerald-300">Approve quote</button>
                           ) : null}
@@ -1600,6 +1758,11 @@ function App() {
                     ) : null}
                   </div>
                 ))}
+                {!filteredJobs.length ? (
+                  <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
+                    No jobs match the current filters.
+                  </div>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
@@ -2004,19 +2167,27 @@ function App() {
                 {fullBackupMessage ? <p className="text-sm text-cyan-300">{fullBackupMessage}</p> : null}
               </div>
             </section>
+          </div>
+        )}
 
+        {activeTab === "billing" && (
+          <div className="space-y-6">
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold">Business personalization</h2>
-                  <p className="mt-2 text-sm text-slate-400">Set business identity details used in customer invoices.</p>
+                  <h2 className="text-xl font-semibold">Billing and personalization</h2>
+                  <p className="mt-2 text-sm text-slate-400">Configure business identity and billing rules in one dedicated area.</p>
                 </div>
-                <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">
-                  {savingBilling ? "Saving..." : "Save business details"}
-                </button>
               </div>
-              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                <div className="space-y-3">
+
+              <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <summary className="cursor-pointer list-none text-lg font-semibold text-white">Business personalization</summary>
+                <div className="mt-4 flex items-center justify-end">
+                  <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">
+                    {savingBilling ? "Saving..." : "Save business details"}
+                  </button>
+                </div>
+                <div className="mt-4 space-y-3">
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Business name</span>
                     <input value={billingSettings.businessName || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessName: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="Fabrication Workshop Tracker" />
@@ -2042,23 +2213,26 @@ function App() {
                     <input value={billingSettings.businessWebsite || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessWebsite: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="https://..." />
                   </label>
                 </div>
-              </div>
-            </section>
+              </details>
 
-            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+              <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <summary className="cursor-pointer list-none text-lg font-semibold text-white">Billing rules</summary>
+                <div className="mt-4 flex items-center justify-end">
+                  <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">
+                    {savingBilling ? "Saving..." : "Save rules"}
+                  </button>
+                </div>
+
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold">Billing rules</h2>
+                  <h2 className="mt-4 text-xl font-semibold">Billing rules</h2>
                   <p className="mt-2 text-sm text-slate-400">Industry-style setup with dedicated Electricity, Materials, and Labour sections.</p>
                 </div>
-                <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">
-                  {savingBilling ? "Saving..." : "Save rules"}
-                </button>
               </div>
               <form onSubmit={saveBilling} className="mt-6 space-y-6">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Electricity</summary>
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-white">Electricity</h3>
                     <p className="mt-1 text-sm text-slate-400">Set base energy pricing rules used by runtime cost calculations.</p>
                   </div>
                   <div className="space-y-3">
@@ -2075,11 +2249,11 @@ function App() {
                       <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.depreciationMarkupPercent)} onChange={(e) => updateBilling("depreciationMarkupPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                   </div>
-                </div>
+                </details>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Materials</summary>
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-white">Materials</h3>
                     <p className="mt-1 text-sm text-slate-400">Set global markup and optional per-material-type pricing rules.</p>
                   </div>
                   <div className="space-y-3">
@@ -2103,22 +2277,22 @@ function App() {
                       ))}
                     </div>
                   </div>
-                </div>
+                </details>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Labour</summary>
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-white">Labour</h3>
                     <p className="mt-1 text-sm text-slate-400">Set the base labour rate used in billing.</p>
                   </div>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Labour rate / hour</span>
                     <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.labourRate)} onChange={(e) => updateBilling("labourRate", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                   </label>
-                </div>
+                </details>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Workshop costs</summary>
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-white">Workshop costs</h3>
                     <p className="mt-1 text-sm text-slate-400">Set a base workshop hourly rate that is included in customer billing.</p>
                   </div>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
@@ -2128,11 +2302,11 @@ function App() {
                   <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
                     Workshop costs are calculated from machine runtime hours multiplied by this hourly rate.
                   </div>
-                </div>
+                </details>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Pricing guardrails</summary>
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-white">Pricing guardrails</h3>
                     <p className="mt-1 text-sm text-slate-400">Apply minimum charge, setup fee, rush multiplier, and waste factor controls.</p>
                   </div>
                   <div className="space-y-3">
@@ -2153,11 +2327,11 @@ function App() {
                       <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.wasteFactorPercent)} onChange={(e) => updateBilling("wasteFactorPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                   </div>
-                </div>
+                </details>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Invoice add-ons</summary>
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold text-white">Invoice add-ons</h3>
                     <p className="mt-1 text-sm text-slate-400">Set delivery, VAT, deposits, and payment terms shown in invoice totals.</p>
                   </div>
                   <div className="space-y-3">
@@ -2178,10 +2352,10 @@ function App() {
                       <input type="number" step="1" value={toClearableNumberInput(billingSettings.paymentTermsDays)} onChange={(e) => updateBilling("paymentTermsDays", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                   </div>
-                </div>
+                </details>
               </form>
+              </details>
             </section>
-
           </div>
         )}
 
@@ -2203,11 +2377,11 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Machines and billing rules</h3>
-                <p className="mt-2">Manage machine profiles in Machines (add/edit/remove wattage, depreciation, replacement runtime). In Admin &gt; Billing rules, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, setup fee, rush fee %, waste factor %), and invoice finance settings (delivery, VAT, suggested deposit %, payment terms days).</p>
+                <p className="mt-2">Manage machine profiles in Machines (add/edit/remove wattage, depreciation, replacement runtime). In Billing, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, setup fee, rush fee %, waste factor %), and invoice finance settings (delivery, VAT, suggested deposit %, payment terms days). Billing and personalization sections are collapsible for easier navigation.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Business and customers</h3>
-                <p className="mt-2">Set business personalization in Admin (name, logo, address, email, phone, website). Manage CRM Lite customer records in Customers and reuse those details in invoices.</p>
+                <p className="mt-2">Set business personalization in Billing (name, logo, address, email, phone, website). Manage CRM Lite customer records in Customers and reuse those details in invoices.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Invoices and backup</h3>

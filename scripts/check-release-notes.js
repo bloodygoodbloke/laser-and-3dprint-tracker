@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const changelogPath = path.join(root, 'CHANGELOG.md');
+const changelogPath = path.join(root, 'docs', 'CHANGELOG.md');
 const backendPackagePath = path.join(root, 'backend', 'package.json');
 const frontendPackagePath = path.join(root, 'frontend', 'package.json');
 
@@ -12,7 +12,7 @@ function readJson(filePath) {
 
 function main() {
   if (!fs.existsSync(changelogPath)) {
-    console.error('CHANGELOG.md is missing.');
+    console.error('docs/CHANGELOG.md is missing.');
     process.exit(1);
   }
 
@@ -22,7 +22,7 @@ function main() {
 
   const expectedVersion = `## [${backendPackage.version}] -`;
   if (!changelog.includes(expectedVersion)) {
-    console.error(`CHANGELOG.md is missing a ${backendPackage.version} release entry.`);
+    console.error(`docs/CHANGELOG.md is missing a ${backendPackage.version} release entry.`);
     process.exit(1);
   }
 
