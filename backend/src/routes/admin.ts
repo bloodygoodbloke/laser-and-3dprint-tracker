@@ -4,15 +4,17 @@ import prisma from "../prisma";
 const router = Router();
 
 router.get("/backup", async (_req, res) => {
-  const [jobs, materials, billingSettings, jobCosts, customers] = await Promise.all([
+  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
     prisma.billingSetting.findMany(),
     prisma.jobCost.findMany(),
     prisma.customer.findMany(),
+    prisma.supplier.findMany(),
+    prisma.materialPurchase.findMany(),
   ]);
 
-  res.json({ jobs, materials, billingSettings, jobCosts, customers });
+  res.json({ jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases });
 });
 
 router.post("/backup", async (req, res) => {
@@ -47,6 +49,12 @@ router.post("/backup", async (req, res) => {
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
           labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          dueDate: job.dueDate ? new Date(String(job.dueDate)) : null,
+          queuePosition: Number(job.queuePosition || 0),
+          qaChecklist: JSON.stringify(Array.isArray(job.qaChecklist) ? job.qaChecklist : []),
+          qaPassed: Boolean(job.qaPassed),
+          reworkCost: Number(job.reworkCost || 0),
+          reworkNotes: String(job.reworkNotes || ""),
           isRush: Boolean(job.isRush),
           paymentStatus: String(job.paymentStatus || "Unpaid"),
           depositPaidAmount: Number(job.depositPaidAmount || 0),
@@ -60,25 +68,29 @@ router.post("/backup", async (req, res) => {
 });
 
 router.get("/backup/full", async (_req, res) => {
-  const [jobs, materials, billingSettings, jobCosts, customers] = await Promise.all([
+  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
     prisma.billingSetting.findMany(),
     prisma.jobCost.findMany(),
     prisma.customer.findMany(),
+    prisma.supplier.findMany(),
+    prisma.materialPurchase.findMany(),
   ]);
 
-  res.json({ jobs, materials, billingSettings, jobCosts, customers });
+  res.json({ jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases });
 });
 
 router.post("/backup/full", async (req, res) => {
-  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [] } = req.body || {};
+  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [] } = req.body || {};
 
   await prisma.$transaction(async (tx) => {
     await tx.jobCost.deleteMany();
     await tx.job.deleteMany();
     await tx.material.deleteMany();
     await tx.customer.deleteMany();
+    await tx.materialPurchase.deleteMany();
+    await tx.supplier.deleteMany();
     await tx.billingSetting.deleteMany();
 
     const materialIdMap = new Map<string, string>();
@@ -126,6 +138,37 @@ router.post("/backup/full", async (req, res) => {
       });
     }
 
+    const supplierIdMap = new Map<string, string>();
+    for (const supplier of suppliers) {
+      const createdSupplier = await tx.supplier.create({
+        data: {
+          name: String(supplier.name || "").trim(),
+          contactEmail: String(supplier.contactEmail || "").trim(),
+          contactPhone: String(supplier.contactPhone || "").trim(),
+          notes: String(supplier.notes || "").trim(),
+        },
+      });
+      if (supplier.id) {
+        supplierIdMap.set(supplier.id, createdSupplier.id);
+      }
+    }
+
+    for (const purchase of purchases) {
+      const mappedSupplierId = purchase.supplierId ? supplierIdMap.get(purchase.supplierId) : null;
+      if (!mappedSupplierId) continue;
+
+      await tx.materialPurchase.create({
+        data: {
+          supplierId: mappedSupplierId,
+          materialName: String(purchase.materialName || "").trim(),
+          quantityKg: Number(purchase.quantityKg || 0),
+          totalCost: Number(purchase.totalCost || 0),
+          purchasedAt: purchase.purchasedAt ? new Date(String(purchase.purchasedAt)) : new Date(),
+          notes: String(purchase.notes || "").trim(),
+        },
+      });
+    }
+
     for (const job of jobs) {
       const createdJob = await tx.job.create({
         data: {
@@ -136,6 +179,12 @@ router.post("/backup/full", async (req, res) => {
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
           labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          dueDate: job.dueDate ? new Date(String(job.dueDate)) : null,
+          queuePosition: Number(job.queuePosition || 0),
+          qaChecklist: JSON.stringify(Array.isArray(job.qaChecklist) ? job.qaChecklist : []),
+          qaPassed: Boolean(job.qaPassed),
+          reworkCost: Number(job.reworkCost || 0),
+          reworkNotes: String(job.reworkNotes || ""),
           isRush: Boolean(job.isRush),
           paymentStatus: String(job.paymentStatus || "Unpaid"),
           depositPaidAmount: Number(job.depositPaidAmount || 0),
@@ -177,7 +226,7 @@ router.post("/backup/full", async (req, res) => {
     }
   });
 
-  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, billingSettingsCount: Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0, customersCount: customers.length });
+  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, billingSettingsCount: Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0, customersCount: customers.length, suppliersCount: suppliers.length, purchasesCount: purchases.length });
 });
 
 export default router;

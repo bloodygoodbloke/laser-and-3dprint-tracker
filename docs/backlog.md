@@ -2,17 +2,11 @@
 
 Tracks planned and in-progress implementation work.
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 ## Backlog Table
 | ID | Type | Priority | Status | Title | Target Date | Details |
 |---|---|---|---|---|---|---|
-| CHG-049 | Feature | P2 Medium | Planned | Machine queue and schedule | - | Queue planning with due-date risk indicators. |
-| CHG-050 | Feature | P2 Medium | Planned | QA checklist and rework cost tracking | - | Add QA/rework tracking with cost impact linkage. |
-| CHG-051 | Feature | P2 Medium | Planned | Supplier management and purchase history | - | Add supplier records and material purchase history workflow. |
-| CHG-052 | Feature | P2 Medium | Planned | Job scheduling/calendar view | - | Add calendar scheduling with estimated completion projections. |
-| CHG-053 | Feature | P3 Low | Planned | Margin reporting | - | Margin reports by machine, material type, and customer. |
-| CHG-054 | Feature | P3 Low | Planned | Delivery/utilization dashboards | - | Add on-time delivery and utilization dashboard metrics. |
 | CHG-055 | Feature | P3 Low | Planned | Billing/invoice audit log | - | Track and report edits to billing and invoice values. |
 | CHG-056 | Feature | P3 Low | Planned | Machine-use telemetry tracker | - | Track machine hours, maintenance intervals, and consumables. |
 | CHG-057 | Feature | P3 Low | Planned | Reports page | - | Monthly totals, profit-vs-cost, and material usage reporting. |
@@ -43,9 +37,9 @@ Last updated: 2026-07-14
 | CHG-082 | Automation | Integrations | Planned | Multi-machine load balancer | - | Auto-assign jobs to best available machine. |
 
 ## Next 3
-- CHG-049
-- CHG-050
-- CHG-051
+- CHG-055
+- CHG-056
+- CHG-057
 
 ## New Entry Template
 

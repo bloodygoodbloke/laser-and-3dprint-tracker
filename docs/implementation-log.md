@@ -2,7 +2,7 @@
 
 Tracks implemented features and completed bug fixes from day-to-day execution work.
 
-Last updated: 2026-07-14
+Last updated: 2026-07-15
 
 | ID | Type | Priority | Status | Title | Actioned On | Details |
 |---|---|---|---|---|---|---|
@@ -54,6 +54,12 @@ Last updated: 2026-07-14
 | CHG-046 | Feature | P1 High | Implemented | Jobs filters/search + status badge controls | 2026-07-14 | Added Jobs search plus status and machine filters, and added stronger status workflow actions from expanded job cards. |
 | CHG-047 | Feature | P1 High | Implemented | File preview in job detail | 2026-07-14 | Added job file upload controls for SVG/STL and inline preview rendering in expanded job details. |
 | CHG-048 | Feature | P1 High | Implemented | Harden full Docker runtime workflow | 2026-07-14 | Hardened compose runtime with health checks, backend-first startup dependency, dev command overrides, and upload volume handling. |
+| CHG-049 | Feature | P2 Medium | Implemented | Machine queue and schedule | 2026-07-14 | Added queue position and due-date scheduling on jobs, plus queue panel risk indicators (On track/Watch/At risk/Overdue). |
+| CHG-050 | Feature | P2 Medium | Implemented | QA checklist and rework cost tracking | 2026-07-14 | Added per-job QA checklist, QA pass/fail, rework notes and rework cost with linked costing impact in calculations. |
+| CHG-051 | Feature | P2 Medium | Implemented | Supplier management and purchase history | 2026-07-14 | Added supplier records and purchase history workflows with backend APIs and frontend Suppliers tab. |
+| CHG-052 | Feature | P2 Medium | Implemented | Job scheduling/calendar view | 2026-07-15 | Added a 14-day schedule calendar with due-date workload visibility and machine-level projected completion timestamps based on queue order/runtime. |
+| CHG-053 | Feature | P3 Low | Implemented | Margin reporting | 2026-07-15 | Added dashboard margin reporting grouped by machine, material type, and customer using calculated customer charge versus base totals. |
+| CHG-054 | Feature | P3 Low | Implemented | Delivery/utilization dashboards | 2026-07-15 | Added delivery and utilization KPIs including on-time delivery rate, overdue open jobs, queued runtime, and per-machine weekly utilization estimates. |
 
 ## New Entry Template
 

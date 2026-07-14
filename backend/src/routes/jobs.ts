@@ -11,7 +11,7 @@ router.get("/", async (_req, res) => {
 
 router.post("/", async (req, res) => {
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
-    const { isRush, paymentStatus, depositPaidAmount } = req.body;
+    const { isRush, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes } = req.body;
 
   const jobsCount = await prisma.job.count();
   const generatedNumber = jobNumber || `JOB-${String(jobsCount + 1).padStart(4, "0")}`;
@@ -25,6 +25,12 @@ router.post("/", async (req, res) => {
       estTimeMinutes: Number(estTimeMinutes || 0),
       machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
       labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+      dueDate: dueDate ? new Date(String(dueDate)) : null,
+      queuePosition: Number(queuePosition || 0),
+      qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
+      qaPassed: Boolean(qaPassed),
+      reworkCost: Number(reworkCost || 0),
+      reworkNotes: String(reworkNotes || ""),
         isRush: Boolean(isRush),
         paymentStatus: String(paymentStatus || "Unpaid"),
         depositPaidAmount: Number(depositPaidAmount || 0),
@@ -73,7 +79,7 @@ router.get("/:id", async (req, res) => {
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
-    const { isRush, paymentStatus, depositPaidAmount } = req.body;
+    const { isRush, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes } = req.body;
 
   try {
     await prisma.jobMaterial.deleteMany({ where: { jobId: id } });
@@ -88,6 +94,12 @@ router.put("/:id", async (req, res) => {
         estTimeMinutes: Number(estTimeMinutes || 0),
         machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
         labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+        dueDate: dueDate ? new Date(String(dueDate)) : null,
+        queuePosition: Number(queuePosition || 0),
+        qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
+        qaPassed: Boolean(qaPassed),
+        reworkCost: Number(reworkCost || 0),
+        reworkNotes: String(reworkNotes || ""),
           isRush: Boolean(isRush),
           paymentStatus: String(paymentStatus || "Unpaid"),
           depositPaidAmount: Number(depositPaidAmount || 0),
@@ -226,7 +238,8 @@ router.post('/:id/calculate-cost', async (req, res) => {
 
     const subtotal = materialCost + electricityCost + labourCost;
     const overheadCost = (machineRunTimeMinutes / 60) * WORKSHOP_HOURLY_RATE;
-    const totalCost = subtotal + overheadCost;
+    const qaReworkCost = Number(job.reworkCost || 0);
+    const totalCost = subtotal + overheadCost + qaReworkCost;
     const electricityOnlyCost = Math.max(0, electricityCost - depreciationCost);
 
     const materialCharge = materialCost + materialTypeMarkupCharge + (materialCost * (MATERIAL_MARKUP_PERCENT / 100));
@@ -239,7 +252,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const rushFeeAmount = isRushJob ? (preGuardrailCustomerCharge + setupFeeAmount) * (Math.max(0, RUSH_FEE_PERCENT) / 100) : 0;
     const guardrailSubtotal = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount;
     const minimumChargeApplied = Math.max(0, Math.max(0, MINIMUM_CHARGE) - guardrailSubtotal);
-    const customerCharge = guardrailSubtotal + minimumChargeApplied;
+    const customerCharge = guardrailSubtotal + minimumChargeApplied + qaReworkCost;
 
     const existing = await prisma.jobCost.findUnique({ where: { jobId: id } });
 
@@ -266,6 +279,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
       depreciationCharge,
       labourCharge,
       overheadCharge,
+      qaReworkCost,
       setupFeeAmount,
       rushFeeAmount,
       minimumChargeApplied,

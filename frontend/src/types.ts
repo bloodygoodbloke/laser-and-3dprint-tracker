@@ -98,10 +98,40 @@ export interface Job {
   estTimeMinutes: number;
   machineRunTimeMinutes?: number;
   labourTimeMinutes?: number;
+  dueDate?: string | null;
+  queuePosition?: number;
+  qaChecklist?: string[];
+  qaPassed?: boolean;
+  reworkCost?: number;
+  reworkNotes?: string;
   isRush?: boolean;
   paymentStatus?: string;
   depositPaidAmount?: number;
   status: string;
   materials?: JobMaterial[];
   cost?: JobCost | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  notes?: string;
+  purchases?: MaterialPurchase[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MaterialPurchase {
+  id: string;
+  supplierId: string;
+  materialName: string;
+  quantityKg: number;
+  totalCost: number;
+  purchasedAt: string;
+  notes?: string;
+  createdAt?: string;
 }

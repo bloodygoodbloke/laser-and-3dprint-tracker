@@ -65,6 +65,12 @@ model Job {
   estTimeMinutes  Int
   machineRunTimeMinutes Int         @default(0)
   labourTimeMinutes Int             @default(0)
+  dueDate         DateTime?
+  queuePosition   Int               @default(0)
+  qaChecklist     String            @default("[]")
+  qaPassed        Boolean           @default(false)
+  reworkCost      Float             @default(0)
+  reworkNotes     String            @default("")
   isRush          Boolean           @default(false)
   paymentStatus   String            @default("Unpaid")
   depositPaidAmount Float           @default(0)
@@ -87,6 +93,29 @@ model Material {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   jobs             JobMaterial[]
+}
+
+model Supplier {
+  id            String           @id @default(cuid())
+  name          String
+  contactEmail  String           @default("")
+  contactPhone  String           @default("")
+  notes         String           @default("")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  purchases     MaterialPurchase[]
+}
+
+model MaterialPurchase {
+  id            String    @id @default(cuid())
+  supplierId    String
+  materialName  String
+  quantityKg    Float     @default(0)
+  totalCost     Float     @default(0)
+  purchasedAt   DateTime  @default(now())
+  notes         String    @default("")
+  createdAt     DateTime  @default(now())
+  supplier      Supplier  @relation(fields: [supplierId], references: [id])
 }
 
 model JobMaterial {

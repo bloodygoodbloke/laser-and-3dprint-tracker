@@ -20,11 +20,17 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Create jobs directly from the Jobs tab, edit existing jobs directly under the selected expanded job card, and delete jobs from expandable job card actions.
 - Use Jobs tab search plus status/machine filters to quickly narrow job lists.
 - Job cards now show internal base total, customer total, and profit visibility without exposing these internal figures on customer invoices.
+- Plan machine queues with queue positions, due dates, and risk indicators (`On track`, `Watch`, `At risk`, `Overdue`).
+- Use the Dashboard scheduling calendar to view a rolling 14-day due-date plan with projected completion timestamps by machine queue.
+- Capture QA checklist items, QA pass/fail status, and rework costs/notes per job with cost impact tracking.
 - Add multi-material usage per job with simplified material selection plus quantity in grams.
 - Upload SVG/STL job files from expanded job cards and preview them inline directly in job detail.
 - Track materials with colour, grouped material-type views, and quick copy/edit workflows.
 - Material creation/editing is managed in the Materials tab (Admin no longer contains a duplicate add-material form).
 - Manage CRM Lite customer records (name, address, email, phone, notes) with recent order history lookup.
+- Manage supplier records and material purchase history (material, quantity, cost, date, notes) from a dedicated Suppliers tab.
+- Track margin reporting by machine, material type, and customer from the Dashboard reporting area.
+- Monitor delivery and utilization KPIs including on-time rate, overdue open jobs, queued runtime, and per-machine utilization.
 - Manage machine profiles from a dedicated Machines tab with add/edit/remove workflows.
 - Calculate production costs for 3D and laser workflows using machine runtime electricity + depreciation plus separate labour-time charging.
 - Configure billing rules for percentage markups, electricity, labour rate, workshop hourly rate, per-machine wattage/depreciation assumptions, and invoice add-ons (delivery + VAT).

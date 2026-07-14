@@ -1,4 +1,4 @@
-import { BillingSettings, Customer, Job, Material } from "./types";
+import { BillingSettings, Customer, Job, Material, MaterialPurchase, Supplier } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
@@ -46,6 +46,47 @@ const api = {
   async getCustomers(): Promise<Customer[]> {
     const res = await fetch("/api/customers");
     if (!res.ok) throw new Error("Failed to load customers");
+    return res.json();
+  },
+  async getSuppliers(): Promise<Supplier[]> {
+    const res = await fetch("/api/suppliers");
+    if (!res.ok) throw new Error("Failed to load suppliers");
+    return res.json();
+  },
+  async createSupplier(payload: Partial<Supplier>) {
+    const res = await fetch("/api/suppliers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to create supplier");
+    return res.json();
+  },
+  async updateSupplier(id: string, payload: Partial<Supplier>) {
+    const res = await fetch(`/api/suppliers/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to update supplier");
+    return res.json();
+  },
+  async deleteSupplier(id: string) {
+    const res = await fetch(`/api/suppliers/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete supplier");
+  },
+  async getSupplierPurchases(id: string): Promise<MaterialPurchase[]> {
+    const res = await fetch(`/api/suppliers/${id}/purchases`);
+    if (!res.ok) throw new Error("Failed to load supplier purchases");
+    return res.json();
+  },
+  async createSupplierPurchase(id: string, payload: Partial<MaterialPurchase>) {
+    const res = await fetch(`/api/suppliers/${id}/purchases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to create purchase record");
     return res.json();
   },
   async createCustomer(payload: Partial<Customer>) {

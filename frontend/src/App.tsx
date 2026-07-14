@@ -1,9 +1,11 @@
 import { createElement, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import api from "./api";
-import { BillingSettings, Customer, Job, Material } from "./types";
+import { BillingSettings, Customer, Job, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
-const APP_VERSION = "0.5.0";
+const APP_VERSION = "0.6.0";
+const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
+const SCHEDULE_HORIZON_DAYS = 14;
 
 const defaultMachineNames = [
   "BambuLab P2S Printer",
@@ -81,17 +83,17 @@ function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "materials" | "machines" | "customers" | "billing" | "admin" | "help">("dashboard");
-  const [jobForm, setJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
+  const [jobForm, setJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(blankBillingSettings());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
-  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
-  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [showMaterialEditor, setShowMaterialEditor] = useState(false);
@@ -108,6 +110,13 @@ function App() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [customerHistory, setCustomerHistory] = useState<Job[]>([]);
   const [customerMessage, setCustomerMessage] = useState("");
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierForm, setSupplierForm] = useState({ name: "", contactEmail: "", contactPhone: "", notes: "" });
+  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [supplierPurchases, setSupplierPurchases] = useState<MaterialPurchase[]>([]);
+  const [supplierPurchaseForm, setSupplierPurchaseForm] = useState({ materialName: "", quantityKg: "", totalCost: "", purchasedAt: "", notes: "" });
+  const [supplierMessage, setSupplierMessage] = useState("");
   const [showCustomerCaptureModal, setShowCustomerCaptureModal] = useState(false);
   const [customerCaptureForm, setCustomerCaptureForm] = useState({ name: "", address: "", email: "", phone: "", notes: "" });
   const [jobSearchTerm, setJobSearchTerm] = useState("");
@@ -117,15 +126,33 @@ function App() {
   const [jobFileMessage, setJobFileMessage] = useState<Record<string, string>>({});
 
   const loadData = async () => {
-    const [jobsData, materialsData, customersData] = await Promise.all([api.getJobs(), api.getMaterials(), api.getCustomers()]);
+    const [jobsData, materialsData, customersData, suppliersData] = await Promise.all([api.getJobs(), api.getMaterials(), api.getCustomers(), api.getSuppliers()]);
+    const normalizedJobs = jobsData.map((job) => {
+      const rawChecklist = (job as Job & { qaChecklist?: unknown }).qaChecklist;
+      let qaChecklist: string[] = [];
+      if (Array.isArray(rawChecklist)) {
+        qaChecklist = rawChecklist.map((item) => String(item || "").trim()).filter(Boolean);
+      } else if (typeof rawChecklist === "string") {
+        try {
+          const parsed = JSON.parse(rawChecklist);
+          if (Array.isArray(parsed)) {
+            qaChecklist = parsed.map((item) => String(item || "").trim()).filter(Boolean);
+          }
+        } catch {
+          qaChecklist = [];
+        }
+      }
+      return { ...job, qaChecklist };
+    });
     let finalMaterials = materialsData;
     if (!finalMaterials.length) {
       await api.seedMaterials();
       finalMaterials = await api.getMaterials();
     }
-    setJobs(jobsData);
+    setJobs(normalizedJobs);
     setMaterials(finalMaterials);
     setCustomers(customersData);
+    setSuppliers(suppliersData);
     if (!jobMaterialEntries.length && finalMaterials.length) {
       setJobMaterialEntries([{ materialId: finalMaterials[0].id, usageQuantity: "100" }]);
     }
@@ -208,12 +235,19 @@ function App() {
 
   useEffect(() => {
     if (!selectedJob) return;
+    const checklistLines = (selectedJob.qaChecklist || []).join("\n");
     setSelectedJobForm({
       name: selectedJob.name,
       customer: selectedJob.customer || "",
       machineType: selectedJob.machineType || machineOptions[0],
       machineRunTimeMinutes: String(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
       labourTimeMinutes: String(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
+      dueDate: selectedJob.dueDate ? String(selectedJob.dueDate).slice(0, 10) : "",
+      queuePosition: String(selectedJob.queuePosition ?? 0),
+      qaChecklistText: checklistLines,
+      qaPassed: Boolean(selectedJob.qaPassed),
+      reworkCost: String(selectedJob.reworkCost ?? 0),
+      reworkNotes: selectedJob.reworkNotes || "",
       isRush: Boolean(selectedJob.isRush),
       paymentStatus: selectedJob.paymentStatus || "Unpaid",
       depositPaidAmount: String(selectedJob.depositPaidAmount ?? 0),
@@ -223,7 +257,7 @@ function App() {
       materialId: entry.materialId,
       usageQuantity: String(entry.usageQuantity || 0),
     })));
-  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.isRush, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
+  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.isRush, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
 
   useEffect(() => {
     if (!newJobMaterialEntries.length && materials.length) {
@@ -245,6 +279,83 @@ function App() {
       return matchesStatus && matchesMachine && matchesSearch;
     });
   }, [jobs, jobMachineFilter, jobSearchTerm, jobStatusFilter]);
+  const queuedJobs = useMemo(
+    () => jobs
+      .filter((job) => job.status === "Pending" || job.status === "In Progress")
+      .sort((left, right) => Number(left.queuePosition || 0) - Number(right.queuePosition || 0)),
+    [jobs],
+  );
+  const machineQueueProjections = useMemo(() => {
+    const workdayStart = new Date();
+    workdayStart.setHours(8, 0, 0, 0);
+    const queueByMachine = new Map<string, Job[]>();
+
+    queuedJobs.forEach((job) => {
+      const key = String(job.machineType || "Other");
+      const existing = queueByMachine.get(key) || [];
+      existing.push(job);
+      queueByMachine.set(key, existing);
+    });
+
+    return Array.from(queueByMachine.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([machineType, machineJobs]) => {
+        let cumulativeMinutes = 0;
+        const projectedJobs = machineJobs.map((job) => {
+          cumulativeMinutes += Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
+          const projectedCompletion = new Date(workdayStart);
+          projectedCompletion.setMinutes(projectedCompletion.getMinutes() + cumulativeMinutes);
+          return { job, projectedCompletion };
+        });
+        return { machineType, projectedJobs, totalMinutes: cumulativeMinutes };
+      });
+  }, [queuedJobs]);
+  const scheduleCalendarDays = useMemo(() => {
+    const dayMap = new Map<string, { date: Date; dueCount: number; projectedCount: number; totalRuntimeMinutes: number }>();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    for (let offset = 0; offset < SCHEDULE_HORIZON_DAYS; offset += 1) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + offset);
+      dayMap.set(date.toISOString().slice(0, 10), {
+        date,
+        dueCount: 0,
+        projectedCount: 0,
+        totalRuntimeMinutes: 0,
+      });
+    }
+
+    queuedJobs.forEach((job) => {
+      if (!job.dueDate) return;
+      const dueKey = new Date(job.dueDate).toISOString().slice(0, 10);
+      const day = dayMap.get(dueKey);
+      if (!day) return;
+      day.dueCount += 1;
+      day.totalRuntimeMinutes += Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
+    });
+
+    machineQueueProjections.forEach((group) => {
+      group.projectedJobs.forEach(({ projectedCompletion }) => {
+        const projectedKey = projectedCompletion.toISOString().slice(0, 10);
+        const day = dayMap.get(projectedKey);
+        if (!day) return;
+        day.projectedCount += 1;
+      });
+    });
+
+    return Array.from(dayMap.values());
+  }, [machineQueueProjections, queuedJobs]);
+  const getDueRiskLabel = (job: Job) => {
+    if (!job.dueDate) return "No due date";
+    const today = new Date();
+    const due = new Date(job.dueDate);
+    const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return "Overdue";
+    if (diffDays <= 1) return "At risk";
+    if (diffDays <= 3) return "Watch";
+    return "On track";
+  };
     const machineOptions = useMemo(() => {
       const configuredMachines = Object.keys(billingSettings.machineElectricitySettings || {}).filter((name) => name && name.trim());
       const preferred = defaultMachineNames.filter((name) => configuredMachines.includes(name));
@@ -315,6 +426,11 @@ function App() {
       };
     });
 
+  const toChecklistArray = (value: string) => value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   const createJob = async (e: FormEvent) => {
     e.preventDefault();
     const rawCustomerName = String(jobForm.customer || "").trim();
@@ -326,13 +442,19 @@ function App() {
       estTimeMinutes: Number(jobForm.machineRunTimeMinutes),
       machineRunTimeMinutes: Number(jobForm.machineRunTimeMinutes || 0),
       labourTimeMinutes: Number(jobForm.labourTimeMinutes || 0),
+      dueDate: jobForm.dueDate || null,
+      queuePosition: Number(jobForm.queuePosition || 0),
+      qaChecklist: toChecklistArray(jobForm.qaChecklistText),
+      qaPassed: Boolean(jobForm.qaPassed),
+      reworkCost: Number(jobForm.reworkCost || 0),
+      reworkNotes: String(jobForm.reworkNotes || ""),
       isRush: jobForm.isRush,
       paymentStatus: jobForm.paymentStatus,
       depositPaidAmount: Number(jobForm.depositPaidAmount || 0),
       status: jobForm.status,
       materials: toApiJobMaterials(jobMaterialEntries),
     });
-    setJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+    setJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setJobMaterialEntries([]);
     await loadData();
 
@@ -411,7 +533,7 @@ function App() {
 
   const openNewJobEditor = () => {
     setJobEditorMode("create");
-    setNewJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+    setNewJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "100" }] : []);
   };
 
@@ -505,6 +627,12 @@ function App() {
       estTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
       machineRunTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
       labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
+      dueDate: newJobForm.dueDate || null,
+      queuePosition: Number(newJobForm.queuePosition || 0),
+      qaChecklist: toChecklistArray(newJobForm.qaChecklistText),
+      qaPassed: Boolean(newJobForm.qaPassed),
+      reworkCost: Number(newJobForm.reworkCost || 0),
+      reworkNotes: String(newJobForm.reworkNotes || ""),
       isRush: newJobForm.isRush,
       paymentStatus: newJobForm.paymentStatus,
       depositPaidAmount: Number(newJobForm.depositPaidAmount || 0),
@@ -595,6 +723,12 @@ function App() {
       estTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
       machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
       labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+      dueDate: job.dueDate || null,
+      queuePosition: Number(job.queuePosition || 0),
+      qaChecklist: job.qaChecklist || [],
+      qaPassed: Boolean(job.qaPassed),
+      reworkCost: Number(job.reworkCost || 0),
+      reworkNotes: String(job.reworkNotes || ""),
       isRush: Boolean(job.isRush),
       paymentStatus: job.paymentStatus || "Unpaid",
       depositPaidAmount: Number(job.depositPaidAmount || 0),
@@ -658,6 +792,12 @@ function App() {
       estTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
       machineRunTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
       labourTimeMinutes: Number(selectedJobForm.labourTimeMinutes || 0),
+      dueDate: selectedJobForm.dueDate || null,
+      queuePosition: Number(selectedJobForm.queuePosition || 0),
+      qaChecklist: toChecklistArray(selectedJobForm.qaChecklistText),
+      qaPassed: Boolean(selectedJobForm.qaPassed),
+      reworkCost: Number(selectedJobForm.reworkCost || 0),
+      reworkNotes: String(selectedJobForm.reworkNotes || ""),
       isRush: selectedJobForm.isRush,
       paymentStatus: selectedJobForm.paymentStatus,
       depositPaidAmount: Number(selectedJobForm.depositPaidAmount || 0),
@@ -844,6 +984,115 @@ function App() {
     return Number(getInvoiceChargeBreakdown(job).customerCharge) - Number(getBaseCostTotal(job));
   };
   const getCostButtonLabel = (job: Job) => (job.cost ? "Refresh costs" : "Calculate cost");
+  const jobsWithCost = useMemo(() => jobs.filter((job) => job.cost), [jobs]);
+  const marginByMachine = useMemo(() => {
+    const grouped = new Map<string, { jobs: number; revenue: number; base: number; margin: number }>();
+    jobsWithCost.forEach((job) => {
+      const key = String(job.machineType || "Other");
+      const revenue = Number(getInvoiceChargeBreakdown(job).customerCharge || 0);
+      const base = Number(getBaseCostTotal(job) || 0);
+      const current = grouped.get(key) || { jobs: 0, revenue: 0, base: 0, margin: 0 };
+      current.jobs += 1;
+      current.revenue += revenue;
+      current.base += base;
+      current.margin += revenue - base;
+      grouped.set(key, current);
+    });
+    return Array.from(grouped.entries())
+      .map(([label, metrics]) => ({ label, ...metrics, marginPercent: metrics.revenue > 0 ? (metrics.margin / metrics.revenue) * 100 : 0 }))
+      .sort((left, right) => right.margin - left.margin);
+  }, [jobsWithCost, billingSettings]);
+  const marginByCustomer = useMemo(() => {
+    const grouped = new Map<string, { jobs: number; revenue: number; base: number; margin: number }>();
+    jobsWithCost.forEach((job) => {
+      const key = String(job.customer || "Walk-in customer");
+      const revenue = Number(getInvoiceChargeBreakdown(job).customerCharge || 0);
+      const base = Number(getBaseCostTotal(job) || 0);
+      const current = grouped.get(key) || { jobs: 0, revenue: 0, base: 0, margin: 0 };
+      current.jobs += 1;
+      current.revenue += revenue;
+      current.base += base;
+      current.margin += revenue - base;
+      grouped.set(key, current);
+    });
+    return Array.from(grouped.entries())
+      .map(([label, metrics]) => ({ label, ...metrics, marginPercent: metrics.revenue > 0 ? (metrics.margin / metrics.revenue) * 100 : 0 }))
+      .sort((left, right) => right.margin - left.margin);
+  }, [jobsWithCost, billingSettings]);
+  const marginByMaterialType = useMemo(() => {
+    const grouped = new Map<string, { jobs: number; allocatedRevenue: number; allocatedBase: number; allocatedMargin: number }>();
+    jobsWithCost.forEach((job) => {
+      const revenue = Number(getInvoiceChargeBreakdown(job).customerCharge || 0);
+      const base = Number(getBaseCostTotal(job) || 0);
+      const margin = revenue - base;
+      const materialLines = (job.materials || []).map((entry) => ({
+        type: String(entry.material?.type || "Other"),
+        lineBase: Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0),
+      }));
+      const totalMaterialBase = materialLines.reduce((sum, line) => sum + line.lineBase, 0);
+
+      if (!materialLines.length || totalMaterialBase <= 0) {
+        const fallback = grouped.get("Unspecified") || { jobs: 0, allocatedRevenue: 0, allocatedBase: 0, allocatedMargin: 0 };
+        fallback.jobs += 1;
+        fallback.allocatedRevenue += revenue;
+        fallback.allocatedBase += base;
+        fallback.allocatedMargin += margin;
+        grouped.set("Unspecified", fallback);
+        return;
+      }
+
+      materialLines.forEach((line) => {
+        const share = line.lineBase / totalMaterialBase;
+        const current = grouped.get(line.type) || { jobs: 0, allocatedRevenue: 0, allocatedBase: 0, allocatedMargin: 0 };
+        current.jobs += 1;
+        current.allocatedRevenue += revenue * share;
+        current.allocatedBase += base * share;
+        current.allocatedMargin += margin * share;
+        grouped.set(line.type, current);
+      });
+    });
+    return Array.from(grouped.entries())
+      .map(([label, metrics]) => ({ label, ...metrics, marginPercent: metrics.allocatedRevenue > 0 ? (metrics.allocatedMargin / metrics.allocatedRevenue) * 100 : 0 }))
+      .sort((left, right) => right.allocatedMargin - left.allocatedMargin);
+  }, [jobsWithCost, billingSettings]);
+  const deliveryAndUtilization = useMemo(() => {
+    const today = new Date();
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    const completionStatuses = new Set(["Completed", "Invoiced"]);
+    const dueEligible = jobs.filter((job) => job.dueDate && completionStatuses.has(job.status));
+    const onTimeCount = dueEligible.filter((job) => {
+      if (!job.dueDate || !job.updatedAt) return false;
+      return new Date(job.updatedAt).getTime() <= new Date(job.dueDate).getTime();
+    }).length;
+    const overdueOpen = jobs.filter((job) => {
+      if (!job.dueDate) return false;
+      if (completionStatuses.has(job.status)) return false;
+      return new Date(job.dueDate).getTime() < todayStart.getTime();
+    }).length;
+
+    const machineCount = Math.max(1, machineOptions.filter((name) => name !== "Other").length || machineQueueProjections.length || 1);
+    const weeklyCapacityMinutes = machineCount * WORKSHOP_DAILY_CAPACITY_HOURS * 60 * 7;
+    const scheduledMinutes = queuedJobs.reduce((sum, job) => sum + Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0), 0);
+    const utilizationPercent = weeklyCapacityMinutes > 0 ? (scheduledMinutes / weeklyCapacityMinutes) * 100 : 0;
+    const perMachineCapacityMinutes = WORKSHOP_DAILY_CAPACITY_HOURS * 60 * 7;
+    const utilizationByMachine = machineQueueProjections.map((group) => ({
+      machineType: group.machineType,
+      hours: group.totalMinutes / 60,
+      utilizationPercent: perMachineCapacityMinutes > 0 ? (group.totalMinutes / perMachineCapacityMinutes) * 100 : 0,
+    }));
+
+    return {
+      dueEligibleCount: dueEligible.length,
+      onTimeCount,
+      onTimePercent: dueEligible.length > 0 ? (onTimeCount / dueEligible.length) * 100 : 0,
+      overdueOpen,
+      machineCount,
+      scheduledHours: scheduledMinutes / 60,
+      utilizationPercent,
+      utilizationByMachine,
+    };
+  }, [jobs, machineOptions, machineQueueProjections, queuedJobs]);
   const selectedCustomerProfile = useMemo(
     () => customers.find((customer) => customer.name.trim().toLowerCase() === String(selectedJob?.customer || "").trim().toLowerCase()) || null,
     [customers, selectedJob?.customer],
@@ -1030,6 +1279,73 @@ function App() {
     setCustomerHistory(payload.jobs || []);
   };
 
+  const resetSupplierForm = () => {
+    setSupplierForm({ name: "", contactEmail: "", contactPhone: "", notes: "" });
+    setEditingSupplierId(null);
+  };
+
+  const saveSupplier = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!supplierForm.name.trim()) return;
+
+    if (editingSupplierId) {
+      await api.updateSupplier(editingSupplierId, supplierForm);
+      setSupplierMessage("Supplier updated.");
+    } else {
+      await api.createSupplier(supplierForm);
+      setSupplierMessage("Supplier created.");
+    }
+
+    resetSupplierForm();
+    await loadData();
+  };
+
+  const startEditingSupplier = (supplier: Supplier) => {
+    setActiveTab("suppliers");
+    setEditingSupplierId(supplier.id);
+    setSupplierForm({
+      name: supplier.name || "",
+      contactEmail: supplier.contactEmail || "",
+      contactPhone: supplier.contactPhone || "",
+      notes: supplier.notes || "",
+    });
+  };
+
+  const removeSupplier = async (supplierId: string) => {
+    await api.deleteSupplier(supplierId);
+    if (selectedSupplierId === supplierId) {
+      setSelectedSupplierId(null);
+      setSupplierPurchases([]);
+    }
+    setSupplierMessage("Supplier removed.");
+    await loadData();
+  };
+
+  const loadSupplierPurchases = async (supplierId: string) => {
+    setSelectedSupplierId(supplierId);
+    const purchases = await api.getSupplierPurchases(supplierId);
+    setSupplierPurchases(purchases || []);
+  };
+
+  const saveSupplierPurchase = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selectedSupplierId) return;
+    if (!supplierPurchaseForm.materialName.trim()) return;
+
+    await api.createSupplierPurchase(selectedSupplierId, {
+      materialName: supplierPurchaseForm.materialName,
+      quantityKg: Number(supplierPurchaseForm.quantityKg || 0),
+      totalCost: Number(supplierPurchaseForm.totalCost || 0),
+      purchasedAt: supplierPurchaseForm.purchasedAt || undefined,
+      notes: supplierPurchaseForm.notes,
+    });
+
+    const purchases = await api.getSupplierPurchases(selectedSupplierId);
+    setSupplierPurchases(purchases || []);
+    setSupplierPurchaseForm({ materialName: "", quantityKg: "", totalCost: "", purchasedAt: "", notes: "" });
+    setSupplierMessage("Purchase history entry added.");
+  };
+
   const exportBackupCsv = async () => {
     const csv = await api.exportJobsCsv(jobs);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1155,7 +1471,7 @@ function App() {
 
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
           <nav className="flex flex-wrap gap-3">
-            {(["dashboard", "jobs", "materials", "machines", "customers", "billing", "admin", "help"] as const).map((tab) => (
+            {(["dashboard", "jobs", "materials", "machines", "customers", "suppliers", "billing", "admin", "help"] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
                 {tab}
               </button>
@@ -1276,6 +1592,123 @@ function App() {
                   ))}
                 </div>
               </section>
+
+              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold">Scheduling calendar (next {SCHEDULE_HORIZON_DAYS} days)</h2>
+                    <p className="mt-2 text-sm text-slate-400">Calendar view combines due dates with projected completion based on machine queue order and runtime.</p>
+                  </div>
+                  <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">{machineQueueProjections.length} machine queues</span>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {scheduleCalendarDays.map((day) => (
+                    <div key={day.date.toISOString()} className="rounded-2xl border border-slate-800 bg-slate-950 p-3">
+                      <p className="text-sm font-medium text-white">{day.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</p>
+                      <p className="mt-1 text-xs text-slate-400">Due jobs: {day.dueCount}</p>
+                      <p className="text-xs text-slate-400">Projected completions: {day.projectedCount}</p>
+                      <p className="text-xs text-slate-400">Queued runtime due: {(day.totalRuntimeMinutes / 60).toFixed(1)} h</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 space-y-2">
+                  {machineQueueProjections.map((group) => (
+                    <div key={group.machineType} className="rounded-2xl border border-slate-800 bg-slate-950 p-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium text-white">{group.machineType}</span>
+                        <span className="text-slate-400">Projected queue runtime {(group.totalMinutes / 60).toFixed(1)} h</span>
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        {group.projectedJobs.slice(0, 3).map(({ job, projectedCompletion }) => (
+                          <p key={`${group.machineType}-${job.id}`} className="text-xs text-slate-400">{job.name}: completes ~ {projectedCompletion.toLocaleString()}</p>
+                        ))}
+                        {!group.projectedJobs.length ? <p className="text-xs text-slate-500">No queued jobs.</p> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
+                <h2 className="text-xl font-semibold">Margin reporting</h2>
+                <p className="mt-2 text-sm text-slate-400">Internal margin analysis based on calculated customer charge and base total.</p>
+                <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="text-sm font-semibold text-white">By machine</h3>
+                    <div className="mt-2 space-y-2 text-xs">
+                      {marginByMachine.slice(0, 6).map((row) => (
+                        <div key={`machine-margin-${row.label}`} className="flex items-center justify-between">
+                          <span className="text-slate-300">{row.label}</span>
+                          <span className="text-slate-200">{formatCurrency(row.margin)} ({row.marginPercent.toFixed(1)}%)</span>
+                        </div>
+                      ))}
+                      {!marginByMachine.length ? <p className="text-slate-500">No costed jobs yet.</p> : null}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="text-sm font-semibold text-white">By material type</h3>
+                    <div className="mt-2 space-y-2 text-xs">
+                      {marginByMaterialType.slice(0, 6).map((row) => (
+                        <div key={`material-margin-${row.label}`} className="flex items-center justify-between">
+                          <span className="text-slate-300">{row.label}</span>
+                          <span className="text-slate-200">{formatCurrency(row.allocatedMargin)} ({row.marginPercent.toFixed(1)}%)</span>
+                        </div>
+                      ))}
+                      {!marginByMaterialType.length ? <p className="text-slate-500">No material margin data yet.</p> : null}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="text-sm font-semibold text-white">By customer</h3>
+                    <div className="mt-2 space-y-2 text-xs">
+                      {marginByCustomer.slice(0, 6).map((row) => (
+                        <div key={`customer-margin-${row.label}`} className="flex items-center justify-between">
+                          <span className="text-slate-300">{row.label}</span>
+                          <span className="text-slate-200">{formatCurrency(row.margin)} ({row.marginPercent.toFixed(1)}%)</span>
+                        </div>
+                      ))}
+                      {!marginByCustomer.length ? <p className="text-slate-500">No customer margin data yet.</p> : null}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
+                <h2 className="text-xl font-semibold">Delivery and utilization dashboard</h2>
+                <div className="mt-4 grid gap-4 md:grid-cols-4">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">On-time delivery</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.onTimePercent.toFixed(1)}%</p>
+                    <p className="text-xs text-slate-400">{deliveryAndUtilization.onTimeCount} of {deliveryAndUtilization.dueEligibleCount} due jobs</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Overdue open jobs</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.overdueOpen}</p>
+                    <p className="text-xs text-slate-400">Pending or in-progress past due date</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Queued runtime</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.scheduledHours.toFixed(1)} h</p>
+                    <p className="text-xs text-slate-400">Across {deliveryAndUtilization.machineCount} machine lanes</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Weekly utilization</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.utilizationPercent.toFixed(1)}%</p>
+                    <p className="text-xs text-slate-400">vs {WORKSHOP_DAILY_CAPACITY_HOURS}h/day capacity assumption</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                  <h3 className="text-sm font-semibold text-white">Machine utilization (next 7-day queue model)</h3>
+                  <div className="mt-2 space-y-2 text-xs">
+                    {deliveryAndUtilization.utilizationByMachine.map((row) => (
+                      <div key={`utilization-${row.machineType}`} className="flex items-center justify-between">
+                        <span className="text-slate-300">{row.machineType}</span>
+                        <span className="text-slate-200">{row.hours.toFixed(1)} h ({row.utilizationPercent.toFixed(1)}%)</span>
+                      </div>
+                    ))}
+                    {!deliveryAndUtilization.utilizationByMachine.length ? <p className="text-slate-500">No queued machine utilization data yet.</p> : null}
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
         )}
@@ -1320,6 +1753,35 @@ function App() {
                 {filteredJobs.length} of {jobs.length} shown
               </div>
             </div>
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Machine queue and schedule</h3>
+                <span className="text-xs text-slate-400">{queuedJobs.length} active queue items</span>
+              </div>
+              <div className="space-y-2">
+                {queuedJobs.map((job) => {
+                  const dueRisk = getDueRiskLabel(job);
+                  const riskTone = dueRisk === "Overdue"
+                    ? "bg-rose-600/20 text-rose-300"
+                    : dueRisk === "At risk"
+                      ? "bg-amber-600/20 text-amber-300"
+                      : dueRisk === "Watch"
+                        ? "bg-yellow-600/20 text-yellow-300"
+                        : "bg-emerald-600/20 text-emerald-300";
+
+                  return (
+                    <div key={`queue-${job.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
+                      <div>
+                        <p className="font-medium text-white">#{job.queuePosition || 0} • {job.name}</p>
+                        <p className="text-slate-400">{job.machineType} • Due {job.dueDate ? new Date(job.dueDate).toLocaleDateString() : "Not set"}</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-1 text-xs ${riskTone}`}>{dueRisk}</span>
+                    </div>
+                  );
+                })}
+                {!queuedJobs.length ? <p className="text-sm text-slate-400">No pending or in-progress queue items yet.</p> : null}
+              </div>
+            </div>
             <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="space-y-3">
                 {filteredJobs.map((job) => (
@@ -1359,10 +1821,16 @@ function App() {
                           <p><span className="text-slate-500">Machine runtime:</span> {job.machineRunTimeMinutes ?? job.estTimeMinutes} mins</p>
                           <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
                           <p><span className="text-slate-500">Status:</span> {job.status}</p>
+                          <p><span className="text-slate-500">Queue position:</span> {job.queuePosition ?? 0}</p>
+                          <p><span className="text-slate-500">Due date:</span> {job.dueDate ? new Date(job.dueDate).toLocaleDateString() : "Not set"}</p>
                           <p><span className="text-slate-500">Payment:</span> {job.paymentStatus || "Unpaid"}</p>
                           <p><span className="text-slate-500">Rush:</span> {job.isRush ? "Yes" : "No"}</p>
                           <p><span className="text-slate-500">Deposit paid:</span> {formatCurrency(Number(job.depositPaidAmount || 0))}</p>
                           <p><span className="text-slate-500">Materials:</span> {job.materials?.length || 0}</p>
+                          <p><span className="text-slate-500">QA passed:</span> {job.qaPassed ? "Yes" : "No"}</p>
+                          <p><span className="text-slate-500">Rework cost:</span> {formatCurrency(Number(job.reworkCost || 0))}</p>
+                          <p className="md:col-span-2"><span className="text-slate-500">QA checklist:</span> {(job.qaChecklist || []).length ? (job.qaChecklist || []).join(", ") : "No checklist items"}</p>
+                          <p className="md:col-span-2"><span className="text-slate-500">Rework notes:</span> {job.reworkNotes || "None"}</p>
                           <p className="md:col-span-2"><span className="text-slate-500">File:</span> {job.filePath || "No file uploaded"}</p>
                         </div>
 
@@ -1557,6 +2025,14 @@ function App() {
                                 <input value={selectedJobForm.labourTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, labourTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
                               <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Queue position</span>
+                                <input type="number" min="0" value={selectedJobForm.queuePosition} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, queuePosition: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Due date</span>
+                                <input type="date" value={selectedJobForm.dueDate} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, dueDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Payment status</span>
                                 <select value={selectedJobForm.paymentStatus} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, paymentStatus: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
                                   {paymentStatusOptions.map((paymentStatusOption) => (
@@ -1567,6 +2043,28 @@ function App() {
                               <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Deposit paid (£)</span>
                                 <input type="number" step="0.01" value={selectedJobForm.depositPaidAmount} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Rework cost (£)</span>
+                                <input type="number" step="0.01" value={selectedJobForm.reworkCost} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, reworkCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">QA passed</span>
+                                <select value={selectedJobForm.qaPassed ? "yes" : "no"} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, qaPassed: e.target.value === "yes" })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                                  <option value="no">No</option>
+                                  <option value="yes">Yes</option>
+                                </select>
+                              </label>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <label className="block text-sm text-slate-300 md:col-span-2">
+                                <span className="mb-2 block">QA checklist (one item per line)</span>
+                                <textarea value={selectedJobForm.qaChecklistText} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, qaChecklistText: e.target.value })} rows={3} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300 md:col-span-2">
+                                <span className="mb-2 block">Rework notes</span>
+                                <textarea value={selectedJobForm.reworkNotes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, reworkNotes: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
                             </div>
 
@@ -1826,6 +2324,36 @@ function App() {
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Deposit paid (£)</span>
                         <input type="number" step="0.01" value={newJobForm.depositPaidAmount} onChange={(e) => setNewJobForm({ ...newJobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Queue position</span>
+                        <input type="number" min="0" value={newJobForm.queuePosition} onChange={(e) => setNewJobForm({ ...newJobForm, queuePosition: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Due date</span>
+                        <input type="date" value={newJobForm.dueDate} onChange={(e) => setNewJobForm({ ...newJobForm, dueDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Rework cost (£)</span>
+                        <input type="number" step="0.01" value={newJobForm.reworkCost} onChange={(e) => setNewJobForm({ ...newJobForm, reworkCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">QA passed</span>
+                        <select value={newJobForm.qaPassed ? "yes" : "no"} onChange={(e) => setNewJobForm({ ...newJobForm, qaPassed: e.target.value === "yes" })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block text-sm text-slate-300 md:col-span-2">
+                        <span className="mb-2 block">QA checklist (one item per line)</span>
+                        <textarea value={newJobForm.qaChecklistText} onChange={(e) => setNewJobForm({ ...newJobForm, qaChecklistText: e.target.value })} rows={3} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300 md:col-span-2">
+                        <span className="mb-2 block">Rework notes</span>
+                        <textarea value={newJobForm.reworkNotes} onChange={(e) => setNewJobForm({ ...newJobForm, reworkNotes: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       </label>
                     </div>
 
@@ -2122,6 +2650,92 @@ function App() {
           </section>
         )}
 
+        {activeTab === "suppliers" && (
+          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Suppliers and purchase history</h2>
+                <p className="mt-2 text-sm text-slate-400">Track supplier records and material purchases for procurement history.</p>
+              </div>
+              {editingSupplierId ? (
+                <button type="button" onClick={resetSupplierForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel edit</button>
+              ) : null}
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
+              <form onSubmit={saveSupplier} className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="text-lg font-semibold text-white">{editingSupplierId ? "Edit supplier" : "Add supplier"}</h3>
+                <label className="flex items-center gap-4 text-sm text-slate-300">
+                  <span className="w-40 shrink-0">Name</span>
+                  <input value={supplierForm.name} onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
+                </label>
+                <label className="flex items-center gap-4 text-sm text-slate-300">
+                  <span className="w-40 shrink-0">Email</span>
+                  <input value={supplierForm.contactEmail} onChange={(e) => setSupplierForm({ ...supplierForm, contactEmail: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                </label>
+                <label className="flex items-center gap-4 text-sm text-slate-300">
+                  <span className="w-40 shrink-0">Phone</span>
+                  <input value={supplierForm.contactPhone} onChange={(e) => setSupplierForm({ ...supplierForm, contactPhone: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                </label>
+                <label className="flex items-center gap-4 text-sm text-slate-300">
+                  <span className="w-40 shrink-0">Notes</span>
+                  <input value={supplierForm.notes} onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                </label>
+                <div className="flex justify-end">
+                  <button className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">{editingSupplierId ? "Save supplier" : "Add supplier"}</button>
+                </div>
+              </form>
+
+              <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="text-lg font-semibold text-white">Suppliers</h3>
+                <div className="space-y-2">
+                  {suppliers.map((supplier) => (
+                    <div key={supplier.id} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-white">{supplier.name}</p>
+                          <p className="text-xs text-slate-400">{supplier.contactEmail || "No email"} • {supplier.contactPhone || "No phone"}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => loadSupplierPurchases(supplier.id)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Purchases</button>
+                          <button type="button" onClick={() => startEditingSupplier(supplier)} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">Edit</button>
+                          <button type="button" onClick={() => removeSupplier(supplier.id)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Delete</button>
+                        </div>
+                      </div>
+                      {supplier.notes ? <p className="mt-2 text-xs text-slate-400">{supplier.notes}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {selectedSupplierId ? (
+              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="text-lg font-semibold text-white">Purchase history</h3>
+                <form onSubmit={saveSupplierPurchase} className="mt-3 grid gap-3 md:grid-cols-5">
+                  <input value={supplierPurchaseForm.materialName} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, materialName: e.target.value }))} placeholder="Material" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required />
+                  <input type="number" step="0.01" min="0" value={supplierPurchaseForm.quantityKg} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, quantityKg: e.target.value }))} placeholder="Qty kg" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+                  <input type="number" step="0.01" min="0" value={supplierPurchaseForm.totalCost} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, totalCost: e.target.value }))} placeholder="Total £" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+                  <input type="date" value={supplierPurchaseForm.purchasedAt} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, purchasedAt: e.target.value }))} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+                  <button className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Add purchase</button>
+                  <input value={supplierPurchaseForm.notes} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, notes: e.target.value }))} placeholder="Notes" className="md:col-span-5 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+                </form>
+                <div className="mt-3 space-y-2">
+                  {supplierPurchases.map((purchase) => (
+                    <div key={purchase.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
+                      <span>{purchase.materialName} • {Number(purchase.quantityKg || 0).toFixed(2)} kg • {formatCurrency(Number(purchase.totalCost || 0))}</span>
+                      <span className="text-slate-400">{purchase.purchasedAt ? new Date(purchase.purchasedAt).toLocaleDateString() : "-"}</span>
+                    </div>
+                  ))}
+                  {!supplierPurchases.length ? <p className="text-sm text-slate-400">No purchases logged for this supplier.</p> : null}
+                </div>
+              </div>
+            ) : null}
+
+            {supplierMessage ? <p className="mt-4 text-sm text-cyan-300">{supplierMessage}</p> : null}
+          </section>
+        )}
+
         {activeTab === "admin" && (
           <div className="space-y-6">
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
@@ -2133,6 +2747,26 @@ function App() {
                     <h3 className="text-sm font-semibold text-white">Jobs CSV</h3>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={exportBackupCsv} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Export</button>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="font-semibold text-white">Machine queue and due-date risk</h3>
+                    <p className="mt-2">Use Jobs to set queue position and due date per job. The queue panel highlights risk states (On track, Watch, At risk, Overdue) so production order can be adjusted early.</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="font-semibold text-white">Calendar scheduling and projections</h3>
+                    <p className="mt-2">Dashboard now includes a 14-day schedule calendar and machine-level projected completion timestamps based on queue order and runtime.</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="font-semibold text-white">QA checklist and rework cost</h3>
+                    <p className="mt-2">In job create/edit forms, add QA checklist items (one per line), mark QA pass/fail, and log rework cost/notes. Rework cost is included in cost impact when calculating totals.</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="font-semibold text-white">Supplier records and purchase history</h3>
+                    <p className="mt-2">Use Suppliers to maintain supplier contact records and log material purchases (material name, quantity, total cost, purchase date, notes) for procurement history.</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="font-semibold text-white">Margin, delivery, and utilization reporting</h3>
+                    <p className="mt-2">Dashboard includes margin reports by machine, material type, and customer, plus delivery KPIs and utilization metrics for production planning.</p>
+                  </div>
                       <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
                         <span>Import</span>
                         <input type="file" accept=".csv" className="hidden" onChange={importBackupCsv} />

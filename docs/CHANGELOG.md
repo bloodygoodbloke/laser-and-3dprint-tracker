@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 - No unreleased changes yet.
 
+## [0.6.0] - 2026-07-15
+- Added machine queue and schedule workflow using per-job queue position and due date with risk indicators (`On track`, `Watch`, `At risk`, `Overdue`).
+- Added QA checklist and rework tracking on jobs, including QA pass/fail, rework notes, and rework cost impact in calculated totals.
+- Added supplier management and purchase history workflows with new backend supplier/purchase APIs and a dedicated frontend Suppliers tab.
+- Added a 14-day dashboard scheduling calendar with due-date workload visibility and projected completion timestamps by machine queue.
+- Added margin reporting views by machine, material type, and customer to support internal profitability analysis.
+- Added delivery and utilization dashboards with on-time delivery rate, overdue open job count, queued runtime hours, and per-machine utilization estimates.
+
 ## [0.5.0] - 2026-07-14
 - Added explicit internal profit visibility on job cards and expanded cost breakdown, alongside existing base and customer totals.
 - Added a dedicated Billing tab and moved billing/personalization workflows out of Admin backup tooling.
