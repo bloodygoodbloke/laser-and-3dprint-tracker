@@ -58,6 +58,11 @@ When updating tracker files, follow this flow exactly:
 6. Run consistency checks:
 - Run `node scripts/check-tracker-consistency.js` before publishing/versioning.
 
+7. Quality cadence default:
+- Perform a code quality audit at every third minor version checkpoint (for example `0.3.0`, `0.6.0`, `0.9.0`).
+- Include a quality-audit note in `docs/CHANGELOG.md` under that release section.
+- Run `node scripts/check-quality-cadence.js` before publishing/versioning.
+
 7. Automatic documentation + help sync after each backlog execution:
 - This is mandatory and must be treated as automatic default behavior.
 - After each implemented backlog item, update all relevant documentation in the same pass:

@@ -37,6 +37,9 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Auto-log runtime/material telemetry usage, auto-deduct linked job material stock, and auto-adjust AMS spool levels from telemetry events.
 - Track open failure logs from Bambu error states and view an event stream for recent telemetry actions.
 - Generate predictive maintenance risk indicators from accumulated machine usage hours and recent error frequency.
+- Import MakerWorld model metadata (title/description/preview/tags plus estimated runtime and grams hints) directly from a MakerWorld URL.
+- Autofill new job creation from MakerWorld URLs to pre-populate name, timing defaults, and suggested material usage, while saving the model URL on the job for future reference.
+- Import MakerWorld print profile hints (layer, nozzle/bed temps, speed, infill) to support faster costing estimation setup.
 - Manage machine profiles from a dedicated Machines tab with add/edit/remove workflows.
 - Calculate production costs for 3D and laser workflows using machine runtime electricity + depreciation plus separate labour-time charging.
 - Configure billing rules for percentage markups, electricity, labour rate, workshop hourly rate, per-machine wattage/depreciation assumptions, and invoice add-ons (delivery + VAT).

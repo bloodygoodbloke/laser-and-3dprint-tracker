@@ -93,6 +93,7 @@ export interface Job {
   jobNumber?: string;
   name: string;
   customer?: string | null;
+  sourceUrl?: string;
   filePath?: string | null;
   machineType: string;
   estTimeMinutes: number;
@@ -218,4 +219,38 @@ export interface BambuDashboardPayload {
   maintenance: BambuMaintenancePrediction[];
   events: BambuEvent[];
   spools: BambuSpoolInventory[];
+}
+
+export interface MakerWorldMetadata {
+  url: string;
+  title: string;
+  description: string;
+  previewImageUrl: string;
+  tags: string[];
+  estimatedMinutes: number;
+  estimatedMaterialGrams: number;
+}
+
+export interface MakerWorldJobDraft {
+  name: string;
+  machineType: string;
+  machineRunTimeMinutes: number;
+  labourTimeMinutes: number;
+  status: string;
+  notes: string;
+  sourceUrl: string;
+  suggestedMaterialGrams: number;
+  tags: string[];
+  previewImageUrl: string;
+}
+
+export interface MakerWorldPrintProfile {
+  profileName: string;
+  layerHeightMm: number;
+  nozzleTempC: number;
+  bedTempC: number;
+  speedMmPerSec: number;
+  infillPercent: number;
+  estimatedMinutes: number;
+  estimatedMaterialGrams: number;
 }

@@ -1,6 +1,6 @@
 import { createElement, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import api from "./api";
-import { BambuDashboardPayload, BillingSettings, Customer, Job, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingSettings, Customer, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
 const APP_VERSION = "0.6.0";
@@ -96,16 +96,16 @@ function App() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "bambu" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
-  const [jobForm, setJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(blankBillingSettings());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
-  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
-  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [showMaterialEditor, setShowMaterialEditor] = useState(false);
@@ -143,6 +143,10 @@ function App() {
   const [bambuMessage, setBambuMessage] = useState("");
   const [bambuSerialInput, setBambuSerialInput] = useState("BAMBU-SIM-001");
   const [bambuJobIdInput, setBambuJobIdInput] = useState("");
+  const [makerWorldUrl, setMakerWorldUrl] = useState("");
+  const [makerWorldMessage, setMakerWorldMessage] = useState("");
+  const [makerWorldMetadata, setMakerWorldMetadata] = useState<MakerWorldMetadata | null>(null);
+  const [makerWorldProfile, setMakerWorldProfile] = useState<MakerWorldPrintProfile | null>(null);
   const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
   const [jobFileMessage, setJobFileMessage] = useState<Record<string, string>>({});
 
@@ -270,6 +274,7 @@ function App() {
     setSelectedJobForm({
       name: selectedJob.name,
       customer: selectedJob.customer || "",
+      sourceUrl: selectedJob.sourceUrl || "",
       machineType: selectedJob.machineType || machineOptions[0],
       machineRunTimeMinutes: String(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
       labourTimeMinutes: String(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
@@ -288,7 +293,7 @@ function App() {
       materialId: entry.materialId,
       usageQuantity: String(entry.usageQuantity || 0),
     })));
-  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.isRush, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
+  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.sourceUrl, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.isRush, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
 
   useEffect(() => {
     if (!newJobMaterialEntries.length && materials.length) {
@@ -469,6 +474,7 @@ function App() {
     await api.createJob({
       name: jobForm.name,
       customer: jobForm.customer || null,
+      sourceUrl: jobForm.sourceUrl || "",
       machineType: jobForm.machineType,
       estTimeMinutes: Number(jobForm.machineRunTimeMinutes),
       machineRunTimeMinutes: Number(jobForm.machineRunTimeMinutes || 0),
@@ -485,7 +491,7 @@ function App() {
       status: jobForm.status,
       materials: toApiJobMaterials(jobMaterialEntries),
     });
-    setJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+    setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setJobMaterialEntries([]);
     await loadData();
 
@@ -564,8 +570,12 @@ function App() {
 
   const openNewJobEditor = () => {
     setJobEditorMode("create");
-    setNewJobForm({ name: "", customer: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "100" }] : []);
+    setMakerWorldUrl("");
+    setMakerWorldMessage("");
+    setMakerWorldMetadata(null);
+    setMakerWorldProfile(null);
   };
 
   const openAddMachineForm = () => {
@@ -654,6 +664,7 @@ function App() {
     const created = await api.createJob({
       name: newJobForm.name,
       customer: newJobForm.customer || null,
+      sourceUrl: newJobForm.sourceUrl || makerWorldUrl || "",
       machineType: newJobForm.machineType,
       estTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
       machineRunTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
@@ -750,6 +761,7 @@ function App() {
     await api.updateJob(job.id, {
       name: job.name,
       customer: job.customer || null,
+      sourceUrl: job.sourceUrl || "",
       machineType: job.machineType,
       estTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
       machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
@@ -816,34 +828,40 @@ function App() {
     e.preventDefault();
     if (!selectedJob) return;
     const nextStatus = selectedJobForm.status;
-    await api.updateJob(selectedJob.id, {
-      name: selectedJobForm.name,
-      customer: selectedJobForm.customer || null,
-      machineType: selectedJobForm.machineType,
-      estTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
-      machineRunTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
-      labourTimeMinutes: Number(selectedJobForm.labourTimeMinutes || 0),
-      dueDate: selectedJobForm.dueDate || null,
-      queuePosition: Number(selectedJobForm.queuePosition || 0),
-      qaChecklist: toChecklistArray(selectedJobForm.qaChecklistText),
-      qaPassed: Boolean(selectedJobForm.qaPassed),
-      reworkCost: Number(selectedJobForm.reworkCost || 0),
-      reworkNotes: String(selectedJobForm.reworkNotes || ""),
-      isRush: selectedJobForm.isRush,
-      paymentStatus: selectedJobForm.paymentStatus,
-      depositPaidAmount: Number(selectedJobForm.depositPaidAmount || 0),
-      status: selectedJobForm.status,
-      materials: toApiJobMaterials(selectedJobMaterialEntries),
-    });
-    await loadData();
-    if (nextStatus === "Completed") {
-      await calculateJobCost({ ...selectedJob, status: nextStatus, isRush: selectedJobForm.isRush });
-      setExpandedJobId(selectedJob.id);
-      setSelectedJobId(selectedJob.id);
-      setJobEditorMode("invoice");
-      return;
+    try {
+      await api.updateJob(selectedJob.id, {
+        name: selectedJobForm.name,
+        customer: selectedJobForm.customer || null,
+        sourceUrl: selectedJobForm.sourceUrl || "",
+        machineType: selectedJobForm.machineType,
+        estTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
+        machineRunTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
+        labourTimeMinutes: Number(selectedJobForm.labourTimeMinutes || 0),
+        dueDate: selectedJobForm.dueDate || null,
+        queuePosition: Number(selectedJobForm.queuePosition || 0),
+        qaChecklist: toChecklistArray(selectedJobForm.qaChecklistText),
+        qaPassed: Boolean(selectedJobForm.qaPassed),
+        reworkCost: Number(selectedJobForm.reworkCost || 0),
+        reworkNotes: String(selectedJobForm.reworkNotes || ""),
+        isRush: selectedJobForm.isRush,
+        paymentStatus: selectedJobForm.paymentStatus,
+        depositPaidAmount: Number(selectedJobForm.depositPaidAmount || 0),
+        status: selectedJobForm.status,
+        materials: toApiJobMaterials(selectedJobMaterialEntries),
+      });
+      await loadData();
+      if (nextStatus === "Completed") {
+        await calculateJobCost({ ...selectedJob, status: nextStatus, isRush: selectedJobForm.isRush });
+        setExpandedJobId(selectedJob.id);
+        setSelectedJobId(selectedJob.id);
+        setJobEditorMode("invoice");
+        return;
+      }
+      setJobEditorMode("none");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save job";
+      window.alert(message);
     }
-    setJobEditorMode("none");
   };
 
   const addSelectedJobMaterialEntry = () => {
@@ -1239,6 +1257,62 @@ function App() {
     });
     await refreshBambuDashboard();
     setBambuMessage(`${eventType} event ingested.`);
+  };
+  const importMakerWorldMetadata = async () => {
+    const payload = await api.importMakerWorldMetadata(makerWorldUrl);
+    setMakerWorldMetadata(payload);
+    setNewJobForm((current) => ({ ...current, sourceUrl: payload.url || makerWorldUrl }));
+    setMakerWorldMessage("MakerWorld metadata imported.");
+  };
+  const importMakerWorldAutofill = async () => {
+    const payload = await api.autofillMakerWorldJob(makerWorldUrl);
+    setMakerWorldMetadata(payload.metadata);
+    setNewJobForm((current) => ({
+      ...current,
+      name: payload.jobDraft.name,
+      sourceUrl: payload.jobDraft.sourceUrl || current.sourceUrl,
+      machineType: payload.jobDraft.machineType,
+      machineRunTimeMinutes: String(payload.jobDraft.machineRunTimeMinutes),
+      labourTimeMinutes: String(payload.jobDraft.labourTimeMinutes),
+      status: payload.jobDraft.status,
+      reworkNotes: [current.reworkNotes, payload.jobDraft.notes].filter(Boolean).join("\n"),
+    }));
+    if (payload.jobDraft.suggestedMaterialGrams > 0) {
+      setNewJobMaterialEntries((current) => {
+        if (!current.length && materials.length) {
+          return [{ materialId: materials[0].id, usageQuantity: String(payload.jobDraft.suggestedMaterialGrams) }];
+        }
+        return current.map((entry, index) => index === 0 ? { ...entry, usageQuantity: String(payload.jobDraft.suggestedMaterialGrams) } : entry);
+      });
+    }
+    setJobEditorMode("create");
+    setMakerWorldMessage("MakerWorld job autofill applied to Add Job form.");
+  };
+  const importMakerWorldPrintProfile = async () => {
+    const payload = await api.importMakerWorldPrintProfile(makerWorldUrl);
+    setMakerWorldMetadata(payload.metadata);
+    setMakerWorldProfile(payload.profile);
+    setNewJobForm((current) => ({
+      ...current,
+      sourceUrl: payload.metadata.url || current.sourceUrl,
+      machineRunTimeMinutes: String(payload.profile.estimatedMinutes || current.machineRunTimeMinutes),
+      labourTimeMinutes: String(Math.max(10, Math.round((payload.profile.estimatedMinutes || Number(current.labourTimeMinutes || 0)) * 0.15))),
+      reworkNotes: [
+        current.reworkNotes,
+        `Print profile: ${payload.profile.profileName}`,
+        `Layer ${payload.profile.layerHeightMm}mm, Nozzle ${payload.profile.nozzleTempC}C, Bed ${payload.profile.bedTempC}C, Speed ${payload.profile.speedMmPerSec}mm/s, Infill ${payload.profile.infillPercent}%`,
+      ].filter(Boolean).join("\n"),
+    }));
+    if (payload.profile.estimatedMaterialGrams > 0) {
+      setNewJobMaterialEntries((current) => {
+        if (!current.length && materials.length) {
+          return [{ materialId: materials[0].id, usageQuantity: String(payload.profile.estimatedMaterialGrams) }];
+        }
+        return current.map((entry, index) => index === 0 ? { ...entry, usageQuantity: String(payload.profile.estimatedMaterialGrams) } : entry);
+      });
+    }
+    setJobEditorMode("create");
+    setMakerWorldMessage("MakerWorld print profile imported for costing estimation.");
   };
   const selectedCustomerProfile = useMemo(
     () => customers.find((customer) => customer.name.trim().toLowerCase() === String(selectedJob?.customer || "").trim().toLowerCase()) || null,
@@ -1721,7 +1795,7 @@ function App() {
                     ))}
                   </div>
                 </div>
-                <button className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Create job</button>
+                <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Create job</button>
               </form>
               </section>
 
@@ -1867,7 +1941,7 @@ function App() {
                 <h2 className="text-xl font-semibold">Reporting page</h2>
                 <p className="mt-2 text-sm text-slate-400">Filter jobs by date range, status, machine, and customer, then export report-ready data.</p>
               </div>
-              <button type="button" onClick={exportReportCsv} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Export CSV</button>
+              <button type="button" onClick={exportReportCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export CSV</button>
             </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -2074,7 +2148,7 @@ function App() {
                 <h2 className="text-xl font-semibold">Jobs</h2>
                 <p className="mt-2 text-sm text-slate-400">Click a job card to expand details, then choose Edit job or Create invoice.</p>
               </div>
-              <button type="button" onClick={openNewJobEditor} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Add job</button>
+              <button type="button" onClick={openNewJobEditor} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add job</button>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto]">
               <label className="block text-sm text-slate-300">
@@ -2171,6 +2245,7 @@ function App() {
                         <div className="grid gap-2 text-sm text-slate-300 md:grid-cols-2">
                           <p><span className="text-slate-500">Job:</span> {job.name}</p>
                           <p><span className="text-slate-500">Customer:</span> {job.customer || "No customer"}</p>
+                          <p><span className="text-slate-500">Model URL:</span> {job.sourceUrl ? <a className="text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer">{job.sourceUrl}</a> : "None"}</p>
                           <p><span className="text-slate-500">Machine:</span> {job.machineType}</p>
                           <p><span className="text-slate-500">Machine runtime:</span> {job.machineRunTimeMinutes ?? job.estTimeMinutes} mins</p>
                           <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
@@ -2338,7 +2413,7 @@ function App() {
                               <div className="flex gap-2">
                                 <button type="button" onClick={() => selectedJob && calculateJobCost(selectedJob)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">{selectedJob ? getCostButtonLabel(selectedJob) : "Calculate cost"}</button>
                                 <button type="button" onClick={() => setJobEditorMode("none")} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Cancel</button>
-                                <button type="submit" className="rounded-full bg-cyan-600 px-3 py-1 text-sm font-medium">Save job</button>
+                                <button type="submit" className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Save job</button>
                               </div>
                             </div>
 
@@ -2350,6 +2425,10 @@ function App() {
                               <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Customer</span>
                                 <input value={selectedJobForm.customer} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, customer: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Model URL</span>
+                                <input value={selectedJobForm.sourceUrl} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, sourceUrl: e.target.value })} placeholder="https://makerworld.com/..." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
                               <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Machine type</span>
@@ -2401,6 +2480,7 @@ function App() {
                               <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Rework cost (£)</span>
                                 <input type="number" step="0.01" value={selectedJobForm.reworkCost} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, reworkCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                                <p className="mt-1 text-xs text-slate-500">Use a negative value (for example -5.00) to apply a manual pricing correction.</p>
                               </label>
                               <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">QA passed</span>
@@ -2627,8 +2707,69 @@ function App() {
                       </div>
                       <div className="flex gap-2">
                         <button type="button" onClick={() => setJobEditorMode("none")} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Cancel</button>
-                        <button type="submit" className="rounded-full bg-cyan-600 px-3 py-1 text-sm font-medium">Create job</button>
+                        <button type="submit" className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Create job</button>
                       </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-cyan-800/50 bg-slate-950 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-semibold text-white">MakerWorld import</h4>
+                          <p className="mt-1 text-xs text-slate-400">Paste a MakerWorld model URL to import metadata, autofill fields, or load a print profile estimate.</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-[2fr_auto_auto_auto] md:items-end">
+                        <label className="block text-sm text-slate-300">
+                          <span className="mb-2 block">MakerWorld URL</span>
+                          <input
+                            value={makerWorldUrl}
+                            onChange={(e) => setMakerWorldUrl(e.target.value)}
+                            placeholder="https://makerworld.com/..."
+                            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => importMakerWorldMetadata().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "MakerWorld metadata import failed"))}
+                          className="rounded-xl border border-cyan-700 px-3 py-2 text-xs text-cyan-300"
+                        >
+                          Import metadata
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => importMakerWorldAutofill().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "MakerWorld autofill failed"))}
+                          className="rounded-xl border border-cyan-700 px-3 py-2 text-xs text-cyan-300"
+                        >
+                          Autofill job
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => importMakerWorldPrintProfile().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "MakerWorld profile import failed"))}
+                          className="rounded-xl border border-cyan-700 px-3 py-2 text-xs text-cyan-300"
+                        >
+                          Import profile
+                        </button>
+                      </div>
+                      {makerWorldMessage ? <p className="mt-3 text-xs text-cyan-300">{makerWorldMessage}</p> : null}
+                      {makerWorldMetadata ? (
+                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-slate-300">
+                          <p className="font-medium text-white">{makerWorldMetadata.title || "Imported model"}</p>
+                          <p className="mt-1 text-slate-400">{makerWorldMetadata.description || "No description available."}</p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                            <span className="rounded-full border border-slate-700 px-2 py-1">Est. runtime: {makerWorldMetadata.estimatedMinutes || 0} min</span>
+                            <span className="rounded-full border border-slate-700 px-2 py-1">Est. material: {makerWorldMetadata.estimatedMaterialGrams || 0} g</span>
+                            {(makerWorldMetadata.tags || []).slice(0, 6).map((tag) => (
+                              <span key={`makerworld-tag-${tag}`} className="rounded-full border border-slate-700 px-2 py-1">#{tag}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {makerWorldProfile ? (
+                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-slate-300">
+                          <p className="font-medium text-white">{makerWorldProfile.profileName}</p>
+                          <p className="mt-1 text-slate-400">Layer {makerWorldProfile.layerHeightMm} mm • Nozzle {makerWorldProfile.nozzleTempC} C • Bed {makerWorldProfile.bedTempC} C • Speed {makerWorldProfile.speedMmPerSec} mm/s • Infill {makerWorldProfile.infillPercent}%</p>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
@@ -2639,6 +2780,10 @@ function App() {
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Customer</span>
                         <input value={newJobForm.customer} onChange={(e) => setNewJobForm({ ...newJobForm, customer: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Model URL</span>
+                        <input value={newJobForm.sourceUrl} onChange={(e) => setNewJobForm({ ...newJobForm, sourceUrl: e.target.value })} placeholder="https://makerworld.com/..." className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       </label>
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Machine type</span>
@@ -2690,6 +2835,7 @@ function App() {
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Rework cost (£)</span>
                         <input type="number" step="0.01" value={newJobForm.reworkCost} onChange={(e) => setNewJobForm({ ...newJobForm, reworkCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                        <p className="mt-1 text-xs text-slate-500">Use a negative value (for example -5.00) to apply a manual pricing correction.</p>
                       </label>
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">QA passed</span>
@@ -2766,7 +2912,7 @@ function App() {
                 <h2 className="text-xl font-semibold">Materials</h2>
                 <p className="mt-2 text-sm text-slate-400">Group stock by material type and copy or edit entries quickly.</p>
               </div>
-              <button type="button" onClick={openAddMaterialForm} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Add material</button>
+              <button type="button" onClick={openAddMaterialForm} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add material</button>
             </div>
 
             {showMaterialEditor ? (
@@ -2813,7 +2959,7 @@ function App() {
 
                   <div className="flex justify-end gap-3">
                     <button type="button" onClick={closeMaterialForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel</button>
-                    <button className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">{editingMaterialId ? "Save material" : "Add material"}</button>
+                    <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingMaterialId ? "Save material" : "Add material"}</button>
                   </div>
                 </form>
               </div>
@@ -2858,7 +3004,7 @@ function App() {
                 <h2 className="text-xl font-semibold">Machines</h2>
                 <p className="mt-2 text-sm text-slate-400">Manage machine profiles used in job selection and runtime billing.</p>
               </div>
-              <button type="button" onClick={openAddMachineForm} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Add machine</button>
+              <button type="button" onClick={openAddMachineForm} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add machine</button>
             </div>
 
             {showMachineEditor ? (
@@ -2891,7 +3037,7 @@ function App() {
 
                   <div className="flex justify-end gap-3">
                     <button type="button" onClick={closeMachineForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel</button>
-                    <button className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">{editingMachineName ? "Save machine" : "Add machine"}</button>
+                    <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingMachineName ? "Save machine" : "Add machine"}</button>
                   </div>
                 </form>
               </div>
@@ -2954,7 +3100,7 @@ function App() {
                   <input value={customerForm.notes} onChange={(e) => setCustomerForm({ ...customerForm, notes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                 </label>
                 <div className="flex justify-end">
-                  <button className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">{editingCustomerId ? "Save customer" : "Add customer"}</button>
+                  <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingCustomerId ? "Save customer" : "Add customer"}</button>
                 </div>
               </form>
 
@@ -3036,7 +3182,7 @@ function App() {
                   <input value={supplierForm.notes} onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                 </label>
                 <div className="flex justify-end">
-                  <button className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">{editingSupplierId ? "Save supplier" : "Add supplier"}</button>
+                  <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingSupplierId ? "Save supplier" : "Add supplier"}</button>
                 </div>
               </form>
 
@@ -3070,8 +3216,8 @@ function App() {
                   <input value={supplierPurchaseForm.materialName} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, materialName: e.target.value }))} placeholder="Material" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required />
                   <input type="number" step="0.01" min="0" value={supplierPurchaseForm.quantityKg} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, quantityKg: e.target.value }))} placeholder="Qty kg" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
                   <input type="number" step="0.01" min="0" value={supplierPurchaseForm.totalCost} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, totalCost: e.target.value }))} placeholder="Total £" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
-                  <input type="date" value={supplierPurchaseForm.purchasedAt} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, purchasedAt: e.target.value }))} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
-                  <button className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Add purchase</button>
+                  <input type="date" aria-label="Purchase date" title="Purchase date" value={supplierPurchaseForm.purchasedAt} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, purchasedAt: e.target.value }))} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
+                  <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add purchase</button>
                   <input value={supplierPurchaseForm.notes} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, notes: e.target.value }))} placeholder="Notes" className="md:col-span-5 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
                 </form>
                 <div className="mt-3 space-y-2">
@@ -3100,7 +3246,7 @@ function App() {
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
                     <h3 className="text-sm font-semibold text-white">Jobs CSV</h3>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportBackupCsv} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Export</button>
+                      <button type="button" onClick={exportBackupCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export</button>
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                     <h3 className="font-semibold text-white">Machine queue and due-date risk</h3>
                     <p className="mt-2">Use Jobs to set queue position and due date per job. The queue panel highlights risk states (On track, Watch, At risk, Overdue) so production order can be adjusted early.</p>
@@ -3111,7 +3257,7 @@ function App() {
                   </div>
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                     <h3 className="font-semibold text-white">QA checklist and rework cost</h3>
-                    <p className="mt-2">In job create/edit forms, add QA checklist items (one per line), mark QA pass/fail, and log rework cost/notes. Rework cost is included in cost impact when calculating totals.</p>
+                      <p className="mt-2">In job create/edit forms, add QA checklist items (one per line), mark QA pass/fail, and log rework cost/notes. Rework cost is included in cost impact when calculating totals, and negative rework values are supported for manual pricing corrections.</p>
                   </div>
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                     <h3 className="font-semibold text-white">Supplier records and purchase history</h3>
@@ -3131,7 +3277,7 @@ function App() {
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
                     <h3 className="text-sm font-semibold text-white">Materials CSV</h3>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportMaterialsCsv} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Export</button>
+                      <button type="button" onClick={exportMaterialsCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export</button>
                       <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
                         <span>Import</span>
                         <input type="file" accept=".csv" className="hidden" onChange={importMaterialsCsv} />
@@ -3142,7 +3288,7 @@ function App() {
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
                     <h3 className="text-sm font-semibold text-white">Full backup</h3>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportFullBackup} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">Download</button>
+                      <button type="button" onClick={exportFullBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
                       <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
                         <span>Restore</span>
                         <input type="file" accept=".json" className="hidden" onChange={importFullBackup} />
@@ -3171,7 +3317,7 @@ function App() {
               <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
                 <summary className="cursor-pointer list-none text-lg font-semibold text-white">Business personalization</summary>
                 <div className="mt-4 flex items-center justify-end">
-                  <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">
+                  <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">
                     {savingBilling ? "Saving..." : "Save business details"}
                   </button>
                 </div>
@@ -3206,7 +3352,7 @@ function App() {
               <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
                 <summary className="cursor-pointer list-none text-lg font-semibold text-white">Billing rules</summary>
                 <div className="mt-4 flex items-center justify-end">
-                  <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium">
+                  <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">
                     {savingBilling ? "Saving..." : "Save rules"}
                   </button>
                 </div>
@@ -3353,7 +3499,7 @@ function App() {
             <div className="mt-6 space-y-4 text-sm text-slate-300">
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Creating a job</h3>
-                <p className="mt-2">Use Dashboard quick add or Jobs &gt; Add job. Enter customer, machine type, machine runtime, labour time, status, payment status, optional deposit paid, and one or more materials. Use Quote Draft/Quote Sent/Quote Approved statuses when preparing quotes before production. Each new job receives an automatic job number. If the customer name is new, a popup appears so you can add customer details into CRM Lite right away.</p>
+                <p className="mt-2">Use Dashboard quick add or Jobs &gt; Add job. Enter customer, machine type, machine runtime, labour time, status, payment status, optional deposit paid, and one or more materials. In Jobs &gt; Add Job you can also paste a MakerWorld URL and use Import metadata, Autofill job, or Import profile to prefill model details and costing hints. The model URL is saved on the job record so you can reopen the original MakerWorld model later. Use Quote Draft/Quote Sent/Quote Approved statuses when preparing quotes before production. Each new job receives an automatic job number. If the customer name is new, a popup appears so you can add customer details into CRM Lite right away.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Calculating costs</h3>
@@ -3454,7 +3600,7 @@ function App() {
                 >
                   Skip
                 </button>
-                <button type="submit" className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white">Save customer</button>
+                <button type="submit" className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Save customer</button>
               </div>
             </form>
           </div>

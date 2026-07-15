@@ -4,6 +4,16 @@ import { upload } from "../upload";
 
 const router = Router();
 
+const isSourceUrlCompatibilityError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return message.includes("sourceUrl") && (
+    message.includes("Unknown arg")
+    || message.includes("Unknown argument")
+    || message.includes("no such column")
+    || message.includes("has no column")
+  );
+};
+
 router.get("/", async (_req, res) => {
   const jobs = await prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } });
   res.json(jobs);
@@ -11,41 +21,56 @@ router.get("/", async (_req, res) => {
 
 router.post("/", async (req, res) => {
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
-    const { isRush, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes } = req.body;
+  const { isRush, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, sourceUrl } = req.body;
 
   const jobsCount = await prisma.job.count();
   const generatedNumber = jobNumber || `JOB-${String(jobsCount + 1).padStart(4, "0")}`;
 
-  const job = await prisma.job.create({
-    data: {
-      jobNumber: generatedNumber,
-      name,
-      customer,
-      machineType,
-      estTimeMinutes: Number(estTimeMinutes || 0),
-      machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
-      labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
-      dueDate: dueDate ? new Date(String(dueDate)) : null,
-      queuePosition: Number(queuePosition || 0),
-      qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
-      qaPassed: Boolean(qaPassed),
-      reworkCost: Number(reworkCost || 0),
-      reworkNotes: String(reworkNotes || ""),
-        isRush: Boolean(isRush),
-        paymentStatus: String(paymentStatus || "Unpaid"),
-        depositPaidAmount: Number(depositPaidAmount || 0),
-      status: status || "Pending",
-      materials: {
-        create: materials.map((entry: any) => ({
-          materialId: entry.materialId,
-          usageQuantity: Number(entry.usageQuantity || 0),
-          usageUnit: entry.usageUnit || "g",
-          usageUnitCost: Number(entry.usageUnitCost || 0),
-        })),
-      },
+  const baseData = {
+    jobNumber: generatedNumber,
+    name,
+    customer,
+    sourceUrl: String(sourceUrl || ""),
+    machineType,
+    estTimeMinutes: Number(estTimeMinutes || 0),
+    machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
+    labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+    dueDate: dueDate ? new Date(String(dueDate)) : null,
+    queuePosition: Number(queuePosition || 0),
+    qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
+    qaPassed: Boolean(qaPassed),
+    reworkCost: Number(reworkCost || 0),
+    reworkNotes: String(reworkNotes || ""),
+    isRush: Boolean(isRush),
+    paymentStatus: String(paymentStatus || "Unpaid"),
+    depositPaidAmount: Number(depositPaidAmount || 0),
+    status: status || "Pending",
+    materials: {
+      create: materials.map((entry: any) => ({
+        materialId: entry.materialId,
+        usageQuantity: Number(entry.usageQuantity || 0),
+        usageUnit: entry.usageUnit || "g",
+        usageUnitCost: Number(entry.usageUnitCost || 0),
+      })),
     },
-    include: { materials: { include: { material: true } }, cost: true },
-  });
+  };
+
+  let job;
+  try {
+    job = await prisma.job.create({
+      data: baseData,
+      include: { materials: { include: { material: true } }, cost: true },
+    });
+  } catch (error) {
+    if (!isSourceUrlCompatibilityError(error)) {
+      throw error;
+    }
+    const fallbackNotes = [String(reworkNotes || ""), sourceUrl ? `Source URL: ${String(sourceUrl)}` : ""].filter(Boolean).join("\n");
+    job = await prisma.job.create({
+      data: { ...baseData, reworkNotes: fallbackNotes } as any,
+      include: { materials: { include: { material: true } }, cost: true },
+    });
+  }
 
   res.status(201).json(job);
 });
@@ -79,46 +104,64 @@ router.get("/:id", async (req, res) => {
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
-    const { isRush, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes } = req.body;
+  const { isRush, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, sourceUrl } = req.body;
 
   try {
     await prisma.jobMaterial.deleteMany({ where: { jobId: id } });
 
-    const job = await prisma.job.update({
-      where: { id },
-      data: {
-        jobNumber: jobNumber || undefined,
-        name,
-        customer,
-        machineType,
-        estTimeMinutes: Number(estTimeMinutes || 0),
-        machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
-        labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
-        dueDate: dueDate ? new Date(String(dueDate)) : null,
-        queuePosition: Number(queuePosition || 0),
-        qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
-        qaPassed: Boolean(qaPassed),
-        reworkCost: Number(reworkCost || 0),
-        reworkNotes: String(reworkNotes || ""),
-          isRush: Boolean(isRush),
-          paymentStatus: String(paymentStatus || "Unpaid"),
-          depositPaidAmount: Number(depositPaidAmount || 0),
-        status,
-        materials: {
-          create: materials.map((entry: any) => ({
-            materialId: entry.materialId,
-            usageQuantity: Number(entry.usageQuantity || 0),
-            usageUnit: entry.usageUnit || "g",
-            usageUnitCost: Number(entry.usageUnitCost || 0),
-          })),
-        },
+    const baseData = {
+      jobNumber: jobNumber || undefined,
+      name,
+      customer,
+      sourceUrl: String(sourceUrl || ""),
+      machineType,
+      estTimeMinutes: Number(estTimeMinutes || 0),
+      machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
+      labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+      dueDate: dueDate ? new Date(String(dueDate)) : null,
+      queuePosition: Number(queuePosition || 0),
+      qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
+      qaPassed: Boolean(qaPassed),
+      reworkCost: Number(reworkCost || 0),
+      reworkNotes: String(reworkNotes || ""),
+      isRush: Boolean(isRush),
+      paymentStatus: String(paymentStatus || "Unpaid"),
+      depositPaidAmount: Number(depositPaidAmount || 0),
+      status,
+      materials: {
+        create: materials.map((entry: any) => ({
+          materialId: entry.materialId,
+          usageQuantity: Number(entry.usageQuantity || 0),
+          usageUnit: entry.usageUnit || "g",
+          usageUnitCost: Number(entry.usageUnitCost || 0),
+        })),
       },
-      include: { materials: { include: { material: true } }, cost: true },
-    });
+    };
+
+    let job;
+    try {
+      job = await prisma.job.update({
+        where: { id },
+        data: baseData,
+        include: { materials: { include: { material: true } }, cost: true },
+      });
+    } catch (error) {
+      if (!isSourceUrlCompatibilityError(error)) {
+        throw error;
+      }
+      const fallbackNotes = [String(reworkNotes || ""), sourceUrl ? `Source URL: ${String(sourceUrl)}` : ""].filter(Boolean).join("\n");
+      job = await prisma.job.update({
+        where: { id },
+        data: { ...baseData, reworkNotes: fallbackNotes } as any,
+        include: { materials: { include: { material: true } }, cost: true },
+      });
+    }
 
     res.json(job);
   } catch (error) {
-    res.status(404).json({ error: "Job not found" });
+    const message = error instanceof Error ? error.message : "Job update failed";
+    const notFound = String(message).toLowerCase().includes("record to update not found") || String(message).toLowerCase().includes("job not found");
+    res.status(notFound ? 404 : 400).json({ error: notFound ? "Job not found" : message });
   }
 });
 
@@ -251,7 +294,8 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const setupFeeAmount = Math.max(0, SETUP_FEE);
     const rushFeeAmount = isRushJob ? (preGuardrailCustomerCharge + setupFeeAmount) * (Math.max(0, RUSH_FEE_PERCENT) / 100) : 0;
     const guardrailSubtotal = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount;
-    const minimumChargeApplied = Math.max(0, Math.max(0, MINIMUM_CHARGE) - guardrailSubtotal);
+    const minimumChargeTarget = Math.max(0, MINIMUM_CHARGE);
+    const minimumChargeApplied = Math.max(0, minimumChargeTarget - guardrailSubtotal);
     const customerCharge = guardrailSubtotal + minimumChargeApplied + qaReworkCost;
 
     const existing = await prisma.jobCost.findUnique({ where: { jobId: id } });

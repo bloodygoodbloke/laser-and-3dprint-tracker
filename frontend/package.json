@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "check:release": "node ../scripts/check-release-notes.js",
     "check:tracker": "node ../scripts/check-tracker-consistency.js",
-    "preversion": "npm run check:release && npm run check:tracker"
+    "check:quality-cadence": "node ../scripts/check-quality-cadence.js",
+    "preversion": "npm run check:release && npm run check:tracker && npm run check:quality-cadence"
   },
   "dependencies": {
     "react": "^18.3.1",

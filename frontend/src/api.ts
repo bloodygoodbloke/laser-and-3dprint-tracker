@@ -1,7 +1,10 @@
-import { BambuDashboardPayload, BillingSettings, Customer, Job, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingSettings, Customer, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
+const makerWorldEnv = (import.meta as unknown as { env?: Record<string, string> }).env || {};
+const makerWorldMockEnabled = String(makerWorldEnv.VITE_MAKERWORLD_MOCK || "").trim() === "1";
+const makerWorldQuerySuffix = makerWorldMockEnabled ? "?mock=1" : "";
 
 const api = {
   async getJobs(): Promise<Job[]> {
@@ -248,6 +251,33 @@ const api = {
       body: JSON.stringify(payload || {}),
     });
     if (!res.ok) throw new Error("Failed to generate Bambu simulation tick");
+    return res.json();
+  },
+  async importMakerWorldMetadata(url: string): Promise<MakerWorldMetadata> {
+    const res = await fetch(`/api/makerworld/metadata${makerWorldQuerySuffix}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) throw new Error("Failed to import MakerWorld metadata");
+    return res.json();
+  },
+  async autofillMakerWorldJob(url: string): Promise<{ metadata: MakerWorldMetadata; jobDraft: MakerWorldJobDraft }> {
+    const res = await fetch(`/api/makerworld/autofill${makerWorldQuerySuffix}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) throw new Error("Failed to import MakerWorld job autofill");
+    return res.json();
+  },
+  async importMakerWorldPrintProfile(url: string): Promise<{ metadata: MakerWorldMetadata; profile: MakerWorldPrintProfile }> {
+    const res = await fetch(`/api/makerworld/print-profile${makerWorldQuerySuffix}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) throw new Error("Failed to import MakerWorld print profile");
     return res.json();
   },
 };

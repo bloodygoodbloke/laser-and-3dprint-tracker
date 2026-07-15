@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 - Added a dedicated Reports page with date-range, status, machine, and customer filters, summary metrics, detailed report rows, and CSV export.
+- Added MakerWorld metadata import endpoint and UI flow to fetch model title, preview metadata, tags, and estimated runtime/material hints from a MakerWorld URL.
+- Added MakerWorld job autofill support in Jobs > Add Job to pre-populate key fields and suggested material usage from imported model metadata.
+- Added MakerWorld print profile import support to capture layer/nozzle/bed/speed/infill profile hints and apply runtime/material estimation to costing inputs.
+- Added support for negative rework cost entries to allow manual pricing corrections during job create/edit workflows.
 - Added Bambu telemetry ingestion and live status tracking for nozzle/bed/chamber temperatures, progress, and AMS summaries.
 - Added event-driven Bambu workflow automation to update linked job statuses on print start/finish/fail/cancel events.
 - Added Bambu runtime/material usage logging with linked material stock and AMS spool deduction support.
@@ -12,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Added auto-failure logging from Bambu error states and failed print event telemetry.
 
 ## [0.6.0] - 2026-07-15
+- Quality audit: completed a code-quality checkpoint (performance, consistency, and release-guardrails cleanup) as part of the third-minor release cadence.
 - Added machine queue and schedule workflow using per-job queue position and due date with risk indicators (`On track`, `Watch`, `At risk`, `Overdue`).
 - Added QA checklist and rework tracking on jobs, including QA pass/fail, rework notes, and rework cost impact in calculated totals.
 - Added supplier management and purchase history workflows with new backend supplier/purchase APIs and a dedicated frontend Suppliers tab.

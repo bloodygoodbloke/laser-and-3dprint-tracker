@@ -60,6 +60,7 @@ model Job {
   jobNumber       String            @unique @default("")
   name            String
   customer        String?
+  sourceUrl       String            @default("")
   filePath        String?
   machineType     String
   estTimeMinutes  Int

@@ -16,9 +16,6 @@ Last updated: 2026-07-15
 | CHG-061 | Integration | Integrations | Planned | Energy-aware scheduling | - | Schedule jobs into off-peak windows from tariff data. |
 | CHG-062 | Integration | Integrations | Planned | SumUp payment links | - | Create payment links from invoice records. |
 | CHG-063 | Integration | Integrations | Planned | SumUp reconciliation | - | Pull sales/outstanding and reconcile invoice transactions. |
-| CHG-064 | Integration | Integrations | Planned | MakerWorld metadata import | - | Import model preview/tags/estimated time/grams. |
-| CHG-065 | Integration | Integrations | Planned | MakerWorld job autofill | - | Auto-populate job creation from MakerWorld URL. |
-| CHG-066 | Integration | Integrations | Planned | MakerWorld print profile import | - | Import print profiles for costing estimation. |
 | CHG-074 | Integration | Integrations | Planned | LightBurn file parser | - | Parse LBRN/LBRN2 for layers/power/speed/passes/runtime. |
 | CHG-075 | Integration | Integrations | Planned | LightBurn G-code parser | - | Parse laser G-code for runtime/material mapping. |
 | CHG-076 | Integration | Integrations | Planned | Laser cost auto-generation | - | Generate laser job cost from LightBurn analysis. |
