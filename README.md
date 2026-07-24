@@ -77,37 +77,7 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - `npx prisma generate`
 - `npx prisma migrate deploy`
 - `cd ../frontend && npm install`
-- Optional owner-only backlog import setup:
-- Preferred setup: copy `backend/.env.local.example` to `backend/.env.local` and fill values.
-- `backend/.env.local` is loaded automatically by backend startup and is git-ignored.
-- GitHub owner OAuth:
-- Choose one identity method (plain or hashed):
-- Plain: `APP_OWNER_GITHUB_LOGIN=<owner-github-login>`
-- Hashed: `APP_OWNER_GITHUB_LOGIN_SHA256=<sha256-of-owner-github-login>`
-- Generate hash example: `printf "%s" "<owner-github-login>" | shasum -a 256 | awk '{print $1}'`
-- `GITHUB_OAUTH_CLIENT_ID=<github-oauth-app-client-id>`
-- `GITHUB_OAUTH_CLIENT_SECRET=<github-oauth-app-client-secret>`
-- Set GitHub OAuth callback URL to:
-- `http://localhost:4000/api/admin/owner/oauth/github/callback`
-- Microsoft owner OAuth:
-- Choose one identity method (plain or hashed):
-- Plain: `APP_OWNER_MICROSOFT_EMAIL=<owner-microsoft-email>`
-- Hashed: `APP_OWNER_MICROSOFT_EMAIL_SHA256=<sha256-of-owner-microsoft-email>`
-- Generate hash example: `printf "%s" "<owner-microsoft-email>" | shasum -a 256 | awk '{print $1}'`
-- `MICROSOFT_OAUTH_CLIENT_ID=<microsoft-app-client-id>`
-- `MICROSOFT_OAUTH_CLIENT_SECRET=<microsoft-app-client-secret>`
-- Set Microsoft redirect URI to:
-- `http://localhost:4000/api/admin/owner/oauth/microsoft/callback`
-- Optional:
-- `APP_OWNER_OAUTH_REDIRECT_BASE=http://localhost:4000`
-- `APP_OWNER_SESSION_TTL_MS=28800000`
-- Common reasons owner login fails:
-- Backend was not restarted after changing `backend/.env.local`.
-- OAuth app callback/redirect URI does not exactly match the URLs above.
-- Owner identity configured in plain/hash does not match the signed-in account.
-- `APP_OWNER_OAUTH_REDIRECT_BASE` does not match backend host/port actually used.
-- In Admin > Help requests inbox, use `Owner auth diagnostics` to see readiness by provider (identity/client ID/client secret) and expected callback URLs without exposing secret values.
-- When configured, only an authenticated owner OAuth session can use `Import to backlog`, and non-owners will not see that action. Owner identity is not exposed in owner-session status responses.
+- Help requests inbox now imports backlog files directly, so no OAuth setup is required for local development.
 - Start locally (two options):
 - Option 1: one command from repo root: `bash start-local.sh`
 - Option 2: start each service manually:
@@ -123,6 +93,13 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Build and start: `docker compose up --build`
 - Backend health endpoint: `http://127.0.0.1:4000/api/health`
 - Frontend app: `http://127.0.0.1:5173`
+
+**Staging deployment**
+- Build and start the staging stack: `docker compose -f docker-compose.staging.yml up --build`
+- Staging frontend: `http://127.0.0.1:8080`
+- Backend health endpoint: `http://127.0.0.1:4000/api/health`
+- Staging uses a persistent SQLite volume and a reverse-proxied frontend so the browser talks to one origin.
+- For public production, swap SQLite for Postgres and move secrets to a managed secret store.
 
 **Local run links**
 - App UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)

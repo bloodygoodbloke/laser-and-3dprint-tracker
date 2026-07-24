@@ -277,36 +277,6 @@ export interface HelpIntakeRequestRecord {
   details: string;
 }
 
-export interface OwnerSessionStatus {
-  isOwner: boolean;
-  ownerLogin: string | null;
-  ownerEmail?: string | null;
-  ownerProvider?: "github" | "microsoft";
-  authConfigured: boolean;
-  providers?: {
-    github: boolean;
-    microsoft: boolean;
-  };
-  expiresAt?: string;
-}
-
-export interface OwnerAuthProviderDiagnostics {
-  enabled: boolean;
-  ownerIdentityConfigured: boolean;
-  clientIdConfigured: boolean;
-  clientSecretConfigured: boolean;
-  callbackUrl: string;
-}
-
-export interface OwnerAuthDiagnostics {
-  authConfigured: boolean;
-  redirectBaseConfigured: boolean;
-  providers: {
-    github: OwnerAuthProviderDiagnostics;
-    microsoft: OwnerAuthProviderDiagnostics;
-  };
-}
-
 export interface BacklogIntakeResponse {
   id: string;
   type: "Bug" | "Feature Request";

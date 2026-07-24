@@ -1,6 +1,6 @@
 import { createElement, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
-import { BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, OwnerAuthDiagnostics, Supplier } from "./types";
+import { BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
 const APP_VERSION = "0.6.0";
@@ -261,14 +261,6 @@ function App() {
   });
   const [helpRequestMessage, setHelpRequestMessage] = useState("");
   const [queuedHelpRequests, setQueuedHelpRequests] = useState<HelpIntakeRequestRecord[]>([]);
-  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(false);
-  const [ownerIdentityHint, setOwnerIdentityHint] = useState<string | null>(null);
-  const [ownerAuthConfigured, setOwnerAuthConfigured] = useState(false);
-  const [ownerGithubEnabled, setOwnerGithubEnabled] = useState(false);
-  const [ownerMicrosoftEnabled, setOwnerMicrosoftEnabled] = useState(false);
-  const [ownerAuthMessage, setOwnerAuthMessage] = useState("");
-  const [showOwnerLoginOptions, setShowOwnerLoginOptions] = useState(false);
-  const [ownerAuthDiagnostics, setOwnerAuthDiagnostics] = useState<OwnerAuthDiagnostics | null>(null);
 
   const loadData = async () => {
     const [jobsData, materialsData, customersData, suppliersData] = await Promise.all([api.getJobs(), api.getMaterials(), api.getCustomers(), api.getSuppliers()]);
@@ -370,30 +362,10 @@ function App() {
     });
   };
 
-  const loadOwnerSessionStatus = async () => {
-    const status = await api.getOwnerSession();
-    setIsOwnerAuthenticated(Boolean(status.isOwner));
-    setOwnerAuthConfigured(Boolean(status.authConfigured));
-    setOwnerGithubEnabled(Boolean(status.providers?.github));
-    setOwnerMicrosoftEnabled(Boolean(status.providers?.microsoft));
-    if (status.isOwner) {
-      setOwnerIdentityHint(status.ownerProvider === "microsoft" ? "Microsoft owner" : "GitHub owner");
-    } else {
-      setOwnerIdentityHint(null);
-    }
-  };
-
-  const loadOwnerAuthDiagnostics = async () => {
-    const diagnostics = await api.getOwnerOauthDiagnostics();
-    setOwnerAuthDiagnostics(diagnostics);
-  };
-
   useEffect(() => {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
     api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
-    loadOwnerSessionStatus().catch(() => undefined);
-    loadOwnerAuthDiagnostics().catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -404,19 +376,6 @@ function App() {
 
     return () => window.clearInterval(timer);
   }, [activeTab]);
-
-  useEffect(() => {
-    const onOwnerOauthMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      const payload = event.data as { type?: string; success?: boolean };
-      if (payload?.type !== "owner-oauth") return;
-      loadOwnerSessionStatus().catch(() => undefined);
-      setOwnerAuthMessage(payload.success ? "Owner OAuth session unlocked." : "Owner OAuth login failed.");
-    };
-
-    window.addEventListener("message", onOwnerOauthMessage);
-    return () => window.removeEventListener("message", onOwnerOauthMessage);
-  }, []);
 
   const selectedJob = useMemo(() => jobs.find((job) => job.id === selectedJobId) ?? jobs[0] ?? null, [jobs, selectedJobId]);
 
@@ -1960,27 +1919,6 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to import help intake requests";
       setHelpIntakeBackupMessage(message);
-    }
-  };
-
-  const openOwnerOauth = (provider: "github" | "microsoft") => {
-    const url = api.getOwnerOauthStartUrl(provider);
-    const popup = window.open(url, "owner-oauth-login", "width=560,height=720");
-    if (!popup) {
-      setOwnerAuthMessage("Popup blocked. Allow popups and try owner login again.");
-      return;
-    }
-    setOwnerAuthMessage(`Continue ${provider === "github" ? "GitHub" : "Microsoft"} sign-in in the popup, then click Refresh owner status.`);
-  };
-
-  const ownerLogout = async () => {
-    try {
-      await api.logoutOwner();
-      await loadOwnerSessionStatus();
-      setOwnerAuthMessage("Owner session locked.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Owner logout failed";
-      setOwnerAuthMessage(message);
     }
   };
 
@@ -3833,81 +3771,14 @@ function App() {
 
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
                     <h4 className="text-sm font-semibold text-white">Help requests inbox</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export separate help-request files for email. Backlog import is owner-only and unlocked by GitHub or Microsoft owner sign-in.</p>
-                    <div className="mt-2">
-                      {isOwnerAuthenticated ? (
-                        <span className="inline-flex items-center rounded-full border border-cyan-700/70 bg-cyan-900/20 px-3 py-1 text-xs text-cyan-300">
-                          Owner authenticated as {ownerIdentityHint || "owner"}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-300">
-                          Owner session locked
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Owner auth: {ownerAuthConfigured ? `configured${ownerIdentityHint ? ` (${ownerIdentityHint})` : ""}` : "not configured on server"}
-                    </p>
+                    <p className="mt-1 text-xs text-slate-400">Export separate help-request files for email, then import them into the backlog when you are ready.</p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <button type="button" onClick={exportHelpIntakeInbox} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
-                      {isOwnerAuthenticated ? (
-                        <>
-                          <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                            <span>Import to backlog</span>
-                            <input type="file" accept=".json" className="hidden" onChange={importHelpIntakeToBacklog} />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              loadOwnerSessionStatus().catch(() => undefined);
-                              loadOwnerAuthDiagnostics().catch(() => undefined);
-                            }}
-                            className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200"
-                          >
-                            Refresh owner status
-                          </button>
-                          <button type="button" onClick={ownerLogout} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Owner logout</button>
-                        </>
-                      ) : (
-                        <>
-                          <button type="button" onClick={() => setShowOwnerLoginOptions((current) => !current)} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">
-                            {showOwnerLoginOptions ? "Hide owner login" : "App owner login"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              loadOwnerSessionStatus().catch(() => undefined);
-                              loadOwnerAuthDiagnostics().catch(() => undefined);
-                            }}
-                            className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200"
-                          >
-                            Refresh owner status
-                          </button>
-                        </>
-                      )}
+                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
+                        <span>Import to backlog</span>
+                        <input type="file" accept=".json" className="hidden" onChange={importHelpIntakeToBacklog} />
+                      </label>
                     </div>
-                    {!isOwnerAuthenticated && showOwnerLoginOptions ? (
-                      <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
-                        {ownerAuthConfigured ? (
-                          <div className="flex flex-wrap gap-2">
-                            {ownerGithubEnabled ? <button type="button" onClick={() => openOwnerOauth("github")} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Login with GitHub</button> : null}
-                            {ownerMicrosoftEnabled ? <button type="button" onClick={() => openOwnerOauth("microsoft")} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Login with Microsoft</button> : null}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-400">Owner OAuth is not configured yet. Set owner OAuth environment variables on the backend, restart the server, then refresh owner status.</p>
-                        )}
-                      </div>
-                    ) : null}
-                    {ownerAuthMessage ? <p className="mt-2 text-xs text-cyan-300">{ownerAuthMessage}</p> : null}
-                    {ownerAuthDiagnostics ? (
-                      <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
-                        <p className="font-semibold text-white">Owner auth diagnostics</p>
-                        <p className="mt-1">GitHub: {ownerAuthDiagnostics.providers.github.enabled ? "Ready" : "Not ready"} (identity: {ownerAuthDiagnostics.providers.github.ownerIdentityConfigured ? "set" : "missing"}, client ID: {ownerAuthDiagnostics.providers.github.clientIdConfigured ? "set" : "missing"}, client secret: {ownerAuthDiagnostics.providers.github.clientSecretConfigured ? "set" : "missing"})</p>
-                        <p className="mt-1">Microsoft: {ownerAuthDiagnostics.providers.microsoft.enabled ? "Ready" : "Not ready"} (identity: {ownerAuthDiagnostics.providers.microsoft.ownerIdentityConfigured ? "set" : "missing"}, client ID: {ownerAuthDiagnostics.providers.microsoft.clientIdConfigured ? "set" : "missing"}, client secret: {ownerAuthDiagnostics.providers.microsoft.clientSecretConfigured ? "set" : "missing"})</p>
-                        <p className="mt-2 text-slate-400">Expected GitHub callback: {ownerAuthDiagnostics.providers.github.callbackUrl}</p>
-                        <p className="text-slate-400">Expected Microsoft callback: {ownerAuthDiagnostics.providers.microsoft.callbackUrl}</p>
-                      </div>
-                    ) : null}
                   </div>
 
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2">

@@ -12,10 +12,8 @@ All notable changes to this project will be documented in this file.
 - Enhanced full backup payload metadata and coverage documentation to explicitly include all customizable and operational data (theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu data).
 - Added separate Help intake workflow: Help submissions are logged in a standalone intake file and downloaded as email-ready JSON, with a new Admin import flow to load those files into `docs/backlog.md` as `Human Review` / `On Hold` items.
 - Updated Help intake UX to allow multiple submissions to be queued before downloading a single combined email-ready JSON file.
-- Added an owner-only import gate for Help intake to backlog: an `App owner login` button now uses OAuth checks (GitHub and/or Microsoft) against configured owner identity values; non-owners only see export options.
-- Hardened owner identity privacy for OAuth owner sessions: removed hardcoded owner defaults, stopped exposing owner identity in owner-session API responses, and added optional SHA-256 owner identity matching via environment variables.
-- Added backend local env auto-loading (`backend/.env` and `backend/.env.local`) plus a `backend/.env.local.example` template, so owner OAuth configuration can be maintained locally (git-ignored) without storing personal owner details in tracked source.
-- Added an `Owner auth diagnostics` panel in Help requests inbox to display provider readiness (identity/client ID/client secret presence) and expected callback URLs for faster owner-login troubleshooting.
+- Temporarily removed owner OAuth login from Help requests inbox so backlog imports are direct again; revisit the authentication flow later once the replacement approach is settled.
+- Added a staging deployment path with a production frontend container, backend migration/startup flow, and reverse proxy compose file for safer user testing before public release.
 - Added a Help-page request intake form that submits bug and feature requests directly into docs/backlog.md with automatic review triage metadata (`Auto Candidate` vs `Human Review Required`) and pending-review tagging.
 - Tracker maintenance: processed CHG-056 as completed and moved it from backlog to implementation log, linking delivery to existing telemetry, maintenance, and consumables features.
 - Tracker maintenance: processed CHG-057 as completed and moved it from backlog to implementation log, noting that reporting requirements were delivered through CHG-083.

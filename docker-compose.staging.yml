@@ -1,0 +1,36 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    entrypoint: ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && npm start"]
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: file:/data/staging.db
+    ports:
+      - "4000:4000"
+    volumes:
+      - backend_data:/data
+      - backend_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.staging
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+  backend_uploads:
