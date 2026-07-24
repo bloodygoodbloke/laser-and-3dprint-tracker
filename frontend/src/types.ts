@@ -39,6 +39,11 @@ export interface BillingSettings {
   businessEmail?: string;
   businessPhone?: string;
   businessWebsite?: string;
+  adminBackgroundColor?: string;
+  adminTextColor?: string;
+  siteInputColor?: string;
+  siteAccentColor?: string;
+  siteAccentTextColor?: string;
   materialMarkupPercent: number;
   materialMarkupAmount: number;
   electricityMarkupPercent: number;
@@ -253,4 +258,64 @@ export interface MakerWorldPrintProfile {
   infillPercent: number;
   estimatedMinutes: number;
   estimatedMaterialGrams: number;
+}
+
+export interface BacklogIntakeRequest {
+  requestType: "Bug" | "Feature Request";
+  priority: "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations";
+  title: string;
+  details: string;
+}
+
+export interface HelpIntakeRequestRecord {
+  id: string;
+  submittedAt: string;
+  source: "help-form";
+  requestType: "Bug" | "Feature Request";
+  priority: "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations";
+  title: string;
+  details: string;
+}
+
+export interface OwnerSessionStatus {
+  isOwner: boolean;
+  ownerLogin: string | null;
+  ownerEmail?: string | null;
+  ownerProvider?: "github" | "microsoft";
+  authConfigured: boolean;
+  providers?: {
+    github: boolean;
+    microsoft: boolean;
+  };
+  expiresAt?: string;
+}
+
+export interface OwnerAuthProviderDiagnostics {
+  enabled: boolean;
+  ownerIdentityConfigured: boolean;
+  clientIdConfigured: boolean;
+  clientSecretConfigured: boolean;
+  callbackUrl: string;
+}
+
+export interface OwnerAuthDiagnostics {
+  authConfigured: boolean;
+  redirectBaseConfigured: boolean;
+  providers: {
+    github: OwnerAuthProviderDiagnostics;
+    microsoft: OwnerAuthProviderDiagnostics;
+  };
+}
+
+export interface BacklogIntakeResponse {
+  id: string;
+  type: "Bug" | "Feature Request";
+  priority: string;
+  status: "Planned" | "On Hold";
+  reviewStatus: "Human Review" | "Reviewed" | "Auto Reviewed";
+  reviewReason: string;
+  reviewRecommendation: "Auto Candidate" | "Human Review Required";
+  triageReason: string;
+  title: string;
+  details: string;
 }

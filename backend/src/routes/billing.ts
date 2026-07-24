@@ -27,15 +27,16 @@ router.get("/", async (_req, res) => {
 router.post("/", async (req, res) => {
   const payload = req.body || {};
   const existing = await prisma.billingSetting.findMany();
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...safePayload } = payload;
 
   const normalizedPayload = {
-    ...payload,
-    machineElectricitySettings: typeof payload.machineElectricitySettings === "string"
-      ? payload.machineElectricitySettings
-      : JSON.stringify(payload.machineElectricitySettings || {}),
-    materialTypeMarkups: typeof payload.materialTypeMarkups === "string"
-      ? payload.materialTypeMarkups
-      : JSON.stringify(payload.materialTypeMarkups || {}),
+    ...safePayload,
+    machineElectricitySettings: typeof safePayload.machineElectricitySettings === "string"
+      ? safePayload.machineElectricitySettings
+      : JSON.stringify(safePayload.machineElectricitySettings || {}),
+    materialTypeMarkups: typeof safePayload.materialTypeMarkups === "string"
+      ? safePayload.materialTypeMarkups
+      : JSON.stringify(safePayload.materialTypeMarkups || {}),
   };
 
   if (existing[0]) {
