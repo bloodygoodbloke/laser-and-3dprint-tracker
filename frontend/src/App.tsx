@@ -1,11 +1,92 @@
-import { createElement, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { createElement, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
-import { BambuDashboardPayload, BillingSettings, Customer, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, OwnerAuthDiagnostics, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
 const APP_VERSION = "0.6.0";
 const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
 const SCHEDULE_HORIZON_DAYS = 14;
+const DEFAULT_ADMIN_BACKGROUND_COLOR = "#0f172a";
+const DEFAULT_ADMIN_TEXT_COLOR = "#e2e8f0";
+const DEFAULT_SITE_INPUT_COLOR = "#111827";
+const DEFAULT_SITE_ACCENT_COLOR = "#22d3ee";
+const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#001219";
+
+type ThemePreset = {
+  name: string;
+  background: string;
+  text: string;
+  input: string;
+  accent: string;
+  accentText: string;
+};
+
+const quickThemePresets: ThemePreset[] = [
+  {
+    name: "Dark",
+    background: "#0f172a",
+    text: "#e2e8f0",
+    input: "#111827",
+    accent: "#22d3ee",
+    accentText: "#001219",
+  },
+  {
+    name: "Light",
+    background: "#f8fafc",
+    text: "#0f172a",
+    input: "#e2e8f0",
+    accent: "#0ea5e9",
+    accentText: "#ffffff",
+  },
+  {
+    name: "High Contrast",
+    background: "#000000",
+    text: "#ffffff",
+    input: "#111111",
+    accent: "#ffde00",
+    accentText: "#000000",
+  },
+  {
+    name: "Ocean",
+    background: "#0b132b",
+    text: "#e0fbfc",
+    input: "#1c2541",
+    accent: "#5bc0be",
+    accentText: "#03242f",
+  },
+  {
+    name: "Forest",
+    background: "#0f241a",
+    text: "#ecfdf3",
+    input: "#193025",
+    accent: "#34d399",
+    accentText: "#052e1c",
+  },
+  {
+    name: "Night Shift",
+    background: "#111827",
+    text: "#e5e7eb",
+    input: "#1f2937",
+    accent: "#f59e0b",
+    accentText: "#111827",
+  },
+  {
+    name: "Workshop Blue",
+    background: "#0b1f3a",
+    text: "#dbeafe",
+    input: "#15345f",
+    accent: "#38bdf8",
+    accentText: "#06223d",
+  },
+  {
+    name: "Paper Invoice",
+    background: "#fdfbf7",
+    text: "#1f2937",
+    input: "#f3f4f6",
+    accent: "#2563eb",
+    accentText: "#ffffff",
+  },
+];
 
 const defaultMachineNames = [
   "BambuLab P2S Printer",
@@ -29,6 +110,11 @@ const blankBillingSettings = (): BillingSettings => ({
   businessEmail: "",
   businessPhone: "",
   businessWebsite: "",
+  adminBackgroundColor: DEFAULT_ADMIN_BACKGROUND_COLOR,
+  adminTextColor: DEFAULT_ADMIN_TEXT_COLOR,
+  siteInputColor: DEFAULT_SITE_INPUT_COLOR,
+  siteAccentColor: DEFAULT_SITE_ACCENT_COLOR,
+  siteAccentTextColor: DEFAULT_SITE_ACCENT_TEXT_COLOR,
   materialMarkupPercent: 25,
   materialMarkupAmount: 0,
   materialTypeMarkups: {},
@@ -57,6 +143,20 @@ const blankBillingSettings = (): BillingSettings => ({
 });
 
 const getJobMode = (machineType: string) => (machineType.toLowerCase().includes("laser") || machineType.toLowerCase().includes("cnc") ? "laser" : "3d");
+const normalizeHexColor = (value: unknown, fallback: string) => {
+  const candidate = String(value || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(candidate)) {
+    return candidate.toLowerCase();
+  }
+  return fallback;
+};
+const hexToRgba = (hex: string, alpha: number) => {
+  const safeHex = normalizeHexColor(hex, "#000000").replace("#", "");
+  const r = Number.parseInt(safeHex.slice(0, 2), 16);
+  const g = Number.parseInt(safeHex.slice(2, 4), 16);
+  const b = Number.parseInt(safeHex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 const normalizeMarkupPercent = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 25;
@@ -95,7 +195,7 @@ function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "bambu" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
   const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
@@ -117,6 +217,10 @@ function App() {
   const [backupMessage, setBackupMessage] = useState("");
   const [materialBackupMessage, setMaterialBackupMessage] = useState("");
   const [fullBackupMessage, setFullBackupMessage] = useState("");
+  const [customerBackupMessage, setCustomerBackupMessage] = useState("");
+  const [supplierBackupMessage, setSupplierBackupMessage] = useState("");
+  const [machineBackupMessage, setMachineBackupMessage] = useState("");
+  const [helpIntakeBackupMessage, setHelpIntakeBackupMessage] = useState("");
   const [customerForm, setCustomerForm] = useState({ name: "", address: "", email: "", phone: "", notes: "" });
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -149,6 +253,22 @@ function App() {
   const [makerWorldProfile, setMakerWorldProfile] = useState<MakerWorldPrintProfile | null>(null);
   const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
   const [jobFileMessage, setJobFileMessage] = useState<Record<string, string>>({});
+  const [helpRequestForm, setHelpRequestForm] = useState({
+    requestType: "Feature Request" as "Bug" | "Feature Request",
+    priority: "P3 Low" as "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations",
+    title: "",
+    details: "",
+  });
+  const [helpRequestMessage, setHelpRequestMessage] = useState("");
+  const [queuedHelpRequests, setQueuedHelpRequests] = useState<HelpIntakeRequestRecord[]>([]);
+  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(false);
+  const [ownerIdentityHint, setOwnerIdentityHint] = useState<string | null>(null);
+  const [ownerAuthConfigured, setOwnerAuthConfigured] = useState(false);
+  const [ownerGithubEnabled, setOwnerGithubEnabled] = useState(false);
+  const [ownerMicrosoftEnabled, setOwnerMicrosoftEnabled] = useState(false);
+  const [ownerAuthMessage, setOwnerAuthMessage] = useState("");
+  const [showOwnerLoginOptions, setShowOwnerLoginOptions] = useState(false);
+  const [ownerAuthDiagnostics, setOwnerAuthDiagnostics] = useState<OwnerAuthDiagnostics | null>(null);
 
   const loadData = async () => {
     const [jobsData, materialsData, customersData, suppliersData] = await Promise.all([api.getJobs(), api.getMaterials(), api.getCustomers(), api.getSuppliers()]);
@@ -221,6 +341,11 @@ function App() {
       businessEmail: String((settings as BillingSettings).businessEmail ?? ""),
       businessPhone: String((settings as BillingSettings).businessPhone ?? ""),
       businessWebsite: String((settings as BillingSettings).businessWebsite ?? ""),
+      adminBackgroundColor: normalizeHexColor((settings as BillingSettings).adminBackgroundColor, DEFAULT_ADMIN_BACKGROUND_COLOR),
+      adminTextColor: normalizeHexColor((settings as BillingSettings).adminTextColor, DEFAULT_ADMIN_TEXT_COLOR),
+      siteInputColor: normalizeHexColor((settings as BillingSettings).siteInputColor, DEFAULT_SITE_INPUT_COLOR),
+      siteAccentColor: normalizeHexColor((settings as BillingSettings).siteAccentColor, DEFAULT_SITE_ACCENT_COLOR),
+      siteAccentTextColor: normalizeHexColor((settings as BillingSettings).siteAccentTextColor, DEFAULT_SITE_ACCENT_TEXT_COLOR),
       overheadPercent: Number(settings.overheadPercent ?? 0.15),
       materialTypeMarkups: Object.fromEntries(
         Object.entries(settings.materialTypeMarkups || {}).map(([materialType, rule]) => [
@@ -245,20 +370,53 @@ function App() {
     });
   };
 
+  const loadOwnerSessionStatus = async () => {
+    const status = await api.getOwnerSession();
+    setIsOwnerAuthenticated(Boolean(status.isOwner));
+    setOwnerAuthConfigured(Boolean(status.authConfigured));
+    setOwnerGithubEnabled(Boolean(status.providers?.github));
+    setOwnerMicrosoftEnabled(Boolean(status.providers?.microsoft));
+    if (status.isOwner) {
+      setOwnerIdentityHint(status.ownerProvider === "microsoft" ? "Microsoft owner" : "GitHub owner");
+    } else {
+      setOwnerIdentityHint(null);
+    }
+  };
+
+  const loadOwnerAuthDiagnostics = async () => {
+    const diagnostics = await api.getOwnerOauthDiagnostics();
+    setOwnerAuthDiagnostics(diagnostics);
+  };
+
   useEffect(() => {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
     api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
+    loadOwnerSessionStatus().catch(() => undefined);
+    loadOwnerAuthDiagnostics().catch(() => undefined);
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "bambu") return;
+    if (activeTab !== "machines") return;
     const timer = window.setInterval(() => {
       api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
     }, 10000);
 
     return () => window.clearInterval(timer);
   }, [activeTab]);
+
+  useEffect(() => {
+    const onOwnerOauthMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const payload = event.data as { type?: string; success?: boolean };
+      if (payload?.type !== "owner-oauth") return;
+      loadOwnerSessionStatus().catch(() => undefined);
+      setOwnerAuthMessage(payload.success ? "Owner OAuth session unlocked." : "Owner OAuth login failed.");
+    };
+
+    window.addEventListener("message", onOwnerOauthMessage);
+    return () => window.removeEventListener("message", onOwnerOauthMessage);
+  }, []);
 
   const selectedJob = useMemo(() => jobs.find((job) => job.id === selectedJobId) ?? jobs[0] ?? null, [jobs, selectedJobId]);
 
@@ -315,6 +473,36 @@ function App() {
       return matchesStatus && matchesMachine && matchesSearch;
     });
   }, [jobs, jobMachineFilter, jobSearchTerm, jobStatusFilter]);
+  const adminBackgroundColor = normalizeHexColor(billingSettings.adminBackgroundColor, DEFAULT_ADMIN_BACKGROUND_COLOR);
+  const adminTextColor = normalizeHexColor(billingSettings.adminTextColor, DEFAULT_ADMIN_TEXT_COLOR);
+  const siteInputColor = normalizeHexColor(billingSettings.siteInputColor, DEFAULT_SITE_INPUT_COLOR);
+  const siteAccentColor = normalizeHexColor(billingSettings.siteAccentColor, DEFAULT_SITE_ACCENT_COLOR);
+  const siteAccentTextColor = normalizeHexColor(billingSettings.siteAccentTextColor, DEFAULT_SITE_ACCENT_TEXT_COLOR);
+  const appThemeStyle: CSSProperties = {
+    "--app-bg": adminBackgroundColor,
+    "--app-surface": hexToRgba(adminBackgroundColor, 0.88),
+    "--app-surface-alt": hexToRgba(adminBackgroundColor, 0.72),
+    "--app-text": adminTextColor,
+    "--app-text-muted": hexToRgba(adminTextColor, 0.78),
+    "--app-text-faint": hexToRgba(adminTextColor, 0.62),
+    "--app-border": hexToRgba(adminTextColor, 0.26),
+    "--app-input-bg": siteInputColor,
+    "--app-accent": siteAccentColor,
+    "--app-accent-text": siteAccentTextColor,
+    "--app-accent-soft": hexToRgba(siteAccentColor, 0.18),
+  } as CSSProperties;
+  const adminSectionStyle = {
+    backgroundColor: adminBackgroundColor,
+    color: adminTextColor,
+    borderColor: hexToRgba(adminTextColor, 0.25),
+  };
+  const adminCardStyle = {
+    backgroundColor: hexToRgba(adminBackgroundColor, 0.5),
+    borderColor: hexToRgba(adminTextColor, 0.25),
+  };
+  const adminMutedTextStyle = {
+    color: hexToRgba(adminTextColor, 0.75),
+  };
   const queuedJobs = useMemo(
     () => jobs
       .filter((job) => job.status === "Pending" || job.status === "In Progress")
@@ -409,6 +597,10 @@ function App() {
       () => Object.entries(billingSettings.machineElectricitySettings || {}).sort(([left], [right]) => left.localeCompare(right)),
       [billingSettings.machineElectricitySettings],
     );
+  const linkedBambuMachineName = useMemo(
+    () => machineProfiles.find(([machineName]) => machineName.toLowerCase().includes("bambu"))?.[0] || null,
+    [machineProfiles],
+  );
   const groupedMaterials = useMemo(() => {
     const groups = new Map<string, Material[]>();
     materials.forEach((material) => {
@@ -1662,6 +1854,42 @@ function App() {
     setFullBackupMessage("Full backup exported.");
   };
 
+  const exportCustomersBackup = async () => {
+    const backup = await api.exportCustomersBackup();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "customers-backup.json";
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setCustomerBackupMessage("Customers backup exported.");
+  };
+
+  const exportSuppliersBackup = async () => {
+    const backup = await api.exportSuppliersBackup();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "suppliers-backup.json";
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setSupplierBackupMessage("Suppliers backup exported.");
+  };
+
+  const exportMachinesBackup = async () => {
+    const backup = await api.exportMachinesBackup();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "machines-backup.json";
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setMachineBackupMessage("Machines backup exported.");
+  };
+
   const importFullBackup = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1673,8 +1901,143 @@ function App() {
     setFullBackupMessage("Full backup restored successfully.");
   };
 
+  const importCustomersBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    await api.importCustomersBackup(payload);
+    await loadData();
+    setCustomerBackupMessage("Customers backup restored successfully.");
+  };
+
+  const importSuppliersBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    await api.importSuppliersBackup(payload);
+    await loadData();
+    setSupplierBackupMessage("Suppliers backup restored successfully.");
+  };
+
+  const importMachinesBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    await api.importMachinesBackup(payload);
+    await loadBillingSettings();
+    await loadBambuDashboard();
+    setMachineBackupMessage("Machines backup restored successfully.");
+  };
+
+  const exportHelpIntakeInbox = async () => {
+    const payload = await api.exportHelpIntakeRequests();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `help-intake-inbox-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setHelpIntakeBackupMessage("Help intake inbox exported.");
+  };
+
+  const importHelpIntakeToBacklog = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (!isOwnerAuthenticated) {
+      setHelpIntakeBackupMessage("Only the app owner can import requests into backlog.");
+      return;
+    }
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    const requests = Array.isArray(payload?.requests) ? payload.requests : [];
+    try {
+      const result = await api.importHelpIntakeRequests({ requests });
+      setHelpIntakeBackupMessage(`Imported ${result.importedCount} request(s) into backlog as Human Review.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to import help intake requests";
+      setHelpIntakeBackupMessage(message);
+    }
+  };
+
+  const openOwnerOauth = (provider: "github" | "microsoft") => {
+    const url = api.getOwnerOauthStartUrl(provider);
+    const popup = window.open(url, "owner-oauth-login", "width=560,height=720");
+    if (!popup) {
+      setOwnerAuthMessage("Popup blocked. Allow popups and try owner login again.");
+      return;
+    }
+    setOwnerAuthMessage(`Continue ${provider === "github" ? "GitHub" : "Microsoft"} sign-in in the popup, then click Refresh owner status.`);
+  };
+
+  const ownerLogout = async () => {
+    try {
+      await api.logoutOwner();
+      await loadOwnerSessionStatus();
+      setOwnerAuthMessage("Owner session locked.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Owner logout failed";
+      setOwnerAuthMessage(message);
+    }
+  };
+
+  const submitHelpRequest = async (e: FormEvent) => {
+    e.preventDefault();
+    const title = helpRequestForm.title.trim();
+    const details = helpRequestForm.details.trim();
+    if (!title || !details) return;
+
+    try {
+      const created = await api.logHelpIntakeRequest({
+        requestType: helpRequestForm.requestType,
+        priority: helpRequestForm.priority,
+        title,
+        details,
+      });
+      setQueuedHelpRequests((current) => {
+        const next = [...current, created];
+        setHelpRequestMessage(`Request ${created.id} queued (${next.length} total). Add more requests, then download one email file.`);
+        return next;
+      });
+
+      setHelpRequestForm({
+        requestType: "Feature Request",
+        priority: "P3 Low",
+        title: "",
+        details: "",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to log request";
+      setHelpRequestMessage(message);
+    }
+  };
+
+  const downloadQueuedHelpRequests = () => {
+    if (!queuedHelpRequests.length) {
+      setHelpRequestMessage("No queued requests yet. Add at least one request before downloading.");
+      return;
+    }
+
+    const downloadable = {
+      exportedAt: new Date().toISOString(),
+      requests: queuedHelpRequests,
+    };
+    const blob = new Blob([JSON.stringify(downloadable, null, 2)], { type: "application/json;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `help-requests-batch-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setHelpRequestMessage(`Downloaded ${queuedHelpRequests.length} queued request(s). Email this file, then import it from Admin.`);
+    setQueuedHelpRequests([]);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="app-theme min-h-screen bg-slate-950 text-slate-100" style={appThemeStyle}>
       <div className="mx-auto max-w-7xl p-6">
         <header className="mb-8 flex items-center justify-between no-print">
           <div>
@@ -1692,7 +2055,7 @@ function App() {
 
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
           <nav className="flex flex-wrap gap-3">
-            {(["dashboard", "jobs", "reports", "bambu", "materials", "machines", "customers", "suppliers", "billing", "admin", "help"] as const).map((tab) => (
+            {(["dashboard", "jobs", "reports", "materials", "machines", "customers", "suppliers", "billing", "admin", "help"] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
                 {tab}
               </button>
@@ -1704,15 +2067,57 @@ function App() {
         {activeTab === "dashboard" && (
           <div className="space-y-6">
             <div className="grid gap-6 lg:grid-cols-3">
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h2 className="text-xl font-semibold">Pending jobs</h2>
-                <p className="mt-4 text-4xl font-semibold">{pendingJobs.length}</p>
+              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
+                <h2 className="text-xl font-semibold">Delivery and utilization dashboard</h2>
+                <div className="mt-4 grid gap-4 md:grid-cols-4">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">On-time delivery</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.onTimePercent.toFixed(1)}%</p>
+                    <p className="text-xs text-slate-400">{deliveryAndUtilization.onTimeCount} of {deliveryAndUtilization.dueEligibleCount} due jobs</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Overdue open jobs</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.overdueOpen}</p>
+                    <p className="text-xs text-slate-400">Pending or in-progress past due date</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Queued runtime</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.scheduledHours.toFixed(1)} h</p>
+                    <p className="text-xs text-slate-400">Across {deliveryAndUtilization.machineCount} machine lanes</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Weekly utilization</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.utilizationPercent.toFixed(1)}%</p>
+                    <p className="text-xs text-slate-400">vs {WORKSHOP_DAILY_CAPACITY_HOURS}h/day capacity assumption</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                  <h3 className="text-sm font-semibold text-white">Machine utilization (next 7-day queue model)</h3>
+                  <div className="mt-2 space-y-2 text-xs">
+                    {deliveryAndUtilization.utilizationByMachine.map((row) => (
+                      <div key={`utilization-${row.machineType}`} className="flex items-center justify-between">
+                        <span className="text-slate-300">{row.machineType}</span>
+                        <span className="text-slate-200">{row.hours.toFixed(1)} h ({row.utilizationPercent.toFixed(1)}%)</span>
+                      </div>
+                    ))}
+                    {!deliveryAndUtilization.utilizationByMachine.length ? <p className="text-slate-500">No queued machine utilization data yet.</p> : null}
+                  </div>
+                </div>
               </section>
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h2 className="text-xl font-semibold">Low stock</h2>
-                <p className="mt-4 text-4xl font-semibold">{lowStockMaterials.length}</p>
+
+              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Pending jobs</h2>
+                <p className="mt-2 text-3xl font-semibold">{pendingJobs.length}</p>
               </section>
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Low stock</h2>
+                <p className="mt-2 text-3xl font-semibold">{lowStockMaterials.length}</p>
+              </section>
+              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Total jobs</h2>
+                <p className="mt-2 text-3xl font-semibold">{jobs.length}</p>
+              </section>
+              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
               <h2 className="text-xl font-semibold">Quick add job</h2>
               <form onSubmit={createJob} className="mt-4 space-y-4">
                 <label className="block text-sm text-slate-300">
@@ -1851,84 +2256,6 @@ function App() {
               </section>
 
               <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h2 className="text-xl font-semibold">Margin reporting</h2>
-                <p className="mt-2 text-sm text-slate-400">Internal margin analysis based on calculated customer charge and base total.</p>
-                <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold text-white">By machine</h3>
-                    <div className="mt-2 space-y-2 text-xs">
-                      {marginByMachine.slice(0, 6).map((row) => (
-                        <div key={`machine-margin-${row.label}`} className="flex items-center justify-between">
-                          <span className="text-slate-300">{row.label}</span>
-                          <span className="text-slate-200">{formatCurrency(row.margin)} ({row.marginPercent.toFixed(1)}%)</span>
-                        </div>
-                      ))}
-                      {!marginByMachine.length ? <p className="text-slate-500">No costed jobs yet.</p> : null}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold text-white">By material type</h3>
-                    <div className="mt-2 space-y-2 text-xs">
-                      {marginByMaterialType.slice(0, 6).map((row) => (
-                        <div key={`material-margin-${row.label}`} className="flex items-center justify-between">
-                          <span className="text-slate-300">{row.label}</span>
-                          <span className="text-slate-200">{formatCurrency(row.allocatedMargin)} ({row.marginPercent.toFixed(1)}%)</span>
-                        </div>
-                      ))}
-                      {!marginByMaterialType.length ? <p className="text-slate-500">No material margin data yet.</p> : null}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold text-white">By customer</h3>
-                    <div className="mt-2 space-y-2 text-xs">
-                      {marginByCustomer.slice(0, 6).map((row) => (
-                        <div key={`customer-margin-${row.label}`} className="flex items-center justify-between">
-                          <span className="text-slate-300">{row.label}</span>
-                          <span className="text-slate-200">{formatCurrency(row.margin)} ({row.marginPercent.toFixed(1)}%)</span>
-                        </div>
-                      ))}
-                      {!marginByCustomer.length ? <p className="text-slate-500">No customer margin data yet.</p> : null}
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h2 className="text-xl font-semibold">Delivery and utilization dashboard</h2>
-                <div className="mt-4 grid gap-4 md:grid-cols-4">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">On-time delivery</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.onTimePercent.toFixed(1)}%</p>
-                    <p className="text-xs text-slate-400">{deliveryAndUtilization.onTimeCount} of {deliveryAndUtilization.dueEligibleCount} due jobs</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Overdue open jobs</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.overdueOpen}</p>
-                    <p className="text-xs text-slate-400">Pending or in-progress past due date</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Queued runtime</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.scheduledHours.toFixed(1)} h</p>
-                    <p className="text-xs text-slate-400">Across {deliveryAndUtilization.machineCount} machine lanes</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Weekly utilization</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.utilizationPercent.toFixed(1)}%</p>
-                    <p className="text-xs text-slate-400">vs {WORKSHOP_DAILY_CAPACITY_HOURS}h/day capacity assumption</p>
-                  </div>
-                </div>
-                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <h3 className="text-sm font-semibold text-white">Machine utilization (next 7-day queue model)</h3>
-                  <div className="mt-2 space-y-2 text-xs">
-                    {deliveryAndUtilization.utilizationByMachine.map((row) => (
-                      <div key={`utilization-${row.machineType}`} className="flex items-center justify-between">
-                        <span className="text-slate-300">{row.machineType}</span>
-                        <span className="text-slate-200">{row.hours.toFixed(1)} h ({row.utilizationPercent.toFixed(1)}%)</span>
-                      </div>
-                    ))}
-                    {!deliveryAndUtilization.utilizationByMachine.length ? <p className="text-slate-500">No queued machine utilization data yet.</p> : null}
-                  </div>
-                </div>
               </section>
             </div>
           </div>
@@ -2005,6 +2332,49 @@ function App() {
             </div>
 
             <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <h3 className="text-sm font-semibold text-white">Margin reporting</h3>
+              <p className="mt-1 text-xs text-slate-400">Internal margin analysis based on calculated customer charge and base total.</p>
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <h4 className="text-sm font-semibold text-white">By machine</h4>
+                  <div className="mt-2 space-y-2 text-xs">
+                    {marginByMachine.slice(0, 6).map((row) => (
+                      <div key={`machine-margin-report-${row.label}`} className="flex items-center justify-between">
+                        <span className="text-slate-300">{row.label}</span>
+                        <span className="text-slate-200">{formatCurrency(row.margin)} ({row.marginPercent.toFixed(1)}%)</span>
+                      </div>
+                    ))}
+                    {!marginByMachine.length ? <p className="text-slate-500">No costed jobs yet.</p> : null}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <h4 className="text-sm font-semibold text-white">By material type</h4>
+                  <div className="mt-2 space-y-2 text-xs">
+                    {marginByMaterialType.slice(0, 6).map((row) => (
+                      <div key={`material-margin-report-${row.label}`} className="flex items-center justify-between">
+                        <span className="text-slate-300">{row.label}</span>
+                        <span className="text-slate-200">{formatCurrency(row.allocatedMargin)} ({row.marginPercent.toFixed(1)}%)</span>
+                      </div>
+                    ))}
+                    {!marginByMaterialType.length ? <p className="text-slate-500">No material margin data yet.</p> : null}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <h4 className="text-sm font-semibold text-white">By customer</h4>
+                  <div className="mt-2 space-y-2 text-xs">
+                    {marginByCustomer.slice(0, 6).map((row) => (
+                      <div key={`customer-margin-report-${row.label}`} className="flex items-center justify-between">
+                        <span className="text-slate-300">{row.label}</span>
+                        <span className="text-slate-200">{formatCurrency(row.margin)} ({row.marginPercent.toFixed(1)}%)</span>
+                      </div>
+                    ))}
+                    {!marginByCustomer.length ? <p className="text-slate-500">No customer margin data yet.</p> : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">Report rows</h3>
                 <span className="text-xs text-slate-400">Runtime {(reportSummary.runtimeMinutes / 60).toFixed(1)} h • Labour {(reportSummary.labourMinutes / 60).toFixed(1)} h</span>
@@ -2026,116 +2396,6 @@ function App() {
                   );
                 })}
                 {!reportJobs.length ? <p className="text-sm text-slate-400">No jobs match the selected report filters.</p> : null}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {activeTab === "bambu" && (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Live Bambu dashboard</h2>
-                <p className="mt-2 text-sm text-slate-400">Live machine status, event stream, AMS spool tracking, failure logs, and predictive maintenance risk.</p>
-              </div>
-              <button type="button" onClick={() => refreshBambuDashboard().catch(() => undefined)} className="rounded-xl border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Refresh</button>
-            </div>
-
-            <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-sm font-semibold text-white">Telemetry simulation controls</h3>
-                <div className="mt-3 space-y-3">
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-40 shrink-0">Device serial</span>
-                    <input value={bambuSerialInput} onChange={(e) => setBambuSerialInput(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-40 shrink-0">Linked job</span>
-                    <select value={bambuJobIdInput} onChange={(e) => setBambuJobIdInput(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-                      <option value="">No linked job</option>
-                      {jobs.map((job) => (
-                        <option key={`bambu-job-${job.id}`} value={job.id}>{job.jobNumber || "No job number"} • {job.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => simulateBambuTick().catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Simulate status tick</button>
-                    <button type="button" onClick={() => sendBambuEvent("PRINT_STARTED").catch(() => undefined)} className="rounded-full border border-emerald-700 px-3 py-1 text-xs text-emerald-300">Send PRINT_STARTED</button>
-                    <button type="button" onClick={() => sendBambuEvent("PRINT_FINISHED").catch(() => undefined)} className="rounded-full border border-sky-700 px-3 py-1 text-xs text-sky-300">Send PRINT_FINISHED</button>
-                    <button type="button" onClick={() => sendBambuEvent("PRINT_FAILED").catch(() => undefined)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Send PRINT_FAILED</button>
-                  </div>
-                  {bambuMessage ? <p className="text-xs text-cyan-300">{bambuMessage}</p> : null}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-sm font-semibold text-white">Live status snapshots</h3>
-                <div className="mt-3 space-y-2 text-xs">
-                  {(bambuDashboard?.latestStatuses || []).slice(0, 8).map((status) => (
-                    <div key={`status-${status.id}`} className="rounded-xl border border-slate-800 bg-slate-900 p-2">
-                      <p className="text-slate-200">{status.device?.name || status.deviceId} • {status.progressPct.toFixed(0)}%</p>
-                      <p className="text-slate-400">Nozzle {status.nozzleTempC.toFixed(1)}C • Bed {status.bedTempC.toFixed(1)}C • Chamber {status.chamberTempC.toFixed(1)}C</p>
-                      <p className="text-slate-500">{status.errorCode || "No active error"}</p>
-                    </div>
-                  ))}
-                  {!(bambuDashboard?.latestStatuses || []).length ? <p className="text-slate-500">No telemetry snapshots yet.</p> : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-sm font-semibold text-white">AMS spool inventory</h3>
-                <div className="mt-2 space-y-2 text-xs">
-                  {(bambuDashboard?.spools || []).slice(0, 10).map((spool) => (
-                    <div key={`spool-${spool.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-2 py-1">
-                      <span className="text-slate-300">{spool.device?.name || spool.deviceId} {spool.slotName}</span>
-                      <span className="text-slate-200">{spool.remainingGrams.toFixed(0)} g</span>
-                    </div>
-                  ))}
-                  {!(bambuDashboard?.spools || []).length ? <p className="text-slate-500">No AMS spool data yet.</p> : null}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-sm font-semibold text-white">Predictive maintenance</h3>
-                <div className="mt-2 space-y-2 text-xs">
-                  {(bambuDashboard?.maintenance || []).slice(0, 10).map((item) => (
-                    <div key={`maint-${item.id}`} className="rounded-xl border border-slate-800 bg-slate-900 px-2 py-1">
-                      <p className="text-slate-200">{item.device?.name || item.deviceId} • {item.component}</p>
-                      <p className="text-slate-400">{item.currentHours.toFixed(1)}h / {item.intervalHours.toFixed(0)}h • Due in {item.predictedDueHours.toFixed(1)}h</p>
-                      <p className={`${item.riskLevel === "Overdue" || item.riskLevel === "High" ? "text-rose-300" : item.riskLevel === "Watch" ? "text-amber-300" : "text-emerald-300"}`}>{item.riskLevel}</p>
-                    </div>
-                  ))}
-                  {!(bambuDashboard?.maintenance || []).length ? <p className="text-slate-500">No maintenance predictions yet.</p> : null}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-sm font-semibold text-white">Open failure logs</h3>
-                <div className="mt-2 space-y-2 text-xs">
-                  {(bambuDashboard?.openFailures || []).slice(0, 10).map((failure) => (
-                    <div key={`failure-${failure.id}`} className="rounded-xl border border-rose-900/70 bg-rose-950/20 px-2 py-1">
-                      <p className="text-rose-200">{failure.device?.name || failure.deviceId} • {failure.errorCode || "ERROR"}</p>
-                      <p className="text-rose-300">{failure.message}</p>
-                      <p className="text-rose-400">{failure.createdAt ? new Date(failure.createdAt).toLocaleString() : ""}</p>
-                    </div>
-                  ))}
-                  {!(bambuDashboard?.openFailures || []).length ? <p className="text-slate-500">No active failures.</p> : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-              <h3 className="text-sm font-semibold text-white">Event stream</h3>
-              <div className="mt-2 space-y-2 text-xs">
-                {(bambuDashboard?.events || []).slice(0, 20).map((event) => (
-                  <div key={`event-${event.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2">
-                    <span className="text-slate-200">{event.device?.name || event.deviceId} • {event.eventType}</span>
-                    <span className="text-slate-400">{event.createdAt ? new Date(event.createdAt).toLocaleString() : ""}</span>
-                  </div>
-                ))}
-                {!(bambuDashboard?.events || []).length ? <p className="text-slate-500">No Bambu events recorded yet.</p> : null}
               </div>
             </div>
           </section>
@@ -3052,6 +3312,7 @@ function App() {
                       <p className="text-sm text-slate-400">{machineSetting.wattage ?? 0}W • Depreciation {formatCurrency(machineSetting.depreciationCost ?? 0)} • Runtime {machineSetting.replacementRunHours ?? 0}h</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {machineName === linkedBambuMachineName ? <span className="rounded-full bg-cyan-600/20 px-3 py-1 text-xs text-cyan-300">Bambu linked</span> : null}
                       <button type="button" onClick={() => startEditingMachine(machineName)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Edit</button>
                       <button type="button" onClick={() => removeMachine(machineName)} className="rounded-full border border-rose-700 px-3 py-1 text-sm text-rose-300">Remove</button>
                     </div>
@@ -3059,6 +3320,118 @@ function App() {
                 </div>
               ))}
             </div>
+
+            <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Bambu telemetry (Machines integration)</h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {linkedBambuMachineName
+                      ? `Linked machine profile: ${linkedBambuMachineName}`
+                      : "No machine profile with 'Bambu' in the name yet. Add or rename a machine profile to link telemetry here."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => refreshBambuDashboard().catch(() => undefined)} className="rounded-xl border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Refresh</button>
+              </div>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <h4 className="text-sm font-semibold text-white">Telemetry simulation controls</h4>
+                  <div className="mt-3 space-y-3">
+                    <label className="flex items-center gap-4 text-sm text-slate-300">
+                      <span className="w-40 shrink-0">Device serial</span>
+                      <input value={bambuSerialInput} onChange={(e) => setBambuSerialInput(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                    </label>
+                    <label className="flex items-center gap-4 text-sm text-slate-300">
+                      <span className="w-40 shrink-0">Linked job</span>
+                      <select value={bambuJobIdInput} onChange={(e) => setBambuJobIdInput(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
+                        <option value="">No linked job</option>
+                        {jobs.map((job) => (
+                          <option key={`machines-bambu-job-${job.id}`} value={job.id}>{job.jobNumber || "No job number"} • {job.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => simulateBambuTick().catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Simulate status tick</button>
+                      <button type="button" onClick={() => sendBambuEvent("PRINT_STARTED").catch(() => undefined)} className="rounded-full border border-emerald-700 px-3 py-1 text-xs text-emerald-300">Send PRINT_STARTED</button>
+                      <button type="button" onClick={() => sendBambuEvent("PRINT_FINISHED").catch(() => undefined)} className="rounded-full border border-sky-700 px-3 py-1 text-xs text-sky-300">Send PRINT_FINISHED</button>
+                      <button type="button" onClick={() => sendBambuEvent("PRINT_FAILED").catch(() => undefined)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Send PRINT_FAILED</button>
+                    </div>
+                    {bambuMessage ? <p className="text-xs text-cyan-300">{bambuMessage}</p> : null}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <h4 className="text-sm font-semibold text-white">Live status snapshots</h4>
+                  <div className="mt-3 space-y-2 text-xs">
+                    {(bambuDashboard?.latestStatuses || []).slice(0, 8).map((status) => (
+                      <div key={`machines-status-${status.id}`} className="rounded-xl border border-slate-800 bg-slate-950 p-2">
+                        <p className="text-slate-200">{status.device?.name || status.deviceId} • {status.progressPct.toFixed(0)}%</p>
+                        <p className="text-slate-400">Nozzle {status.nozzleTempC.toFixed(1)}C • Bed {status.bedTempC.toFixed(1)}C • Chamber {status.chamberTempC.toFixed(1)}C</p>
+                        <p className="text-slate-500">{status.errorCode || "No active error"}</p>
+                      </div>
+                    ))}
+                    {!(bambuDashboard?.latestStatuses || []).length ? <p className="text-slate-500">No telemetry snapshots yet.</p> : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <h4 className="text-sm font-semibold text-white">AMS spool inventory</h4>
+                  <div className="mt-2 space-y-2 text-xs">
+                    {(bambuDashboard?.spools || []).slice(0, 10).map((spool) => (
+                      <div key={`machines-spool-${spool.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-2 py-1">
+                        <span className="text-slate-300">{spool.device?.name || spool.deviceId} {spool.slotName}</span>
+                        <span className="text-slate-200">{spool.remainingGrams.toFixed(0)} g</span>
+                      </div>
+                    ))}
+                    {!(bambuDashboard?.spools || []).length ? <p className="text-slate-500">No AMS spool data yet.</p> : null}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <h4 className="text-sm font-semibold text-white">Predictive maintenance</h4>
+                  <div className="mt-2 space-y-2 text-xs">
+                    {(bambuDashboard?.maintenance || []).slice(0, 10).map((item) => (
+                      <div key={`machines-maint-${item.id}`} className="rounded-xl border border-slate-800 bg-slate-950 px-2 py-1">
+                        <p className="text-slate-200">{item.device?.name || item.deviceId} • {item.component}</p>
+                        <p className="text-slate-400">{item.currentHours.toFixed(1)}h / {item.intervalHours.toFixed(0)}h • Due in {item.predictedDueHours.toFixed(1)}h</p>
+                        <p className={`${item.riskLevel === "Overdue" || item.riskLevel === "High" ? "text-rose-300" : item.riskLevel === "Watch" ? "text-amber-300" : "text-emerald-300"}`}>{item.riskLevel}</p>
+                      </div>
+                    ))}
+                    {!(bambuDashboard?.maintenance || []).length ? <p className="text-slate-500">No maintenance predictions yet.</p> : null}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <h4 className="text-sm font-semibold text-white">Open failure logs</h4>
+                  <div className="mt-2 space-y-2 text-xs">
+                    {(bambuDashboard?.openFailures || []).slice(0, 10).map((failure) => (
+                      <div key={`machines-failure-${failure.id}`} className="rounded-xl border border-rose-900/70 bg-rose-950/20 px-2 py-1">
+                        <p className="text-rose-200">{failure.device?.name || failure.deviceId} • {failure.errorCode || "ERROR"}</p>
+                        <p className="text-rose-300">{failure.message}</p>
+                        <p className="text-rose-400">{failure.createdAt ? new Date(failure.createdAt).toLocaleString() : ""}</p>
+                      </div>
+                    ))}
+                    {!(bambuDashboard?.openFailures || []).length ? <p className="text-slate-500">No active failures.</p> : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                <h4 className="text-sm font-semibold text-white">Event stream</h4>
+                <div className="mt-2 space-y-2 text-xs">
+                  {(bambuDashboard?.events || []).slice(0, 20).map((event) => (
+                    <div key={`machines-event-${event.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
+                      <span className="text-slate-200">{event.device?.name || event.deviceId} • {event.eventType}</span>
+                      <span className="text-slate-400">{event.createdAt ? new Date(event.createdAt).toLocaleString() : ""}</span>
+                    </div>
+                  ))}
+                  {!(bambuDashboard?.events || []).length ? <p className="text-slate-500">No Bambu events recorded yet.</p> : null}
+                </div>
+              </div>
+            </section>
 
             {machineMessage ? <p className="mt-4 text-sm text-cyan-300">{machineMessage}</p> : null}
           </section>
@@ -3237,56 +3610,309 @@ function App() {
         )}
 
         {activeTab === "admin" && (
-          <div className="space-y-6">
-            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+          <div className="space-y-6" style={{ color: adminTextColor }}>
+            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6" style={adminSectionStyle}>
               <h2 className="text-xl font-semibold">Admin backup & data tools</h2>
-              <p className="mt-2 text-sm text-slate-400">Export jobs, materials, and the full app data snapshot, then restore them later if needed.</p>
-              <div className="mt-6 space-y-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-                    <h3 className="text-sm font-semibold text-white">Jobs CSV</h3>
+              <p className="mt-2 text-sm text-slate-400" style={adminMutedTextStyle}>Export jobs, materials, and the full app data snapshot, then restore them later if needed.</p>
+
+              <div className="mt-6 rounded-2xl border border-slate-800 p-4" style={adminCardStyle}>
+                <h3 className="text-sm font-semibold" style={{ color: adminTextColor }}>Site theme colors</h3>
+                <p className="mt-2 text-xs" style={adminMutedTextStyle}>Set custom background and text colors for the whole app to match your business color scheme.</p>
+                <div className="mt-4">
+                  <p className="text-xs" style={adminMutedTextStyle}>Quick presets</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {quickThemePresets.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => setBillingSettings((current) => ({
+                          ...current,
+                          adminBackgroundColor: preset.background,
+                          adminTextColor: preset.text,
+                          siteInputColor: preset.input,
+                          siteAccentColor: preset.accent,
+                          siteAccentTextColor: preset.accentText,
+                        }))}
+                        className="rounded-2xl border border-slate-700 px-3 py-2 text-left text-xs"
+                        title={`Apply ${preset.name} preset`}
+                      >
+                        <span className="block font-semibold" style={{ color: adminTextColor }}>{preset.name}</span>
+                        <span className="mt-1 flex items-center gap-1.5">
+                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.background }} title="Background" />
+                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.text }} title="Text" />
+                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.input }} title="Input" />
+                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.accent }} title="Accent" />
+                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.accentText }} title="Accent text" />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
+                    <span className="shrink-0">Site background</span>
+                    <span className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={adminBackgroundColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, adminBackgroundColor: e.target.value }))}
+                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
+                    />
+                    <input
+                      value={adminBackgroundColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, adminBackgroundColor: e.target.value }))}
+                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
+                      placeholder="#0f172a"
+                    />
+                    </span>
+                  </label>
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
+                    <span className="shrink-0">Site text</span>
+                    <span className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={adminTextColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, adminTextColor: e.target.value }))}
+                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
+                    />
+                    <input
+                      value={adminTextColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, adminTextColor: e.target.value }))}
+                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
+                      placeholder="#e2e8f0"
+                    />
+                    </span>
+                  </label>
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
+                    <span className="shrink-0">Search and input</span>
+                    <span className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={siteInputColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteInputColor: e.target.value }))}
+                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
+                    />
+                    <input
+                      value={siteInputColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteInputColor: e.target.value }))}
+                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
+                      placeholder="#111827"
+                    />
+                    </span>
+                  </label>
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
+                    <span className="shrink-0">Accent button</span>
+                    <span className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={siteAccentColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentColor: e.target.value }))}
+                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
+                    />
+                    <input
+                      value={siteAccentColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentColor: e.target.value }))}
+                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
+                      placeholder="#22d3ee"
+                    />
+                    </span>
+                  </label>
+                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
+                    <span className="shrink-0">Accent button text</span>
+                    <span className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={siteAccentTextColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentTextColor: e.target.value }))}
+                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
+                    />
+                    <input
+                      value={siteAccentTextColor}
+                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentTextColor: e.target.value }))}
+                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
+                      placeholder="#001219"
+                    />
+                    </span>
+                  </label>
+                  <div className="rounded-xl border border-slate-700 p-3" style={{ backgroundColor: siteInputColor }}>
+                    <p className="text-xs" style={adminMutedTextStyle}>Accent preview</p>
+                    <button type="button" className="mt-2 rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Example action button</button>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBillingSettings((current) => ({
+                      ...current,
+                      adminBackgroundColor: DEFAULT_ADMIN_BACKGROUND_COLOR,
+                      adminTextColor: DEFAULT_ADMIN_TEXT_COLOR,
+                      siteInputColor: DEFAULT_SITE_INPUT_COLOR,
+                      siteAccentColor: DEFAULT_SITE_ACCENT_COLOR,
+                      siteAccentTextColor: DEFAULT_SITE_ACCENT_TEXT_COLOR,
+                    }))}
+                    className="rounded-full border border-slate-600 px-4 py-2 text-sm"
+                  >
+                    Reset colors
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)}
+                    className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300"
+                  >
+                    {savingBilling ? "Saving..." : "Save site theme"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4" style={adminCardStyle}>
+                <div>
+                  <h3 className="text-sm font-semibold" style={{ color: adminTextColor }}>Export and backup</h3>
+                  <p className="mt-1 text-xs" style={adminMutedTextStyle}>Use targeted backups for one area at a time, or use Full backup to capture everything: theme colors, machine settings, billing, jobs, materials, customers, suppliers, and Bambu machine telemetry.</p>
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <h4 className="text-sm font-semibold text-white">Jobs backup</h4>
+                    <p className="mt-1 text-xs text-slate-400">Export or restore job records only.</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={exportBackupCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export</button>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="font-semibold text-white">Machine queue and due-date risk</h3>
-                    <p className="mt-2">Use Jobs to set queue position and due date per job. The queue panel highlights risk states (On track, Watch, At risk, Overdue) so production order can be adjusted early.</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="font-semibold text-white">Calendar scheduling and projections</h3>
-                    <p className="mt-2">Dashboard now includes a 14-day schedule calendar and machine-level projected completion timestamps based on queue order and runtime.</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="font-semibold text-white">QA checklist and rework cost</h3>
-                      <p className="mt-2">In job create/edit forms, add QA checklist items (one per line), mark QA pass/fail, and log rework cost/notes. Rework cost is included in cost impact when calculating totals, and negative rework values are supported for manual pricing corrections.</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="font-semibold text-white">Supplier records and purchase history</h3>
-                    <p className="mt-2">Use Suppliers to maintain supplier contact records and log material purchases (material name, quantity, total cost, purchase date, notes) for procurement history.</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="font-semibold text-white">Margin, delivery, and utilization reporting</h3>
-                    <p className="mt-2">Dashboard includes margin reports by machine, material type, and customer, plus delivery KPIs and utilization metrics for production planning.</p>
-                  </div>
                       <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Import</span>
+                        <span>Restore</span>
                         <input type="file" accept=".csv" className="hidden" onChange={importBackupCsv} />
                       </label>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-                    <h3 className="text-sm font-semibold text-white">Materials CSV</h3>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <h4 className="text-sm font-semibold text-white">Materials backup</h4>
+                    <p className="mt-1 text-xs text-slate-400">Export or restore material catalog data.</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={exportMaterialsCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export</button>
                       <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Import</span>
+                        <span>Restore</span>
                         <input type="file" accept=".csv" className="hidden" onChange={importMaterialsCsv} />
                       </label>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-                    <h3 className="text-sm font-semibold text-white">Full backup</h3>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <h4 className="text-sm font-semibold text-white">Customers backup</h4>
+                    <p className="mt-1 text-xs text-slate-400">Export or restore customer directory and notes in JSON.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={exportCustomersBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
+                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
+                        <span>Restore</span>
+                        <input type="file" accept=".json" className="hidden" onChange={importCustomersBackup} />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <h4 className="text-sm font-semibold text-white">Suppliers backup</h4>
+                    <p className="mt-1 text-xs text-slate-400">Export or restore suppliers and purchase history in JSON.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={exportSuppliersBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
+                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
+                        <span>Restore</span>
+                        <input type="file" accept=".json" className="hidden" onChange={importSuppliersBackup} />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <h4 className="text-sm font-semibold text-white">Machines backup</h4>
+                    <p className="mt-1 text-xs text-slate-400">Export or restore machine profiles plus Bambu device state and telemetry.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={exportMachinesBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
+                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
+                        <span>Restore</span>
+                        <input type="file" accept=".json" className="hidden" onChange={importMachinesBackup} />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <h4 className="text-sm font-semibold text-white">Help requests inbox</h4>
+                    <p className="mt-1 text-xs text-slate-400">Export separate help-request files for email. Backlog import is owner-only and unlocked by GitHub or Microsoft owner sign-in.</p>
+                    <div className="mt-2">
+                      {isOwnerAuthenticated ? (
+                        <span className="inline-flex items-center rounded-full border border-cyan-700/70 bg-cyan-900/20 px-3 py-1 text-xs text-cyan-300">
+                          Owner authenticated as {ownerIdentityHint || "owner"}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-300">
+                          Owner session locked
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Owner auth: {ownerAuthConfigured ? `configured${ownerIdentityHint ? ` (${ownerIdentityHint})` : ""}` : "not configured on server"}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={exportHelpIntakeInbox} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
+                      {isOwnerAuthenticated ? (
+                        <>
+                          <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
+                            <span>Import to backlog</span>
+                            <input type="file" accept=".json" className="hidden" onChange={importHelpIntakeToBacklog} />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              loadOwnerSessionStatus().catch(() => undefined);
+                              loadOwnerAuthDiagnostics().catch(() => undefined);
+                            }}
+                            className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200"
+                          >
+                            Refresh owner status
+                          </button>
+                          <button type="button" onClick={ownerLogout} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Owner logout</button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" onClick={() => setShowOwnerLoginOptions((current) => !current)} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">
+                            {showOwnerLoginOptions ? "Hide owner login" : "App owner login"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              loadOwnerSessionStatus().catch(() => undefined);
+                              loadOwnerAuthDiagnostics().catch(() => undefined);
+                            }}
+                            className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200"
+                          >
+                            Refresh owner status
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    {!isOwnerAuthenticated && showOwnerLoginOptions ? (
+                      <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                        {ownerAuthConfigured ? (
+                          <div className="flex flex-wrap gap-2">
+                            {ownerGithubEnabled ? <button type="button" onClick={() => openOwnerOauth("github")} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Login with GitHub</button> : null}
+                            {ownerMicrosoftEnabled ? <button type="button" onClick={() => openOwnerOauth("microsoft")} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Login with Microsoft</button> : null}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400">Owner OAuth is not configured yet. Set owner OAuth environment variables on the backend, restart the server, then refresh owner status.</p>
+                        )}
+                      </div>
+                    ) : null}
+                    {ownerAuthMessage ? <p className="mt-2 text-xs text-cyan-300">{ownerAuthMessage}</p> : null}
+                    {ownerAuthDiagnostics ? (
+                      <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
+                        <p className="font-semibold text-white">Owner auth diagnostics</p>
+                        <p className="mt-1">GitHub: {ownerAuthDiagnostics.providers.github.enabled ? "Ready" : "Not ready"} (identity: {ownerAuthDiagnostics.providers.github.ownerIdentityConfigured ? "set" : "missing"}, client ID: {ownerAuthDiagnostics.providers.github.clientIdConfigured ? "set" : "missing"}, client secret: {ownerAuthDiagnostics.providers.github.clientSecretConfigured ? "set" : "missing"})</p>
+                        <p className="mt-1">Microsoft: {ownerAuthDiagnostics.providers.microsoft.enabled ? "Ready" : "Not ready"} (identity: {ownerAuthDiagnostics.providers.microsoft.ownerIdentityConfigured ? "set" : "missing"}, client ID: {ownerAuthDiagnostics.providers.microsoft.clientIdConfigured ? "set" : "missing"}, client secret: {ownerAuthDiagnostics.providers.microsoft.clientSecretConfigured ? "set" : "missing"})</p>
+                        <p className="mt-2 text-slate-400">Expected GitHub callback: {ownerAuthDiagnostics.providers.github.callbackUrl}</p>
+                        <p className="text-slate-400">Expected Microsoft callback: {ownerAuthDiagnostics.providers.microsoft.callbackUrl}</p>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2">
+                    <h4 className="text-sm font-semibold text-white">Full backup</h4>
+                    <p className="mt-1 text-xs text-slate-400">Download or restore the complete app dataset, including all customizable settings and operational records.</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={exportFullBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
                       <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
@@ -3296,8 +3922,13 @@ function App() {
                     </div>
                   </div>
                 </div>
-                {backupMessage ? <p className="text-sm text-cyan-300">{backupMessage}</p> : null}
+
+                {backupMessage ? <p className="mt-4 text-sm text-cyan-300">{backupMessage}</p> : null}
                 {materialBackupMessage ? <p className="text-sm text-cyan-300">{materialBackupMessage}</p> : null}
+                {customerBackupMessage ? <p className="text-sm text-cyan-300">{customerBackupMessage}</p> : null}
+                {supplierBackupMessage ? <p className="text-sm text-cyan-300">{supplierBackupMessage}</p> : null}
+                {machineBackupMessage ? <p className="text-sm text-cyan-300">{machineBackupMessage}</p> : null}
+                {helpIntakeBackupMessage ? <p className="text-sm text-cyan-300">{helpIntakeBackupMessage}</p> : null}
                 {fullBackupMessage ? <p className="text-sm text-cyan-300">{fullBackupMessage}</p> : null}
               </div>
             </section>
@@ -3496,6 +4127,7 @@ function App() {
         {activeTab === "help" && (
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
             <h2 className="text-xl font-semibold">Help guide</h2>
+            <p className="mt-2 text-sm text-slate-400">Use this page as your operating manual for daily workflows, then submit bugs/features directly into the backlog review queue.</p>
             <div className="mt-6 space-y-4 text-sm text-slate-300">
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Creating a job</h3>
@@ -3514,20 +4146,34 @@ function App() {
                 <p className="mt-2">Manage machine profiles in Machines (add/edit/remove wattage, depreciation, replacement runtime). In Billing, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, setup fee, rush fee %, waste factor %), and invoice finance settings (delivery, VAT, suggested deposit %, payment terms days). Billing and personalization sections are collapsible for easier navigation.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="font-semibold text-white">Site theme customization</h3>
+                <p className="mt-2">Open Admin and use Site theme colors to style the whole app. You can set Site background, Site text, Search and input, Accent button, and Accent button text colors. Use the quick preset row for one-click setup (Light, Dark, High Contrast, Ocean, Forest, Night Shift, Workshop Blue, Paper Invoice), then fine-tune any color fields and click Save site theme to keep your branding for future sessions.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Business and customers</h3>
                 <p className="mt-2">Set business personalization in Billing (name, logo, address, email, phone, website). Manage CRM Lite customer records in Customers and reuse those details in invoices.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Invoices and backup</h3>
-                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoice totals include SubTotal, Delivery, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, and full JSON backup download/restore.</p>
+                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoice totals include SubTotal, Delivery, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, customers JSON backup/restore, suppliers JSON backup/restore (with purchase history), machines JSON backup/restore (machine profiles + Bambu telemetry), and full JSON backup download/restore. Full backup includes all customizable and operational data, including theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu machine data.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Reporting page</h3>
-                <p className="mt-2">Use Reports to filter by date range, status, machine, and customer. The page shows summary metrics (jobs, revenue, base cost, margin) and lets you export the filtered report rows as CSV.</p>
+                <p className="mt-2">Use Reports to filter by date range, status, machine, and customer. The page shows summary metrics (jobs, revenue, base cost, margin), includes margin reporting views by machine/material/customer, and lets you export the filtered report rows as CSV.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <h3 className="font-semibold text-white">MakerWorld integration</h3>
+                <p className="mt-2">In Jobs &gt; Add Job, paste a MakerWorld URL and use one of the three actions:</p>
+                <ol className="mt-2 list-decimal space-y-1 pl-5">
+                  <li><strong>Import metadata:</strong> pulls model title, description, preview image, tags, estimated runtime, and estimated material grams.</li>
+                  <li><strong>Autofill job:</strong> writes imported values into the Add Job form (name, source URL, machine/runtime defaults, labour estimate, and suggested material usage).</li>
+                  <li><strong>Import profile:</strong> imports print-profile hints (layer height, nozzle/bed temperature, speed, infill) and applies them as costing-time/material hints.</li>
+                </ol>
+                <p className="mt-2">The source URL is saved on the job so you can reopen the original model reference later. After import/autofill, review machine, runtime, labour, and material values before saving the job.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Bambu telemetry integration</h3>
-                <p className="mt-2">Use Bambu tab to monitor live status (temps/progress/AMS), event stream updates, spool levels, predictive maintenance risk, and failure logs. Simulation buttons can be used to test start/finish/fail event handling and auto-updates without live hardware.</p>
+                <p className="mt-2">Use Machines tab for Bambu telemetry monitoring. The Bambu section is linked to your Bambu machine profile and includes live status (temps/progress/AMS), event stream updates, spool levels, predictive maintenance risk, and failure logs. Simulation buttons can be used to test start/finish/fail event handling and auto-updates without live hardware.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">If the app is not responding</h3>
@@ -3537,6 +4183,84 @@ function App() {
                 <h3 className="font-semibold text-white">Release notes and change history</h3>
                 <p className="mt-2">Review project updates and release notes in the changelog: <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">CHANGELOG.md</a>.</p>
               </div>
+              <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
+                <h3 className="font-semibold text-white">Raise a bug or feature request</h3>
+                <p className="mt-2 text-slate-300">Submit here to queue requests in a separate intake workflow, then download one combined email-ready JSON file.</p>
+                <p className="mt-1 text-xs text-slate-400">After emailing the file, import it from Admin using Help requests inbox → Import to backlog.</p>
+
+                <div className="mt-4 space-y-3">
+                  <label className="flex items-center gap-4 text-sm text-slate-300">
+                    <span className="w-56 shrink-0">Request type</span>
+                    <select
+                      value={helpRequestForm.requestType}
+                      onChange={(e) => setHelpRequestForm((current) => ({ ...current, requestType: e.target.value as "Bug" | "Feature Request" }))}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                    >
+                      <option value="Feature Request">Feature Request</option>
+                      <option value="Bug">Bug</option>
+                    </select>
+                  </label>
+
+                  <label className="flex items-center gap-4 text-sm text-slate-300">
+                    <span className="w-56 shrink-0">Priority</span>
+                    <select
+                      value={helpRequestForm.priority}
+                      onChange={(e) => setHelpRequestForm((current) => ({ ...current, priority: e.target.value as "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations" }))}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                    >
+                      <option value="P1 Critical">P1 Critical</option>
+                      <option value="P1 High">P1 High</option>
+                      <option value="P2 Medium">P2 Medium</option>
+                      <option value="P3 Low">P3 Low</option>
+                      <option value="Integrations">Integrations</option>
+                    </select>
+                  </label>
+
+                  <label className="flex items-center gap-4 text-sm text-slate-300">
+                    <span className="w-56 shrink-0">Short title</span>
+                    <input
+                      value={helpRequestForm.title}
+                      onChange={(e) => setHelpRequestForm((current) => ({ ...current, title: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                      placeholder="Example: Invoice line-item audit history"
+                      required
+                    />
+                  </label>
+
+                  <label className="flex items-start gap-4 text-sm text-slate-300">
+                    <span className="w-56 shrink-0 pt-2">Details</span>
+                    <textarea
+                      value={helpRequestForm.details}
+                      onChange={(e) => setHelpRequestForm((current) => ({ ...current, details: e.target.value }))}
+                      className="min-h-[110px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                      placeholder="Describe the issue or outcome you want. Include affected tabs/workflows if possible."
+                      required
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <p className="text-xs text-slate-400">Queued requests: {queuedHelpRequests.length}</p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={downloadQueuedHelpRequests} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">
+                      Download email file
+                    </button>
+                    <button type="submit" className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Queue request</button>
+                  </div>
+                </div>
+
+                {helpRequestMessage ? <p className="mt-3 text-sm text-cyan-300">{helpRequestMessage}</p> : null}
+
+                <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300">
+                  <p className="font-semibold text-white">How review handoff works</p>
+                  <ol className="mt-2 list-decimal space-y-1 pl-4">
+                    <li>Each submission is logged in a separate help-intake record with a unique request ID and added to this local queue.</li>
+                    <li>Users can submit multiple requests, then download one combined JSON file for email handoff.</li>
+                    <li>The backlog owner imports emailed files from Admin using Help requests inbox.</li>
+                    <li>Imported items are inserted into docs/backlog.md with Human Review and On Hold status for manual review.</li>
+                  </ol>
+                </div>
+              </form>
             </div>
             <div className="mt-6 text-left text-xs text-slate-500">Version {APP_VERSION}</div>
           </section>

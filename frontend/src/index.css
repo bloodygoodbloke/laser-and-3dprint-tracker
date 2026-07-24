@@ -12,6 +12,79 @@ body {
   background: #020617;
 }
 
+.app-theme {
+  background: var(--app-bg) !important;
+  color: var(--app-text) !important;
+}
+
+.app-theme .bg-slate-950 {
+  background-color: var(--app-bg) !important;
+}
+
+.app-theme .bg-slate-900 {
+  background-color: var(--app-surface) !important;
+}
+
+.app-theme .bg-slate-900\/70,
+.app-theme .bg-slate-900\/60 {
+  background-color: var(--app-surface-alt) !important;
+}
+
+.app-theme .text-slate-100,
+.app-theme .text-slate-300,
+.app-theme .text-white {
+  color: var(--app-text) !important;
+}
+
+.app-theme .text-slate-400 {
+  color: var(--app-text-muted) !important;
+}
+
+.app-theme .text-slate-500 {
+  color: var(--app-text-faint) !important;
+}
+
+.app-theme .border-slate-800,
+.app-theme .border-slate-700 {
+  border-color: var(--app-border) !important;
+}
+
+.app-theme .border-cyan-700 {
+  border-color: var(--app-accent) !important;
+}
+
+.app-theme .text-cyan-300,
+.app-theme .text-cyan-200,
+.app-theme a.text-cyan-300 {
+  color: var(--app-accent) !important;
+}
+
+.app-theme button.border-cyan-700,
+.app-theme label.border-cyan-700,
+.app-theme .rounded-full.border-cyan-700 {
+  background-color: var(--app-accent) !important;
+  color: var(--app-accent-text) !important;
+}
+
+.app-theme button.border-cyan-700.text-cyan-300,
+.app-theme button.border-cyan-700 .text-cyan-300,
+.app-theme label.border-cyan-700.text-cyan-300 {
+  color: var(--app-accent-text) !important;
+}
+
+.app-theme input,
+.app-theme select,
+.app-theme textarea {
+  background-color: var(--app-input-bg) !important;
+  color: var(--app-text) !important;
+  border-color: var(--app-border) !important;
+}
+
+.app-theme input::placeholder,
+.app-theme textarea::placeholder {
+  color: var(--app-text-faint) !important;
+}
+
 @media print {
   body {
     background: white;

@@ -1,4 +1,4 @@
-import { BambuDashboardPayload, BillingSettings, Customer, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
+import { BacklogIntakeRequest, BacklogIntakeResponse, BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, OwnerAuthDiagnostics, OwnerSessionStatus, Supplier } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
@@ -201,6 +201,48 @@ const api = {
     if (!res.ok) throw new Error("Failed to restore full backup");
     return res.json();
   },
+  async exportCustomersBackup() {
+    const res = await fetch("/api/admin/backup/customers");
+    if (!res.ok) throw new Error("Failed to export customers backup");
+    return res.json();
+  },
+  async importCustomersBackup(payload: Record<string, unknown>) {
+    const res = await fetch("/api/admin/backup/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to restore customers backup");
+    return res.json();
+  },
+  async exportSuppliersBackup() {
+    const res = await fetch("/api/admin/backup/suppliers");
+    if (!res.ok) throw new Error("Failed to export suppliers backup");
+    return res.json();
+  },
+  async importSuppliersBackup(payload: Record<string, unknown>) {
+    const res = await fetch("/api/admin/backup/suppliers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to restore suppliers backup");
+    return res.json();
+  },
+  async exportMachinesBackup() {
+    const res = await fetch("/api/admin/backup/machines");
+    if (!res.ok) throw new Error("Failed to export machines backup");
+    return res.json();
+  },
+  async importMachinesBackup(payload: Record<string, unknown>) {
+    const res = await fetch("/api/admin/backup/machines", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to restore machines backup");
+    return res.json();
+  },
   async calculateCost(id: string, payload: Record<string, unknown>) {
     const res = await fetch(`/api/jobs/${id}/calculate-cost`, {
       method: "POST",
@@ -279,6 +321,65 @@ const api = {
     });
     if (!res.ok) throw new Error("Failed to import MakerWorld print profile");
     return res.json();
+  },
+  async submitBacklogIntake(payload: BacklogIntakeRequest): Promise<BacklogIntakeResponse> {
+    const res = await fetch("/api/admin/backlog-intake", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to submit backlog request");
+    return res.json();
+  },
+  async logHelpIntakeRequest(payload: BacklogIntakeRequest): Promise<HelpIntakeRequestRecord> {
+    const res = await fetch("/api/admin/help-intake/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to log help intake request");
+    return res.json();
+  },
+  async exportHelpIntakeRequests(): Promise<{ exportedAt: string; requests: HelpIntakeRequestRecord[] }> {
+    const res = await fetch("/api/admin/help-intake/export");
+    if (!res.ok) throw new Error("Failed to export help intake requests");
+    return res.json();
+  },
+  async importHelpIntakeRequests(payload: { requests: HelpIntakeRequestRecord[] }): Promise<{ importedCount: number }> {
+    const res = await fetch("/api/admin/help-intake/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorPayload = await res.json().catch(() => null);
+      throw new Error(String(errorPayload?.error || "Failed to import help intake requests"));
+    }
+    return res.json();
+  },
+  async getOwnerSession(): Promise<OwnerSessionStatus> {
+    const res = await fetch("/api/admin/owner/session");
+    if (!res.ok) throw new Error("Failed to load owner session status");
+    return res.json();
+  },
+  async getOwnerOauthProviders(): Promise<OwnerSessionStatus> {
+    const res = await fetch("/api/admin/owner/oauth/providers");
+    if (!res.ok) throw new Error("Failed to load owner OAuth providers");
+    return res.json();
+  },
+  async getOwnerOauthDiagnostics(): Promise<OwnerAuthDiagnostics> {
+    const res = await fetch("/api/admin/owner/oauth/diagnostics");
+    if (!res.ok) throw new Error("Failed to load owner OAuth diagnostics");
+    return res.json();
+  },
+  getOwnerOauthStartUrl(provider: "github" | "microsoft") {
+    return provider === "github"
+      ? "/api/admin/owner/oauth/github/start"
+      : "/api/admin/owner/oauth/microsoft/start";
+  },
+  async logoutOwner() {
+    const res = await fetch("/api/admin/owner/session", { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed owner logout");
   },
 };
 

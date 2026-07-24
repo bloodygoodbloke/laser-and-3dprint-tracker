@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Moved Bambu telemetry and dashboard workflows into the Machines tab, linked to the Bambu machine profile, and removed the standalone Bambu top-level tab.
+- Updated dashboard layout to prioritize Delivery and Utilization at the top, reduced visual weight of Pending Jobs and Low Stock cards, and expanded Quick Add Job to full width.
+- Moved margin reporting breakdown widgets from Dashboard to the Reports tab.
+- Added site-wide theme customization for background, text, search/input, and accent button colors, including saved color preferences persisted in billing settings and one-click presets (Light, Dark, High Contrast, Ocean, Forest, Night Shift, Workshop Blue, Paper Invoice).
+- Improved accent button readability by recalibrating preset accent text defaults and using stronger filled accent button styling.
+- Expanded Admin backup tooling with dedicated JSON backup/restore options for customers, suppliers (including purchase history), and machines (including machine profile settings and Bambu telemetry data).
+- Enhanced full backup payload metadata and coverage documentation to explicitly include all customizable and operational data (theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu data).
+- Added separate Help intake workflow: Help submissions are logged in a standalone intake file and downloaded as email-ready JSON, with a new Admin import flow to load those files into `docs/backlog.md` as `Human Review` / `On Hold` items.
+- Updated Help intake UX to allow multiple submissions to be queued before downloading a single combined email-ready JSON file.
+- Added an owner-only import gate for Help intake to backlog: an `App owner login` button now uses OAuth checks (GitHub and/or Microsoft) against configured owner identity values; non-owners only see export options.
+- Hardened owner identity privacy for OAuth owner sessions: removed hardcoded owner defaults, stopped exposing owner identity in owner-session API responses, and added optional SHA-256 owner identity matching via environment variables.
+- Added backend local env auto-loading (`backend/.env` and `backend/.env.local`) plus a `backend/.env.local.example` template, so owner OAuth configuration can be maintained locally (git-ignored) without storing personal owner details in tracked source.
+- Added an `Owner auth diagnostics` panel in Help requests inbox to display provider readiness (identity/client ID/client secret presence) and expected callback URLs for faster owner-login troubleshooting.
+- Added a Help-page request intake form that submits bug and feature requests directly into docs/backlog.md with automatic review triage metadata (`Auto Candidate` vs `Human Review Required`) and pending-review tagging.
+- Tracker maintenance: processed CHG-056 as completed and moved it from backlog to implementation log, linking delivery to existing telemetry, maintenance, and consumables features.
+- Tracker maintenance: processed CHG-057 as completed and moved it from backlog to implementation log, noting that reporting requirements were delivered through CHG-083.
 - Added a dedicated Reports page with date-range, status, machine, and customer filters, summary metrics, detailed report rows, and CSV export.
 - Added MakerWorld metadata import endpoint and UI flow to fetch model title, preview metadata, tags, and estimated runtime/material hints from a MakerWorld URL.
 - Added MakerWorld job autofill support in Jobs > Add Job to pre-populate key fields and suggested material usage from imported model metadata.

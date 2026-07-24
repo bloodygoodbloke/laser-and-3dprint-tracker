@@ -2,7 +2,7 @@
 
 Tracks implemented features and completed bug fixes from day-to-day execution work.
 
-Last updated: 2026-07-15
+Last updated: 2026-07-24
 
 | ID | Type | Priority | Status | Title | Actioned On | Details |
 |---|---|---|---|---|---|---|
@@ -60,6 +60,10 @@ Last updated: 2026-07-15
 | CHG-052 | Feature | P2 Medium | Implemented | Job scheduling/calendar view | 2026-07-15 | Added a 14-day schedule calendar with due-date workload visibility and machine-level projected completion timestamps based on queue order/runtime. |
 | CHG-053 | Feature | P3 Low | Implemented | Margin reporting | 2026-07-15 | Added dashboard margin reporting grouped by machine, material type, and customer using calculated customer charge versus base totals. |
 | CHG-054 | Feature | P3 Low | Implemented | Delivery/utilization dashboards | 2026-07-15 | Added delivery and utilization KPIs including on-time delivery rate, overdue open jobs, queued runtime, and per-machine weekly utilization estimates. |
+| CHG-056 | Feature | P3 Low | Implemented | Machine-use telemetry tracker | 2026-07-23 | Closed backlog request as delivered by existing Bambu telemetry implementation covering runtime-hour usage logs, maintenance interval prediction/risk scoring, and consumables tracking via AMS spool inventory and material deductions. |
+| CHG-057 | Feature | P3 Low | Implemented | Reports page | 2026-07-23 | Closed original backlog request for monthly totals/profit-vs-cost/material usage reporting; delivered via the implemented Reports tab capability tracked in CHG-083. |
+| CHG-086 | Feature | P2 Medium | Implemented | Help page backlog intake and review triage | 2026-07-24 | Expanded in-app Help guidance and added a built-in bug/feature submission form that appends Planned items to docs/backlog.md with automatic triage recommendation (`Auto Candidate` or `Human Review Required`) and pending-review metadata. |
+| CHG-088 | Feature Request | P2 Medium | Implemented | Site-wide theme color customization | 2026-07-24 | Added background/text/search-input/accent-button color controls (managed in Admin) that apply across the whole app, with persisted billing-setting storage, quick theme presets (Light, Dark, High Contrast, Ocean, Forest), reset/save actions, and Help/README guidance for branded workspace theming. |
 | CHG-083 | Feature | P3 Low | Implemented | New reporting page | 2026-07-15 | Added a dedicated Reports tab with date-range and dimension filters, summary metrics, detailed rows, and CSV export of filtered report data. |
 | CHG-064 | Integration | Integrations | Implemented | MakerWorld metadata import | 2026-07-15 | Added MakerWorld URL ingestion endpoint and metadata extraction for model title/description/preview/tags plus estimated runtime and grams hints. |
 | CHG-065 | Integration | Integrations | Implemented | MakerWorld job autofill | 2026-07-15 | Added MakerWorld-driven Add Job autofill to pre-populate name, machine/runtime/labour defaults, source notes, and suggested material usage. |
