@@ -45,7 +45,8 @@ Last updated: 2026-08-04
 | CHG-079 | Automation | Integrations | On Hold | Cross-source cost auto-generation | Combine MakerWorld + LightBurn + Bambu data for costing. | Human Review | Multi-source merge logic can introduce hidden pricing assumptions. | - |
 | CHG-080 | Automation | Integrations | On Hold | Telemetry progress automation | Auto-update progress/completion timestamps from telemetry. | Human Review | Automated status transitions can affect invoicing and workflow controls. | - |
 | CHG-081 | Automation | Integrations | On Hold | Metadata auto-tagging | Auto-tag machine/material/complexity from imported metadata. | Human Review | Auto-tagging quality thresholds and override rules need policy decisions. | - |
-| CHG-082 | Automation | Integrations | On Hold | Multi-machine load balancer | Auto-assign jobs to best available machine. | Human Review | Assignment strategy can conflict with operator constraints and due-date priorities. | - |ch
+| CHG-082 | Automation | Integrations | On Hold | Multi-machine load balancer | Auto-assign jobs to best available machine. | Human Review | Assignment strategy can conflict with operator constraints and due-date priorities. | - |
+| CHG-088 | Integration | Integrations | On Hold | Revisit owner OAuth | Reintroduce owner authentication for Help intake backlog imports after the temporary removal is replaced with a simpler, lower-friction approach. | Human Review | Authentication flow changes admin access and should be re-specified before reimplementation. | - |
 
 ## New Entry Template
 

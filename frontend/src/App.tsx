@@ -458,6 +458,7 @@ function App() {
   useEffect(() => {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
+    api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
   }, []);
 
   const applyBambuDashboardUpdate = (payload: BambuDashboardPayload, force = false) => {

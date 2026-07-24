@@ -80,6 +80,7 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Optional local env setup:
 - Preferred setup: copy `backend/.env.local.example` to `backend/.env.local` and fill values as needed.
 - `backend/.env.local` is loaded automatically by backend startup and is git-ignored.
+- Help requests inbox now imports backlog files directly, so no OAuth setup is required for local development.
 - Start locally (two options):
 - Option 1: one command from repo root: `bash start-local.sh`
 - Option 2: start each service manually:
@@ -95,6 +96,13 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Build and start: `docker compose up --build`
 - Backend health endpoint: `http://127.0.0.1:4000/api/health`
 - Frontend app: `http://127.0.0.1:5173`
+
+**Staging deployment**
+- Build and start the staging stack: `docker compose -f docker-compose.staging.yml up --build`
+- Staging frontend: `http://127.0.0.1:8080`
+- Backend health endpoint: `http://127.0.0.1:4000/api/health`
+- Staging uses a persistent SQLite volume and a reverse-proxied frontend so the browser talks to one origin.
+- For public production, swap SQLite for Postgres and move secrets to a managed secret store.
 
 **Local run links**
 - App UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)
