@@ -1,4 +1,4 @@
-import { createElement, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
+import { createElement, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
 import { BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
@@ -326,6 +326,19 @@ function App() {
   const [directToBacklog, setDirectToBacklog] = useState(false);
   const [dashboardJobMessage, setDashboardJobMessage] = useState("");
   const [isCreatingDashboardJob, setIsCreatingDashboardJob] = useState(false);
+  const addJobFormRef = useRef<HTMLFormElement | null>(null);
+
+  const scrollToAddJobForm = () => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const form = addJobFormRef.current;
+        if (!form) return;
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+        const firstField = form.querySelector("input, select, textarea") as HTMLElement | null;
+        firstField?.focus();
+      });
+    });
+  };
 
   const normalizeJobsForUi = (jobsData: Job[]) => jobsData.map((job) => {
     const rawChecklist = (job as Job & { qaChecklist?: unknown }).qaChecklist;
@@ -825,6 +838,7 @@ function App() {
     setMakerWorldMessage("");
     setMakerWorldMetadata(null);
     setMakerWorldProfile(null);
+    scrollToAddJobForm();
   };
 
   const applyEstimateTemplate = (template: Job) => {
@@ -3080,7 +3094,7 @@ function App() {
 
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
                 {jobEditorMode === "create" ? (
-                  <form onSubmit={createJobFromJobsTab} className="space-y-5">
+                  <form ref={addJobFormRef} onSubmit={createJobFromJobsTab} className="space-y-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm uppercase tracking-[0.3em] text-cyan-400">New job</p>
@@ -3282,6 +3296,10 @@ function App() {
                           </div>
                         ))}
                       </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button type="submit" className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Create job</button>
                     </div>
                   </form>
                 ) : jobEditorMode === "edit" ? (

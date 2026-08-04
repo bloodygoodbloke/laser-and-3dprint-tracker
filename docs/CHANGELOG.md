@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Next version target updated to `0.7.0`.
+- Added `restart-local.sh` to stop any existing frontend/backend processes on local ports and relaunch both services via `start-local.sh`.
+- Moved setup fee and delivery charge from billing-wide invoice add-ons into per-job controls, including persisted job-level amount fields.
+- Updated customer costing rules so minimum charge is only applied when the computed total is below the configured threshold.
+- Updated invoice production subtotal composition so non-material/non-labour charge components (including workshop costs and minimum-fee uplift when triggered) are included under production charges.
+- Added backup/restore compatibility updates so billing and job-level setup/delivery fields are preserved reliably across full snapshot workflows.
+- Updated Jobs dashboard workflows by removing Quick Add and Low Stock cards, adding a focused Jobs summary card, and adding Add Job shortcuts that scroll/focus directly to the Add Job form.
 - Added first-pass estimate catalogue workflow for CHG-087: jobs can be marked as `Estimate Template`, listed in a reusable Jobs estimate catalogue, and applied into Add Job as prefilled drafts for quick pricing without requiring customer details up front.
 - Moved Bambu telemetry and dashboard workflows into the Machines tab, linked to the Bambu machine profile, and removed the standalone Bambu top-level tab.
 - Updated dashboard layout to prioritize Delivery and Utilization at the top, reduced visual weight of Pending Jobs and Low Stock cards, and expanded Quick Add Job to full width.

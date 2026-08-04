@@ -2,7 +2,7 @@
 
 Tracks implemented features and completed bug fixes from day-to-day execution work.
 
-Last updated: 2026-07-24
+Last updated: 2026-08-04
 
 | ID | Type | Priority | Status | Title | Actioned On | Details |
 |---|---|---|---|---|---|---|
@@ -77,6 +77,11 @@ Last updated: 2026-07-24
 | CHG-071 | Integration | Integrations | Implemented | Live Bambu dashboard | 2026-07-15 | Added dedicated frontend Bambu tab showing live statuses, event stream, spools, failures, maintenance, and simulation controls. |
 | CHG-072 | Integration | Integrations | Implemented | Predictive maintenance engine | 2026-07-15 | Added maintenance prediction model and risk scoring based on runtime-hour accumulation and recent failure frequency. |
 | CHG-073 | Integration | Integrations | Implemented | Auto-failure logging from Bambu | 2026-07-15 | Added automatic failure log creation for Bambu error states and failed telemetry events. |
+| CHG-089 | Bug | P1 High | Completed Bug Fix | Cost calculation reliability and minimum-charge threshold logic | 2026-08-04 | Fixed cost-calculation behavior so customer minimum charge is only applied when calculated customer total is below the configured threshold; resolved calculation reliability regressions reported in local workflows. |
+| CHG-090 | Feature | P1 High | Implemented | Job-level setup and delivery charging | 2026-08-04 | Removed setup and delivery invoice add-ons from global billing rules and moved both charges into per-job controls, including persisted setup/delivery amounts used in create/edit/invoice flows. |
+| CHG-091 | Bug | P1 High | Completed Bug Fix | Billing backup/restore durability | 2026-08-04 | Hardened backup and restore paths to preserve billing configuration and newer job-level pricing fields so billing data survives export/import cycles. |
+| CHG-092 | Feature Request | P2 Medium | Implemented | Jobs dashboard workflow simplification | 2026-08-04 | Removed Quick Add and Low Stock dashboard cards, added a dedicated Jobs summary card with core metrics/actions, and added Add Job navigation that scrolls and focuses the add-job form plus a secondary Create button at form bottom. |
+| CHG-093 | Automation | P3 Low | Implemented | Local full-app restart script | 2026-08-04 | Added restart-local.sh to stop existing processes on backend/frontend ports and relaunch both services through the existing local startup script for faster recovery during development. |
 
 ## New Entry Template
 
