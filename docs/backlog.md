@@ -2,7 +2,7 @@
 
 Tracks planned and in-progress implementation work.
 
-Last updated: 2026-07-24
+Last updated: 2026-08-04
 
 ## Next 3
 - CHG-087
@@ -29,7 +29,7 @@ Last updated: 2026-07-24
 ## Backlog Table
 | ID | Type | Priority | Status | Title | Details | Review Status | Review Reason | Target Date |
 |---|---|---|---|---|---|---|---|---|
-| CHG-087 | Feature Request | P1 High | In Progress | job estimates | Id like to have a feature where i can put in the information or bring in from makerworld to do a job estimate without actually having to fill in customer details, id like to save the job per the model and have a sort of catalogue that i can reference for quick pricing. [Source: Help page intake] | Reviewed | Implementable with existing MakerWorld metadata/autofill pipeline and internal job data model extensions. | - |
+| CHG-087 | Feature Request | P1 High | In Progress | job estimates | Id like to have a feature where i can put in the information or bring in from makerworld to do a job estimate without actually having to fill in customer details, id like to save the job per the model and have a sort of catalogue that i can reference for quick pricing. [Source: Help page intake] Progress: first slice delivered - added Estimate Template status, Jobs estimate catalogue panel, and Use template prefill into Add Job. Remaining: dedicated estimate-only records and deeper catalogue controls. | Reviewed | Implementable with existing MakerWorld metadata/autofill pipeline and internal job data model extensions. | - |
 | CHG-055 | Feature | P3 Low | In Progress | Billing/invoice audit log | Track and report edits to billing and invoice values. | Reviewed | Implementable using append-only audit records on existing billing and invoice update workflows. | - |
 | CHG-058 | Feature | P3 Low | In Progress | Proper time tracking | Track setup, post-processing, and actual manufacture time. | Reviewed | Implementable by extending existing runtime/labour model with setup/post-processing segments. | - |
 | CHG-059 | Feature | P3 Low | Planned | Failure tracking | Capture failure reason, waste, and failure cost. | Reviewed | Implementable with current job and telemetry structures plus failure taxonomy fields. | - |
@@ -45,7 +45,7 @@ Last updated: 2026-07-24
 | CHG-079 | Automation | Integrations | On Hold | Cross-source cost auto-generation | Combine MakerWorld + LightBurn + Bambu data for costing. | Human Review | Multi-source merge logic can introduce hidden pricing assumptions. | - |
 | CHG-080 | Automation | Integrations | On Hold | Telemetry progress automation | Auto-update progress/completion timestamps from telemetry. | Human Review | Automated status transitions can affect invoicing and workflow controls. | - |
 | CHG-081 | Automation | Integrations | On Hold | Metadata auto-tagging | Auto-tag machine/material/complexity from imported metadata. | Human Review | Auto-tagging quality thresholds and override rules need policy decisions. | - |
-| CHG-082 | Automation | Integrations | On Hold | Multi-machine load balancer | Auto-assign jobs to best available machine. | Human Review | Assignment strategy can conflict with operator constraints and due-date priorities. | - |
+| CHG-082 | Automation | Integrations | On Hold | Multi-machine load balancer | Auto-assign jobs to best available machine. | Human Review | Assignment strategy can conflict with operator constraints and due-date priorities. | - |ch
 
 ## New Entry Template
 

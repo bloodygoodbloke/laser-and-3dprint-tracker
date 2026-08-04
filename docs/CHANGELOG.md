@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Added first-pass estimate catalogue workflow for CHG-087: jobs can be marked as `Estimate Template`, listed in a reusable Jobs estimate catalogue, and applied into Add Job as prefilled drafts for quick pricing without requiring customer details up front.
 - Moved Bambu telemetry and dashboard workflows into the Machines tab, linked to the Bambu machine profile, and removed the standalone Bambu top-level tab.
 - Updated dashboard layout to prioritize Delivery and Utilization at the top, reduced visual weight of Pending Jobs and Low Stock cards, and expanded Quick Add Job to full width.
 - Moved margin reporting breakdown widgets from Dashboard to the Reports tab.

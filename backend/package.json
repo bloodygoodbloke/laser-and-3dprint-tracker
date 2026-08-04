@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "prisma": "prisma",
+    "check:api-smoke": "node ../scripts/smoke-api-check.js",
+    "check:local": "npm run check:api-smoke && npm run check:tracker && npm run check:quality-cadence && npm run check:release",
     "check:release": "node ../scripts/check-release-notes.js",
     "check:tracker": "node ../scripts/check-tracker-consistency.js",
     "check:quality-cadence": "node ../scripts/check-quality-cadence.js",

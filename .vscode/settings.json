@@ -1,1 +1,8 @@
-{}
+{
+    "chat.tools.terminal.autoApprove": {
+        "mkdir": true,
+        "git pull": true,
+        "git clone": true,
+        "git rev-parse": true
+    }
+}

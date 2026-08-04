@@ -110,7 +110,11 @@ export interface Job {
   qaPassed?: boolean;
   reworkCost?: number;
   reworkNotes?: string;
+  setupFee?: number;
+  deliveryCharge?: number;
   isRush?: boolean;
+  isSetupFee?: boolean;
+  isDelivery?: boolean;
   paymentStatus?: string;
   depositPaidAmount?: number;
   status: string;
@@ -275,36 +279,6 @@ export interface HelpIntakeRequestRecord {
   priority: "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations";
   title: string;
   details: string;
-}
-
-export interface OwnerSessionStatus {
-  isOwner: boolean;
-  ownerLogin: string | null;
-  ownerEmail?: string | null;
-  ownerProvider?: "github" | "microsoft";
-  authConfigured: boolean;
-  providers?: {
-    github: boolean;
-    microsoft: boolean;
-  };
-  expiresAt?: string;
-}
-
-export interface OwnerAuthProviderDiagnostics {
-  enabled: boolean;
-  ownerIdentityConfigured: boolean;
-  clientIdConfigured: boolean;
-  clientSecretConfigured: boolean;
-  callbackUrl: string;
-}
-
-export interface OwnerAuthDiagnostics {
-  authConfigured: boolean;
-  redirectBaseConfigured: boolean;
-  providers: {
-    github: OwnerAuthProviderDiagnostics;
-    microsoft: OwnerAuthProviderDiagnostics;
-  };
 }
 
 export interface BacklogIntakeResponse {

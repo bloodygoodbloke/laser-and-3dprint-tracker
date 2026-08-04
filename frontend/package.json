@@ -6,6 +6,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "check:frontend-smoke": "node ../scripts/smoke-frontend-check.js",
+    "check:local": "npm run check:frontend-smoke && npm run check:tracker && npm run check:quality-cadence && npm run check:release",
     "check:release": "node ../scripts/check-release-notes.js",
     "check:tracker": "node ../scripts/check-tracker-consistency.js",
     "check:quality-cadence": "node ../scripts/check-quality-cadence.js",

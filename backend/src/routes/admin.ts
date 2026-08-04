@@ -1,5 +1,4 @@
-import { Router, type Request, type Response } from "express";
-import crypto from "crypto";
+import { Router } from "express";
 import fs from "fs/promises";
 import path from "path";
 import prisma from "../prisma";
@@ -13,25 +12,35 @@ const helpIntakeInboxPath = path.join(docsRoot, "help-intake-inbox.jsonl");
 
 const ALLOWED_PRIORITIES = new Set(["P1 Critical", "P1 High", "P2 Medium", "P3 Low", "Integrations"]);
 const BACKUP_SCHEMA_VERSION = "2026-07-24";
-const OWNER_GITHUB_LOGIN = String(process.env.APP_OWNER_GITHUB_LOGIN || "").trim().toLowerCase();
-const OWNER_GITHUB_LOGIN_SHA256 = String(process.env.APP_OWNER_GITHUB_LOGIN_SHA256 || "").trim().toLowerCase();
-const OWNER_MICROSOFT_EMAIL = String(process.env.APP_OWNER_MICROSOFT_EMAIL || "").trim().toLowerCase();
-const OWNER_MICROSOFT_EMAIL_SHA256 = String(process.env.APP_OWNER_MICROSOFT_EMAIL_SHA256 || "").trim().toLowerCase();
-const OWNER_OAUTH_REDIRECT_BASE = String(process.env.APP_OWNER_OAUTH_REDIRECT_BASE || "http://localhost:4000").trim().replace(/\/$/, "");
-const GITHUB_OAUTH_CLIENT_ID = String(process.env.GITHUB_OAUTH_CLIENT_ID || "").trim();
-const GITHUB_OAUTH_CLIENT_SECRET = String(process.env.GITHUB_OAUTH_CLIENT_SECRET || "").trim();
-const MICROSOFT_OAUTH_CLIENT_ID = String(process.env.MICROSOFT_OAUTH_CLIENT_ID || "").trim();
-const MICROSOFT_OAUTH_CLIENT_SECRET = String(process.env.MICROSOFT_OAUTH_CLIENT_SECRET || "").trim();
-const OWNER_SESSION_TTL_MS = Number(process.env.APP_OWNER_SESSION_TTL_MS || 1000 * 60 * 60 * 8);
-const OWNER_SESSION_COOKIE = "app_owner_session";
-const ownerSessions = new Map<string, { ownerId: string; provider: "github" | "microsoft"; expiresAt: number }>();
-const ownerOauthStateStore = new Map<string, { provider: "github" | "microsoft"; expiresAt: number }>();
 
 type RawRecord = Record<string, unknown>;
 
 const toRecordArray = (value: unknown): RawRecord[] => Array.isArray(value)
   ? value.filter((item): item is RawRecord => Boolean(item) && typeof item === "object")
   : [];
+
+const parseJsonRecord = (value: unknown): Record<string, unknown> => {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+  return typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+};
+
+const isBillingSchemaCompatibilityError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return message.includes("BillingSetting") && (
+    message.includes("does not exist")
+    || message.includes("Unknown arg")
+    || message.includes("Unknown argument")
+    || message.includes("has no column")
+  );
+};
 
 const getFullBackupPayload = async () => {
   const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
@@ -131,129 +140,6 @@ const appendHelpIntakeInbox = async (record: HelpIntakeRequestRecord) => {
 };
 
 const createHelpRequestId = () => `REQ-${Date.now().toString(36)}-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
-
-const sha256Hex = (value: string) => crypto.createHash("sha256").update(value, "utf8").digest("hex");
-
-const ownerIdentityMatches = (provider: "github" | "microsoft", identity: string) => {
-  const normalized = identity.trim().toLowerCase();
-  if (!normalized) return false;
-
-  if (provider === "github") {
-    if (OWNER_GITHUB_LOGIN && normalized === OWNER_GITHUB_LOGIN) return true;
-    if (OWNER_GITHUB_LOGIN_SHA256 && sha256Hex(normalized) === OWNER_GITHUB_LOGIN_SHA256) return true;
-    return false;
-  }
-
-  if (OWNER_MICROSOFT_EMAIL && normalized === OWNER_MICROSOFT_EMAIL) return true;
-  if (OWNER_MICROSOFT_EMAIL_SHA256 && sha256Hex(normalized) === OWNER_MICROSOFT_EMAIL_SHA256) return true;
-  return false;
-};
-
-const parseCookies = (req: Request) => {
-  const raw = req.headers.cookie || "";
-  const result: Record<string, string> = {};
-  for (const pair of raw.split(";")) {
-    const [rawKey, ...rawValue] = pair.trim().split("=");
-    if (!rawKey) continue;
-    result[rawKey] = decodeURIComponent(rawValue.join("=") || "");
-  }
-  return result;
-};
-
-const setOwnerSessionCookie = (res: Response, token: string) => {
-  const maxAgeSeconds = Math.max(60, Math.floor(OWNER_SESSION_TTL_MS / 1000));
-  res.setHeader("Set-Cookie", `${OWNER_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`);
-};
-
-const clearOwnerSessionCookie = (res: Response) => {
-  res.setHeader("Set-Cookie", `${OWNER_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
-};
-
-const createOwnerSession = (res: Response, ownerId: string, provider: "github" | "microsoft") => {
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = Date.now() + OWNER_SESSION_TTL_MS;
-  ownerSessions.set(token, { ownerId, provider, expiresAt });
-  setOwnerSessionCookie(res, token);
-  return { token, ownerId, provider, expiresAt };
-};
-
-const popOauthState = (state: string, provider: "github" | "microsoft") => {
-  const existing = ownerOauthStateStore.get(state);
-  if (!existing) return false;
-  ownerOauthStateStore.delete(state);
-  return existing.provider === provider && existing.expiresAt > Date.now();
-};
-
-const createOauthState = (provider: "github" | "microsoft") => {
-  const state = crypto.randomBytes(24).toString("hex");
-  ownerOauthStateStore.set(state, { provider, expiresAt: Date.now() + 1000 * 60 * 10 });
-  return state;
-};
-
-const oauthPopupResultHtml = (success: boolean, message: string) => `<!doctype html>
-<html>
-  <body style="font-family: ui-sans-serif, system-ui, sans-serif; background:#0f172a; color:#e2e8f0; padding:20px;">
-    <h3>${success ? "Owner login successful" : "Owner login failed"}</h3>
-    <p>${message}</p>
-    <p>You can close this window and return to the app.</p>
-    <script>
-      try { if (window.opener) window.opener.postMessage({ type: 'owner-oauth', success: ${success ? "true" : "false"} }, window.location.origin); } catch (_e) {}
-      try { window.close(); } catch (_e) {}
-    </script>
-  </body>
-</html>`;
-
-const readOwnerSession = (req: Request) => {
-  const token = parseCookies(req)[OWNER_SESSION_COOKIE];
-  if (!token) return null;
-
-  const session = ownerSessions.get(token);
-  if (!session) return null;
-  if (session.expiresAt <= Date.now()) {
-    ownerSessions.delete(token);
-    return null;
-  }
-  return { token, ...session };
-};
-
-const requireOwnerSession = (req: Request, res: Response) => {
-  const session = readOwnerSession(req);
-  if (!session) {
-    res.status(403).json({ error: "Owner session required" });
-    return null;
-  }
-  return session;
-};
-
-const githubOwnerConfigured = () => Boolean(OWNER_GITHUB_LOGIN || OWNER_GITHUB_LOGIN_SHA256);
-const microsoftOwnerConfigured = () => Boolean(OWNER_MICROSOFT_EMAIL || OWNER_MICROSOFT_EMAIL_SHA256);
-const githubOauthConfigured = () => Boolean(GITHUB_OAUTH_CLIENT_ID && GITHUB_OAUTH_CLIENT_SECRET && githubOwnerConfigured());
-const microsoftOauthConfigured = () => Boolean(MICROSOFT_OAUTH_CLIENT_ID && MICROSOFT_OAUTH_CLIENT_SECRET && microsoftOwnerConfigured());
-const isOwnerAuthConfigured = () => githubOauthConfigured() || microsoftOauthConfigured();
-
-const getOwnerAuthDiagnostics = () => {
-  const github = {
-    enabled: githubOauthConfigured(),
-    ownerIdentityConfigured: githubOwnerConfigured(),
-    clientIdConfigured: Boolean(GITHUB_OAUTH_CLIENT_ID),
-    clientSecretConfigured: Boolean(GITHUB_OAUTH_CLIENT_SECRET),
-    callbackUrl: `${OWNER_OAUTH_REDIRECT_BASE}/api/admin/owner/oauth/github/callback`,
-  };
-
-  const microsoft = {
-    enabled: microsoftOauthConfigured(),
-    ownerIdentityConfigured: microsoftOwnerConfigured(),
-    clientIdConfigured: Boolean(MICROSOFT_OAUTH_CLIENT_ID),
-    clientSecretConfigured: Boolean(MICROSOFT_OAUTH_CLIENT_SECRET),
-    callbackUrl: `${OWNER_OAUTH_REDIRECT_BASE}/api/admin/owner/oauth/microsoft/callback`,
-  };
-
-  return {
-    authConfigured: github.enabled || microsoft.enabled,
-    redirectBaseConfigured: Boolean(OWNER_OAUTH_REDIRECT_BASE),
-    providers: { github, microsoft },
-  };
-};
 
 const extractMaxChgId = (markdown: string) => {
   const matches = markdown.match(/CHG-(\d{3})/g) || [];
@@ -386,7 +272,11 @@ router.post("/backup", async (req, res) => {
           qaPassed: Boolean(job.qaPassed),
           reworkCost: Number(job.reworkCost || 0),
           reworkNotes: String(job.reworkNotes || ""),
+          setupFee: Math.max(0, Number(job.setupFee || 0)),
+          deliveryCharge: Math.max(0, Number(job.deliveryCharge || 0)),
           isRush: Boolean(job.isRush),
+          isSetupFee: Boolean(job.isSetupFee),
+          isDelivery: Boolean(job.isDelivery),
           paymentStatus: String(job.paymentStatus || "Unpaid"),
           depositPaidAmount: Number(job.depositPaidAmount || 0),
           status: job.status,
@@ -692,6 +582,77 @@ router.post("/backup/machines", async (req, res) => {
   });
 });
 
+router.get("/backup/billing", async (_req, res) => {
+  try {
+    const billingSetting = await prisma.billingSetting.findFirst();
+
+    if (!billingSetting) {
+      return res.json({
+        schemaVersion: BACKUP_SCHEMA_VERSION,
+        exportedAt: new Date().toISOString(),
+        billingSettings: null,
+      });
+    }
+
+    const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = billingSetting as unknown as Record<string, unknown>;
+    return res.json({
+      schemaVersion: BACKUP_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      billingSettings: {
+        ...rest,
+        machineElectricitySettings: parseJsonRecord(rest.machineElectricitySettings),
+        materialTypeMarkups: parseJsonRecord(rest.materialTypeMarkups),
+      },
+    });
+  } catch (error) {
+    if (isBillingSchemaCompatibilityError(error)) {
+      return res.status(503).json({ error: "Billing settings schema is behind expected version. Run migrations before exporting billing backup." });
+    }
+    const message = error instanceof Error ? error.message : "Failed to export billing backup";
+    return res.status(500).json({ error: message });
+  }
+});
+
+router.post("/backup/billing", async (req, res) => {
+  try {
+    const payload = (req.body?.billingSettings && typeof req.body.billingSettings === "object")
+      ? req.body.billingSettings as RawRecord
+      : (req.body || {}) as RawRecord;
+
+    if (!payload || typeof payload !== "object" || !Object.keys(payload).length) {
+      return res.status(400).json({ error: "billingSettings payload is required" });
+    }
+
+    const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...safePayload } = payload;
+    const normalizedPayload = {
+      ...safePayload,
+      machineElectricitySettings: JSON.stringify(parseJsonRecord(safePayload.machineElectricitySettings)),
+      materialTypeMarkups: JSON.stringify(parseJsonRecord(safePayload.materialTypeMarkups)),
+    };
+
+    const existing = await prisma.billingSetting.findFirst();
+    const saved = existing
+      ? await prisma.billingSetting.update({ where: { id: existing.id }, data: normalizedPayload })
+      : await prisma.billingSetting.create({ data: normalizedPayload as any });
+
+    const { id: _savedId, createdAt: _savedCreatedAt, updatedAt: _savedUpdatedAt, ...rest } = saved as unknown as Record<string, unknown>;
+    return res.json({
+      restored: true,
+      billingSettings: {
+        ...rest,
+        machineElectricitySettings: parseJsonRecord(rest.machineElectricitySettings),
+        materialTypeMarkups: parseJsonRecord(rest.materialTypeMarkups),
+      },
+    });
+  } catch (error) {
+    if (isBillingSchemaCompatibilityError(error)) {
+      return res.status(503).json({ error: "Billing settings schema is behind expected version. Run migrations before restoring billing backup." });
+    }
+    const message = error instanceof Error ? error.message : "Failed to restore billing backup";
+    return res.status(500).json({ error: message });
+  }
+});
+
 router.post("/backup/full", async (req, res) => {
   const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [], bambuDevices = [], bambuStatuses = [], bambuEvents = [], bambuSpools = [], bambuUsageLogs = [], bambuMaintenance = [], bambuFailureLogs = [] } = req.body || {};
 
@@ -806,7 +767,11 @@ router.post("/backup/full", async (req, res) => {
           qaPassed: Boolean(job.qaPassed),
           reworkCost: Number(job.reworkCost || 0),
           reworkNotes: String(job.reworkNotes || ""),
+          setupFee: Math.max(0, Number(job.setupFee || 0)),
+          deliveryCharge: Math.max(0, Number(job.deliveryCharge || 0)),
           isRush: Boolean(job.isRush),
+          isSetupFee: Boolean(job.isSetupFee),
+          isDelivery: Boolean(job.isDelivery),
           paymentStatus: String(job.paymentStatus || "Unpaid"),
           depositPaidAmount: Number(job.depositPaidAmount || 0),
           status: job.status,
@@ -1064,196 +1029,8 @@ router.get("/help-intake/export", async (_req, res) => {
   }
 });
 
-router.get("/owner/session", (req, res) => {
-  const session = readOwnerSession(req);
-  if (!session) {
-    return res.json({
-      isOwner: false,
-      authConfigured: isOwnerAuthConfigured(),
-      providers: {
-        github: githubOauthConfigured(),
-        microsoft: microsoftOauthConfigured(),
-      },
-    });
-  }
-
-  res.json({
-    isOwner: true,
-    ownerLogin: null,
-    ownerProvider: session.provider,
-    ownerEmail: null,
-    authConfigured: isOwnerAuthConfigured(),
-    providers: {
-      github: githubOauthConfigured(),
-      microsoft: microsoftOauthConfigured(),
-    },
-    expiresAt: new Date(session.expiresAt).toISOString(),
-  });
-});
-
-router.get("/owner/oauth/providers", (_req, res) => {
-  const diagnostics = getOwnerAuthDiagnostics();
-  res.json({
-    authConfigured: isOwnerAuthConfigured(),
-    ownerLogin: null,
-    ownerEmail: null,
-    providers: diagnostics.providers,
-  });
-});
-
-router.get("/owner/oauth/diagnostics", (_req, res) => {
-  res.json(getOwnerAuthDiagnostics());
-});
-
-router.get("/owner/oauth/github/start", (req, res) => {
-  if (!githubOauthConfigured()) {
-    return res.status(503).send("GitHub owner OAuth is not configured");
-  }
-
-  const state = createOauthState("github");
-  const redirectUri = `${OWNER_OAUTH_REDIRECT_BASE}/api/admin/owner/oauth/github/callback`;
-  const url = new URL("https://github.com/login/oauth/authorize");
-  url.searchParams.set("client_id", GITHUB_OAUTH_CLIENT_ID);
-  url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("scope", "read:user user:email");
-  url.searchParams.set("state", state);
-  if (typeof req.query.next === "string" && req.query.next.trim()) {
-    url.searchParams.set("allow_signup", "false");
-  }
-  res.redirect(url.toString());
-});
-
-router.get("/owner/oauth/github/callback", async (req, res) => {
-  const state = String(req.query.state || "");
-  const code = String(req.query.code || "");
-  if (!state || !code || !popOauthState(state, "github")) {
-    return res.status(400).send(oauthPopupResultHtml(false, "Invalid GitHub OAuth state."));
-  }
-
-  try {
-    const redirectUri = `${OWNER_OAUTH_REDIRECT_BASE}/api/admin/owner/oauth/github/callback`;
-    const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
-      },
-      body: new URLSearchParams({
-        client_id: GITHUB_OAUTH_CLIENT_ID,
-        client_secret: GITHUB_OAUTH_CLIENT_SECRET,
-        code,
-        redirect_uri: redirectUri,
-      }),
-    });
-
-    const tokenPayload = await tokenRes.json() as Record<string, unknown>;
-    const accessToken = String(tokenPayload.access_token || "").trim();
-    if (!accessToken) {
-      return res.status(401).send(oauthPopupResultHtml(false, "GitHub token exchange failed."));
-    }
-
-    const userRes = await fetch("https://api.github.com/user", {
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "laser-and-3dprint-tracker",
-      },
-    });
-    const user = await userRes.json() as Record<string, unknown>;
-    const login = String(user.login || "").trim().toLowerCase();
-    if (!ownerIdentityMatches("github", login)) {
-      return res.status(403).send(oauthPopupResultHtml(false, "This GitHub account is not the app owner."));
-    }
-
-    const session = createOwnerSession(res, login, "github");
-    return res.status(200).send(oauthPopupResultHtml(true, `Signed in as @${session.ownerId}.`));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "GitHub owner login failed";
-    return res.status(500).send(oauthPopupResultHtml(false, message));
-  }
-});
-
-router.get("/owner/oauth/microsoft/start", (_req, res) => {
-  if (!microsoftOauthConfigured()) {
-    return res.status(503).send("Microsoft owner OAuth is not configured");
-  }
-
-  const state = createOauthState("microsoft");
-  const redirectUri = `${OWNER_OAUTH_REDIRECT_BASE}/api/admin/owner/oauth/microsoft/callback`;
-  const url = new URL("https://login.microsoftonline.com/common/oauth2/v2.0/authorize");
-  url.searchParams.set("client_id", MICROSOFT_OAUTH_CLIENT_ID);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("response_mode", "query");
-  url.searchParams.set("scope", "openid profile email User.Read");
-  url.searchParams.set("state", state);
-  res.redirect(url.toString());
-});
-
-router.get("/owner/oauth/microsoft/callback", async (req, res) => {
-  const state = String(req.query.state || "");
-  const code = String(req.query.code || "");
-  if (!state || !code || !popOauthState(state, "microsoft")) {
-    return res.status(400).send(oauthPopupResultHtml(false, "Invalid Microsoft OAuth state."));
-  }
-
-  try {
-    const redirectUri = `${OWNER_OAUTH_REDIRECT_BASE}/api/admin/owner/oauth/microsoft/callback`;
-    const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: MICROSOFT_OAUTH_CLIENT_ID,
-        client_secret: MICROSOFT_OAUTH_CLIENT_SECRET,
-        code,
-        redirect_uri: redirectUri,
-        grant_type: "authorization_code",
-        scope: "openid profile email User.Read",
-      }),
-    });
-
-    const tokenPayload = await tokenRes.json() as Record<string, unknown>;
-    const accessToken = String(tokenPayload.access_token || "").trim();
-    if (!accessToken) {
-      return res.status(401).send(oauthPopupResultHtml(false, "Microsoft token exchange failed."));
-    }
-
-    const meRes = await fetch("https://graph.microsoft.com/v1.0/me?$select=userPrincipalName,mail", {
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Accept": "application/json",
-      },
-    });
-    const me = await meRes.json() as Record<string, unknown>;
-    const resolvedEmail = String(me.mail || me.userPrincipalName || "").trim().toLowerCase();
-    if (!ownerIdentityMatches("microsoft", resolvedEmail)) {
-      return res.status(403).send(oauthPopupResultHtml(false, "This Microsoft account is not the app owner."));
-    }
-
-    createOwnerSession(res, resolvedEmail, "microsoft");
-    return res.status(200).send(oauthPopupResultHtml(true, `Signed in as ${resolvedEmail}.`));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Microsoft owner login failed";
-    return res.status(500).send(oauthPopupResultHtml(false, message));
-  }
-});
-
-router.delete("/owner/session", (req, res) => {
-  const token = parseCookies(req)[OWNER_SESSION_COOKIE];
-  if (token) {
-    ownerSessions.delete(token);
-  }
-  clearOwnerSessionCookie(res);
-  res.status(204).send();
-});
-
 router.post("/help-intake/import", async (req, res) => {
   try {
-    const ownerSession = requireOwnerSession(req, res);
-    if (!ownerSession) {
-      return;
-    }
-
     const imported = Array.isArray(req.body?.requests) ? req.body.requests : [];
     if (!imported.length) {
       return res.status(400).json({ error: "requests array is required" });

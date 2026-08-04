@@ -4,6 +4,22 @@ import { upload } from "../upload";
 
 const router = Router();
 
+const toRecord = (value: unknown): Record<string, any> => {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, any> : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, any>;
+  }
+  return {};
+};
+
 const isSourceUrlCompatibilityError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error || "");
   return message.includes("sourceUrl") && (
@@ -14,6 +30,16 @@ const isSourceUrlCompatibilityError = (error: unknown) => {
   );
 };
 
+const isBillingSettingsCompatibilityError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return message.includes("BillingSetting") && (
+    message.includes("no such column")
+    || message.includes("does not exist")
+    || message.includes("Unknown arg")
+    || message.includes("Unknown argument")
+  );
+};
+
 router.get("/", async (_req, res) => {
   const jobs = await prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } });
   res.json(jobs);
@@ -21,7 +47,7 @@ router.get("/", async (_req, res) => {
 
 router.post("/", async (req, res) => {
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
-  const { isRush, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, sourceUrl } = req.body;
+  const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, sourceUrl } = req.body;
 
   const jobsCount = await prisma.job.count();
   const generatedNumber = jobNumber || `JOB-${String(jobsCount + 1).padStart(4, "0")}`;
@@ -41,7 +67,11 @@ router.post("/", async (req, res) => {
     qaPassed: Boolean(qaPassed),
     reworkCost: Number(reworkCost || 0),
     reworkNotes: String(reworkNotes || ""),
+    setupFee: Math.max(0, Number(setupFee || 0)),
+    deliveryCharge: Math.max(0, Number(deliveryCharge || 0)),
     isRush: Boolean(isRush),
+    isSetupFee: Boolean(isSetupFee),
+    isDelivery: Boolean(isDelivery),
     paymentStatus: String(paymentStatus || "Unpaid"),
     depositPaidAmount: Number(depositPaidAmount || 0),
     status: status || "Pending",
@@ -104,7 +134,7 @@ router.get("/:id", async (req, res) => {
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
-  const { isRush, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, sourceUrl } = req.body;
+  const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, sourceUrl } = req.body;
 
   try {
     await prisma.jobMaterial.deleteMany({ where: { jobId: id } });
@@ -124,7 +154,11 @@ router.put("/:id", async (req, res) => {
       qaPassed: Boolean(qaPassed),
       reworkCost: Number(reworkCost || 0),
       reworkNotes: String(reworkNotes || ""),
+      setupFee: Math.max(0, Number(setupFee || 0)),
+      deliveryCharge: Math.max(0, Number(deliveryCharge || 0)),
       isRush: Boolean(isRush),
+      isSetupFee: Boolean(isSetupFee),
+      isDelivery: Boolean(isDelivery),
       paymentStatus: String(paymentStatus || "Unpaid"),
       depositPaidAmount: Number(depositPaidAmount || 0),
       status,
@@ -185,13 +219,20 @@ router.post('/:id/calculate-cost', async (req, res) => {
   const { id } = req.params;
   const payload = req.body || {};
 
-  const billingSettings = await prisma.billingSetting.findMany();
-  const settings = billingSettings[0];
+  let settings: any = null;
+  try {
+    const billingSettings = await prisma.billingSetting.findMany();
+    settings = billingSettings[0] || null;
+  } catch (error) {
+    if (!isBillingSettingsCompatibilityError(error)) {
+      throw error;
+    }
+    settings = null;
+  }
   const KWH_RATE = settings?.electricityCostPerKwh ?? parseFloat(process.env.KWH_RATE || '0.20');
   const LABOUR_RATE = settings?.labourRate ?? parseFloat(process.env.LABOUR_RATE || '20');
   const WORKSHOP_HOURLY_RATE = settings?.workshopHourlyRate ?? 0;
   const MINIMUM_CHARGE = Number(settings?.minimumCharge ?? 0);
-  const SETUP_FEE = Number(settings?.setupFee ?? 0);
   const RUSH_FEE_PERCENT = Number(settings?.rushFeePercent ?? 0);
   const WASTE_FACTOR_PERCENT = Number(settings?.wasteFactorPercent ?? 0);
   const MATERIAL_MARKUP_PERCENT = Number(settings?.materialMarkupPercent) > 0 ? Number(settings?.materialMarkupPercent) : 25;
@@ -206,7 +247,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
 
     const mode = payload.mode || '3d';
     const machineName = String(payload.machineName || job.machineType || 'Other');
-    const machineSettings = settings?.machineElectricitySettings ? JSON.parse(String(settings.machineElectricitySettings || '{}')) : {};
+    const machineSettings = toRecord(settings?.machineElectricitySettings);
     const normalizeMachineName = (value: unknown) => String(value || '').trim().toLowerCase();
     const normalizedMachineName = normalizeMachineName(machineName);
     const selectedMachineEntry = Object.entries(machineSettings).find(([savedName]) => normalizeMachineName(savedName) === normalizedMachineName);
@@ -214,7 +255,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const machineWattage = Number(selectedMachine?.wattage ?? payload.wattage ?? process.env.PRINTER_WATTAGE ?? (mode === 'laser' ? process.env.LASER_WATTAGE : process.env.PRINTER_WATTAGE) ?? 120);
     const machineDepreciationCost = Number(selectedMachine?.depreciationCost ?? DEPRECIATION_COST ?? 0);
     const machineReplacementRunHours = Number(selectedMachine?.replacementRunHours ?? DEPRECIATION_HOURS ?? 0);
-    const materialTypeMarkups = settings?.materialTypeMarkups ? JSON.parse(String(settings.materialTypeMarkups || '{}')) : {};
+    const materialTypeMarkups = toRecord(settings?.materialTypeMarkups);
     const normalizedMaterialTypeMarkups = new Map(
       Object.entries(materialTypeMarkups || {}).map(([typeName, rule]) => [
         String(typeName || '').trim().toLowerCase(),
@@ -230,6 +271,10 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const machineRunTimeMinutes = Number(payload.machineRunTimeMinutes ?? payload.printTimeMinutes ?? payload.laserMinutes ?? job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
     const labourTimeMinutes = Number(payload.labourTimeMinutes ?? job.labourTimeMinutes ?? machineRunTimeMinutes);
     const isRushJob = Boolean(payload.isRush ?? job.isRush);
+    const jobSetupFee = Math.max(0, Number(payload.setupFee ?? job.setupFee ?? 0));
+    const jobDeliveryCharge = Math.max(0, Number(payload.deliveryCharge ?? job.deliveryCharge ?? 0));
+    const isSetupFeeJob = jobSetupFee > 0;
+    const isDeliveryJob = jobDeliveryCharge > 0;
     const wasteFactorMultiplier = 1 + (Math.max(0, WASTE_FACTOR_PERCENT) / 100);
     const depreciationCost = machineReplacementRunHours > 0 ? (machineRunTimeMinutes / 60) * (machineDepreciationCost / machineReplacementRunHours) : 0;
     let materialTypeMarkupCharge = 0;
@@ -291,12 +336,13 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const labourCharge = labourCost;
     const overheadCharge = overheadCost;
     const preGuardrailCustomerCharge = materialCharge + electricityCharge + depreciationCharge + labourCharge + overheadCharge;
-    const setupFeeAmount = Math.max(0, SETUP_FEE);
+    const setupFeeAmount = isSetupFeeJob ? jobSetupFee : 0;
     const rushFeeAmount = isRushJob ? (preGuardrailCustomerCharge + setupFeeAmount) * (Math.max(0, RUSH_FEE_PERCENT) / 100) : 0;
-    const guardrailSubtotal = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount;
+    const deliveryFeeAmount = isDeliveryJob ? jobDeliveryCharge : 0;
+    const customerSubtotalBeforeMinimum = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount + deliveryFeeAmount + qaReworkCost;
     const minimumChargeTarget = Math.max(0, MINIMUM_CHARGE);
-    const minimumChargeApplied = Math.max(0, minimumChargeTarget - guardrailSubtotal);
-    const customerCharge = guardrailSubtotal + minimumChargeApplied + qaReworkCost;
+    const minimumChargeApplied = Math.max(0, minimumChargeTarget - customerSubtotalBeforeMinimum);
+    const customerCharge = customerSubtotalBeforeMinimum + minimumChargeApplied;
 
     const existing = await prisma.jobCost.findUnique({ where: { jobId: id } });
 
@@ -326,9 +372,12 @@ router.post('/:id/calculate-cost', async (req, res) => {
       qaReworkCost,
       setupFeeAmount,
       rushFeeAmount,
+      deliveryFeeAmount,
       minimumChargeApplied,
       wasteFactorPercent: Math.max(0, WASTE_FACTOR_PERCENT),
       isRush: isRushJob,
+      isSetupFee: isSetupFeeJob,
+      isDelivery: isDeliveryJob,
     });
   } catch (error) {
     console.error('calculate-cost error', error);

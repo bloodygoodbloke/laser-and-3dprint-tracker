@@ -1,4 +1,4 @@
-import { BacklogIntakeRequest, BacklogIntakeResponse, BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, OwnerAuthDiagnostics, OwnerSessionStatus, Supplier } from "./types";
+import { BacklogIntakeRequest, BacklogIntakeResponse, BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
@@ -243,6 +243,23 @@ const api = {
     if (!res.ok) throw new Error("Failed to restore machines backup");
     return res.json();
   },
+  async exportBillingBackup() {
+    const res = await fetch("/api/admin/backup/billing");
+    if (!res.ok) throw new Error("Failed to export billing backup");
+    return res.json();
+  },
+  async importBillingBackup(payload: Record<string, unknown>) {
+    const res = await fetch("/api/admin/backup/billing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorPayload = await res.json().catch(() => null);
+      throw new Error(String(errorPayload?.error || "Failed to restore billing backup"));
+    }
+    return res.json();
+  },
   async calculateCost(id: string, payload: Record<string, unknown>) {
     const res = await fetch(`/api/jobs/${id}/calculate-cost`, {
       method: "POST",
@@ -356,30 +373,6 @@ const api = {
       throw new Error(String(errorPayload?.error || "Failed to import help intake requests"));
     }
     return res.json();
-  },
-  async getOwnerSession(): Promise<OwnerSessionStatus> {
-    const res = await fetch("/api/admin/owner/session");
-    if (!res.ok) throw new Error("Failed to load owner session status");
-    return res.json();
-  },
-  async getOwnerOauthProviders(): Promise<OwnerSessionStatus> {
-    const res = await fetch("/api/admin/owner/oauth/providers");
-    if (!res.ok) throw new Error("Failed to load owner OAuth providers");
-    return res.json();
-  },
-  async getOwnerOauthDiagnostics(): Promise<OwnerAuthDiagnostics> {
-    const res = await fetch("/api/admin/owner/oauth/diagnostics");
-    if (!res.ok) throw new Error("Failed to load owner OAuth diagnostics");
-    return res.json();
-  },
-  getOwnerOauthStartUrl(provider: "github" | "microsoft") {
-    return provider === "github"
-      ? "/api/admin/owner/oauth/github/start"
-      : "/api/admin/owner/oauth/microsoft/start";
-  },
-  async logoutOwner() {
-    const res = await fetch("/api/admin/owner/session", { method: "DELETE" });
-    if (!res.ok) throw new Error("Failed owner logout");
   },
 };
 

@@ -1,6 +1,6 @@
 import { createElement, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
-import { BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, OwnerAuthDiagnostics, Supplier } from "./types";
+import { BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
 const APP_VERSION = "0.6.0";
@@ -11,6 +11,7 @@ const DEFAULT_ADMIN_TEXT_COLOR = "#e2e8f0";
 const DEFAULT_SITE_INPUT_COLOR = "#111827";
 const DEFAULT_SITE_ACCENT_COLOR = "#22d3ee";
 const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#001219";
+const BILLING_LOCAL_STORAGE_KEY = "billing-settings-local-backup-v1";
 
 type ThemePreset = {
   name: string;
@@ -166,9 +167,68 @@ const normalizeOptionalMarkupPercent = (value: unknown) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
+const normalizeBillingSettingsForUi = (settings: Partial<BillingSettings>): BillingSettings => ({
+  ...blankBillingSettings(),
+  ...settings,
+  materialMarkupPercent: normalizeMarkupPercent(settings.materialMarkupPercent),
+  materialMarkupAmount: Number(settings.materialMarkupAmount ?? 0),
+  electricityMarkupPercent: normalizeMarkupPercent(settings.electricityMarkupPercent),
+  electricityMarkupAmount: Number(settings.electricityMarkupAmount ?? 0),
+  labourMarkupPercent: Number(settings.labourMarkupPercent ?? 0),
+  labourMarkupAmount: Number(settings.labourMarkupAmount ?? 0),
+  overheadMarkupPercent: Number(settings.overheadMarkupPercent ?? 0),
+  overheadMarkupAmount: Number(settings.overheadMarkupAmount ?? 0),
+  electricityCostPerKwh: Number(settings.electricityCostPerKwh ?? 0.2),
+  depreciationCost: Number(settings.depreciationCost ?? 0),
+  depreciationHours: Number(settings.depreciationHours ?? 0),
+  depreciationMarkupPercent: Number(settings.depreciationMarkupPercent ?? 0),
+  labourRate: Number(settings.labourRate ?? 20),
+  workshopHourlyRate: Number(settings.workshopHourlyRate ?? 0),
+  minimumCharge: Number(settings.minimumCharge ?? 0),
+  setupFee: Number(settings.setupFee ?? 0),
+  rushFeePercent: Number(settings.rushFeePercent ?? 0),
+  wasteFactorPercent: Number(settings.wasteFactorPercent ?? 0),
+  deliveryAmount: Number(settings.deliveryAmount ?? 0),
+  vatPercent: Number(settings.vatPercent ?? 0),
+  depositPercent: Number(settings.depositPercent ?? 0),
+  paymentTermsDays: Number(settings.paymentTermsDays ?? 0),
+  businessName: String(settings.businessName ?? ""),
+  businessLogoUrl: String(settings.businessLogoUrl ?? ""),
+  businessAddress: String(settings.businessAddress ?? ""),
+  businessEmail: String(settings.businessEmail ?? ""),
+  businessPhone: String(settings.businessPhone ?? ""),
+  businessWebsite: String(settings.businessWebsite ?? ""),
+  adminBackgroundColor: normalizeHexColor(settings.adminBackgroundColor, DEFAULT_ADMIN_BACKGROUND_COLOR),
+  adminTextColor: normalizeHexColor(settings.adminTextColor, DEFAULT_ADMIN_TEXT_COLOR),
+  siteInputColor: normalizeHexColor(settings.siteInputColor, DEFAULT_SITE_INPUT_COLOR),
+  siteAccentColor: normalizeHexColor(settings.siteAccentColor, DEFAULT_SITE_ACCENT_COLOR),
+  siteAccentTextColor: normalizeHexColor(settings.siteAccentTextColor, DEFAULT_SITE_ACCENT_TEXT_COLOR),
+  overheadPercent: Number(settings.overheadPercent ?? 0.15),
+  materialTypeMarkups: Object.fromEntries(
+    Object.entries(settings.materialTypeMarkups || {}).map(([materialType, rule]) => [
+      materialType,
+      { percent: normalizeOptionalMarkupPercent(rule?.percent) },
+    ]),
+  ),
+  machineElectricitySettings: {
+    ...getDefaultMachineRuntimeSettings(),
+    ...Object.fromEntries(
+      Object.entries(settings.machineElectricitySettings || {}).map(([machineName, machineSetting]) => [
+        machineName,
+        {
+          name: machineName,
+          wattage: Number(machineSetting?.wattage ?? 0),
+          depreciationCost: Number(machineSetting?.depreciationCost ?? 0),
+          replacementRunHours: Number(machineSetting?.replacementRunHours ?? 0),
+        },
+      ]),
+    ),
+  },
+});
+
 const toClearableNumberInput = (value: number) => (value === 0 ? "" : String(value));
 const parseNumberInput = (value: string) => (value.trim() === "" ? 0 : Number(value));
-const jobStatusOptions = ["Quote Draft", "Quote Sent", "Quote Approved", "Pending", "In Progress", "Completed", "Invoiced"];
+const jobStatusOptions = ["Quote Draft", "Quote Sent", "Quote Approved", "Estimate Template", "Pending", "In Progress", "Completed", "Invoiced"];
 const paymentStatusOptions = ["Unpaid", "Partially Paid", "Paid", "Overdue"];
 const jobWorkflowStatusOptions = ["All", ...jobStatusOptions] as const;
 const getPreviewType = (filePath?: string | null) => {
@@ -196,16 +256,16 @@ function App() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
-  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(blankBillingSettings());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
-  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
-  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [showMaterialEditor, setShowMaterialEditor] = useState(false);
@@ -220,7 +280,9 @@ function App() {
   const [customerBackupMessage, setCustomerBackupMessage] = useState("");
   const [supplierBackupMessage, setSupplierBackupMessage] = useState("");
   const [machineBackupMessage, setMachineBackupMessage] = useState("");
+  const [billingBackupMessage, setBillingBackupMessage] = useState("");
   const [helpIntakeBackupMessage, setHelpIntakeBackupMessage] = useState("");
+  const [billingSaveMessage, setBillingSaveMessage] = useState("");
   const [customerForm, setCustomerForm] = useState({ name: "", address: "", email: "", phone: "", notes: "" });
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -261,34 +323,31 @@ function App() {
   });
   const [helpRequestMessage, setHelpRequestMessage] = useState("");
   const [queuedHelpRequests, setQueuedHelpRequests] = useState<HelpIntakeRequestRecord[]>([]);
-  const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState(false);
-  const [ownerIdentityHint, setOwnerIdentityHint] = useState<string | null>(null);
-  const [ownerAuthConfigured, setOwnerAuthConfigured] = useState(false);
-  const [ownerGithubEnabled, setOwnerGithubEnabled] = useState(false);
-  const [ownerMicrosoftEnabled, setOwnerMicrosoftEnabled] = useState(false);
-  const [ownerAuthMessage, setOwnerAuthMessage] = useState("");
-  const [showOwnerLoginOptions, setShowOwnerLoginOptions] = useState(false);
-  const [ownerAuthDiagnostics, setOwnerAuthDiagnostics] = useState<OwnerAuthDiagnostics | null>(null);
+  const [directToBacklog, setDirectToBacklog] = useState(false);
+  const [dashboardJobMessage, setDashboardJobMessage] = useState("");
+  const [isCreatingDashboardJob, setIsCreatingDashboardJob] = useState(false);
+
+  const normalizeJobsForUi = (jobsData: Job[]) => jobsData.map((job) => {
+    const rawChecklist = (job as Job & { qaChecklist?: unknown }).qaChecklist;
+    let qaChecklist: string[] = [];
+    if (Array.isArray(rawChecklist)) {
+      qaChecklist = rawChecklist.map((item) => String(item || "").trim()).filter(Boolean);
+    } else if (typeof rawChecklist === "string") {
+      try {
+        const parsed = JSON.parse(rawChecklist);
+        if (Array.isArray(parsed)) {
+          qaChecklist = parsed.map((item) => String(item || "").trim()).filter(Boolean);
+        }
+      } catch {
+        qaChecklist = [];
+      }
+    }
+    return { ...job, qaChecklist };
+  });
 
   const loadData = async () => {
     const [jobsData, materialsData, customersData, suppliersData] = await Promise.all([api.getJobs(), api.getMaterials(), api.getCustomers(), api.getSuppliers()]);
-    const normalizedJobs = jobsData.map((job) => {
-      const rawChecklist = (job as Job & { qaChecklist?: unknown }).qaChecklist;
-      let qaChecklist: string[] = [];
-      if (Array.isArray(rawChecklist)) {
-        qaChecklist = rawChecklist.map((item) => String(item || "").trim()).filter(Boolean);
-      } else if (typeof rawChecklist === "string") {
-        try {
-          const parsed = JSON.parse(rawChecklist);
-          if (Array.isArray(parsed)) {
-            qaChecklist = parsed.map((item) => String(item || "").trim()).filter(Boolean);
-          }
-        } catch {
-          qaChecklist = [];
-        }
-      }
-      return { ...job, qaChecklist };
-    });
+    const normalizedJobs = normalizeJobsForUi(jobsData);
     let finalMaterials = materialsData;
     if (!finalMaterials.length) {
       await api.seedMaterials();
@@ -303,97 +362,60 @@ function App() {
     }
   };
 
+  const saveBillingSettingsToLocalBackup = (settingsToCache: BillingSettings) => {
+    try {
+      window.localStorage.setItem(BILLING_LOCAL_STORAGE_KEY, JSON.stringify(settingsToCache));
+    } catch (_error) {
+      // Ignore storage failures (private mode/quota limits).
+    }
+  };
+
+  const readBillingSettingsFromLocalBackup = (): BillingSettings | null => {
+    try {
+      const raw = window.localStorage.getItem(BILLING_LOCAL_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<BillingSettings>;
+      return normalizeBillingSettingsForUi(parsed || {});
+    } catch (_error) {
+      return null;
+    }
+  };
+
   const loadBillingSettings = async () => {
-    const settings = await api.getBillingSettings();
-    if (!settings) {
+    try {
+      const settings = await api.getBillingSettings();
+      if (settings) {
+        const normalized = normalizeBillingSettingsForUi(settings);
+        setBillingSettings(normalized);
+        saveBillingSettingsToLocalBackup(normalized);
+        return;
+      }
+
+      const localBackup = readBillingSettingsFromLocalBackup();
+      if (localBackup) {
+        setBillingSettings(localBackup);
+        setBillingSaveMessage("Backend returned no billing settings. Loaded your local browser backup.");
+        return;
+      }
+
       setBillingSettings(blankBillingSettings());
-      return;
+      setBillingSaveMessage("No saved billing settings found yet. Save billing once to persist it.");
+    } catch (_error) {
+      const localBackup = readBillingSettingsFromLocalBackup();
+      if (localBackup) {
+        setBillingSettings(localBackup);
+        setBillingSaveMessage("Backend billing settings are unavailable. Loaded your local browser backup.");
+        return;
+      }
+
+      setBillingSaveMessage("Could not load billing settings from backend.");
     }
-
-    setBillingSettings({
-      ...blankBillingSettings(),
-      ...settings,
-      materialMarkupPercent: normalizeMarkupPercent(settings.materialMarkupPercent),
-      materialMarkupAmount: Number(settings.materialMarkupAmount ?? 0),
-      electricityMarkupPercent: normalizeMarkupPercent(settings.electricityMarkupPercent),
-      electricityMarkupAmount: Number(settings.electricityMarkupAmount ?? 0),
-      labourMarkupPercent: Number(settings.labourMarkupPercent ?? 0),
-      labourMarkupAmount: Number(settings.labourMarkupAmount ?? 0),
-      overheadMarkupPercent: Number(settings.overheadMarkupPercent ?? 0),
-      overheadMarkupAmount: Number(settings.overheadMarkupAmount ?? 0),
-      electricityCostPerKwh: Number(settings.electricityCostPerKwh ?? 0.2),
-      depreciationCost: Number(settings.depreciationCost ?? 0),
-      depreciationHours: Number(settings.depreciationHours ?? 0),
-      depreciationMarkupPercent: Number((settings as BillingSettings).depreciationMarkupPercent ?? 0),
-      labourRate: Number(settings.labourRate ?? 20),
-      workshopHourlyRate: Number((settings as BillingSettings).workshopHourlyRate ?? 0),
-      minimumCharge: Number((settings as BillingSettings).minimumCharge ?? 0),
-      setupFee: Number((settings as BillingSettings).setupFee ?? 0),
-      rushFeePercent: Number((settings as BillingSettings).rushFeePercent ?? 0),
-      wasteFactorPercent: Number((settings as BillingSettings).wasteFactorPercent ?? 0),
-      deliveryAmount: Number((settings as BillingSettings).deliveryAmount ?? 0),
-      vatPercent: Number((settings as BillingSettings).vatPercent ?? 0),
-      depositPercent: Number((settings as BillingSettings).depositPercent ?? 0),
-      paymentTermsDays: Number((settings as BillingSettings).paymentTermsDays ?? 0),
-      businessName: String((settings as BillingSettings).businessName ?? ""),
-      businessLogoUrl: String((settings as BillingSettings).businessLogoUrl ?? ""),
-      businessAddress: String((settings as BillingSettings).businessAddress ?? ""),
-      businessEmail: String((settings as BillingSettings).businessEmail ?? ""),
-      businessPhone: String((settings as BillingSettings).businessPhone ?? ""),
-      businessWebsite: String((settings as BillingSettings).businessWebsite ?? ""),
-      adminBackgroundColor: normalizeHexColor((settings as BillingSettings).adminBackgroundColor, DEFAULT_ADMIN_BACKGROUND_COLOR),
-      adminTextColor: normalizeHexColor((settings as BillingSettings).adminTextColor, DEFAULT_ADMIN_TEXT_COLOR),
-      siteInputColor: normalizeHexColor((settings as BillingSettings).siteInputColor, DEFAULT_SITE_INPUT_COLOR),
-      siteAccentColor: normalizeHexColor((settings as BillingSettings).siteAccentColor, DEFAULT_SITE_ACCENT_COLOR),
-      siteAccentTextColor: normalizeHexColor((settings as BillingSettings).siteAccentTextColor, DEFAULT_SITE_ACCENT_TEXT_COLOR),
-      overheadPercent: Number(settings.overheadPercent ?? 0.15),
-      materialTypeMarkups: Object.fromEntries(
-        Object.entries(settings.materialTypeMarkups || {}).map(([materialType, rule]) => [
-          materialType,
-          { percent: normalizeOptionalMarkupPercent(rule?.percent) },
-        ]),
-      ),
-      machineElectricitySettings: {
-        ...getDefaultMachineRuntimeSettings(),
-        ...Object.fromEntries(
-          Object.entries(settings.machineElectricitySettings || {}).map(([machineName, machineSetting]) => [
-            machineName,
-            {
-              name: machineName,
-              wattage: Number(machineSetting?.wattage ?? 0),
-              depreciationCost: Number(machineSetting?.depreciationCost ?? 0),
-              replacementRunHours: Number(machineSetting?.replacementRunHours ?? 0),
-            },
-          ]),
-        ),
-      },
-    });
-  };
-
-  const loadOwnerSessionStatus = async () => {
-    const status = await api.getOwnerSession();
-    setIsOwnerAuthenticated(Boolean(status.isOwner));
-    setOwnerAuthConfigured(Boolean(status.authConfigured));
-    setOwnerGithubEnabled(Boolean(status.providers?.github));
-    setOwnerMicrosoftEnabled(Boolean(status.providers?.microsoft));
-    if (status.isOwner) {
-      setOwnerIdentityHint(status.ownerProvider === "microsoft" ? "Microsoft owner" : "GitHub owner");
-    } else {
-      setOwnerIdentityHint(null);
-    }
-  };
-
-  const loadOwnerAuthDiagnostics = async () => {
-    const diagnostics = await api.getOwnerOauthDiagnostics();
-    setOwnerAuthDiagnostics(diagnostics);
   };
 
   useEffect(() => {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
     api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
-    loadOwnerSessionStatus().catch(() => undefined);
-    loadOwnerAuthDiagnostics().catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -404,19 +426,6 @@ function App() {
 
     return () => window.clearInterval(timer);
   }, [activeTab]);
-
-  useEffect(() => {
-    const onOwnerOauthMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      const payload = event.data as { type?: string; success?: boolean };
-      if (payload?.type !== "owner-oauth") return;
-      loadOwnerSessionStatus().catch(() => undefined);
-      setOwnerAuthMessage(payload.success ? "Owner OAuth session unlocked." : "Owner OAuth login failed.");
-    };
-
-    window.addEventListener("message", onOwnerOauthMessage);
-    return () => window.removeEventListener("message", onOwnerOauthMessage);
-  }, []);
 
   const selectedJob = useMemo(() => jobs.find((job) => job.id === selectedJobId) ?? jobs[0] ?? null, [jobs, selectedJobId]);
 
@@ -443,6 +452,8 @@ function App() {
       reworkCost: String(selectedJob.reworkCost ?? 0),
       reworkNotes: selectedJob.reworkNotes || "",
       isRush: Boolean(selectedJob.isRush),
+      setupFee: String(selectedJob.setupFee ?? 0),
+      deliveryCharge: String(selectedJob.deliveryCharge ?? 0),
       paymentStatus: selectedJob.paymentStatus || "Unpaid",
       depositPaidAmount: String(selectedJob.depositPaidAmount ?? 0),
       status: selectedJob.status || "Pending",
@@ -451,7 +462,7 @@ function App() {
       materialId: entry.materialId,
       usageQuantity: String(entry.usageQuantity || 0),
     })));
-  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.sourceUrl, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.isRush, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
+  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.sourceUrl, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.isRush, selectedJob?.setupFee, selectedJob?.deliveryCharge, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
 
   useEffect(() => {
     if (!newJobMaterialEntries.length && materials.length) {
@@ -459,8 +470,15 @@ function App() {
     }
   }, [materials, newJobMaterialEntries.length]);
 
-  const lowStockMaterials = useMemo(() => materials.filter((material) => material.stockLevel <= material.reorderThreshold), [materials]);
   const pendingJobs = useMemo(() => jobs.filter((job) => job.status === "Pending"), [jobs]);
+  const jobsWaitingPayment = useMemo(
+    () => jobs.filter((job) => job.status === "Pending" && (job.paymentStatus || "Unpaid") !== "Paid").length,
+    [jobs],
+  );
+  const jobsWaitingDispatch = useMemo(
+    () => jobs.filter((job) => job.status === "Pending" && (job.paymentStatus || "Unpaid") === "Paid").length,
+    [jobs],
+  );
   const filteredJobs = useMemo(() => {
     const normalizedSearch = jobSearchTerm.trim().toLowerCase();
     return jobs.filter((job) => {
@@ -473,6 +491,12 @@ function App() {
       return matchesStatus && matchesMachine && matchesSearch;
     });
   }, [jobs, jobMachineFilter, jobSearchTerm, jobStatusFilter]);
+  const estimateTemplates = useMemo(
+    () => jobs
+      .filter((job) => job.status === "Estimate Template")
+      .sort((left, right) => new Date(String(right.updatedAt || right.createdAt || 0)).getTime() - new Date(String(left.updatedAt || left.createdAt || 0)).getTime()),
+    [jobs],
+  );
   const adminBackgroundColor = normalizeHexColor(billingSettings.adminBackgroundColor, DEFAULT_ADMIN_BACKGROUND_COLOR);
   const adminTextColor = normalizeHexColor(billingSettings.adminTextColor, DEFAULT_ADMIN_TEXT_COLOR);
   const siteInputColor = normalizeHexColor(billingSettings.siteInputColor, DEFAULT_SITE_INPUT_COLOR);
@@ -597,6 +621,12 @@ function App() {
       () => Object.entries(billingSettings.machineElectricitySettings || {}).sort(([left], [right]) => left.localeCompare(right)),
       [billingSettings.machineElectricitySettings],
     );
+    const recentJobs = useMemo(
+      () => [...jobs]
+        .sort((left, right) => new Date(String(right.createdAt || 0)).getTime() - new Date(String(left.createdAt || 0)).getTime())
+        .slice(0, 5),
+      [jobs],
+    );
   const linkedBambuMachineName = useMemo(
     () => machineProfiles.find(([machineName]) => machineName.toLowerCase().includes("bambu"))?.[0] || null,
     [machineProfiles],
@@ -661,35 +691,62 @@ function App() {
 
   const createJob = async (e: FormEvent) => {
     e.preventDefault();
+    if (isCreatingDashboardJob) return;
+
+    setDashboardJobMessage("");
+    setIsCreatingDashboardJob(true);
     const rawCustomerName = String(jobForm.customer || "").trim();
     const existingCustomer = customers.find((customer) => customer.name.trim().toLowerCase() === rawCustomerName.toLowerCase());
-    await api.createJob({
-      name: jobForm.name,
-      customer: jobForm.customer || null,
-      sourceUrl: jobForm.sourceUrl || "",
-      machineType: jobForm.machineType,
-      estTimeMinutes: Number(jobForm.machineRunTimeMinutes),
-      machineRunTimeMinutes: Number(jobForm.machineRunTimeMinutes || 0),
-      labourTimeMinutes: Number(jobForm.labourTimeMinutes || 0),
-      dueDate: jobForm.dueDate || null,
-      queuePosition: Number(jobForm.queuePosition || 0),
-      qaChecklist: toChecklistArray(jobForm.qaChecklistText),
-      qaPassed: Boolean(jobForm.qaPassed),
-      reworkCost: Number(jobForm.reworkCost || 0),
-      reworkNotes: String(jobForm.reworkNotes || ""),
-      isRush: jobForm.isRush,
-      paymentStatus: jobForm.paymentStatus,
-      depositPaidAmount: Number(jobForm.depositPaidAmount || 0),
-      status: jobForm.status,
-      materials: toApiJobMaterials(jobMaterialEntries),
-    });
-    setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
-    setJobMaterialEntries([]);
-    await loadData();
+    try {
+      const created = await api.createJob({
+        name: jobForm.name,
+        customer: jobForm.customer || null,
+        sourceUrl: jobForm.sourceUrl || "",
+        machineType: jobForm.machineType,
+        estTimeMinutes: Number(jobForm.machineRunTimeMinutes),
+        machineRunTimeMinutes: Number(jobForm.machineRunTimeMinutes || 0),
+        labourTimeMinutes: Number(jobForm.labourTimeMinutes || 0),
+        dueDate: jobForm.dueDate || null,
+        queuePosition: Number(jobForm.queuePosition || 0),
+        qaChecklist: toChecklistArray(jobForm.qaChecklistText),
+        qaPassed: Boolean(jobForm.qaPassed),
+        reworkCost: Number(jobForm.reworkCost || 0),
+        reworkNotes: String(jobForm.reworkNotes || ""),
+        isRush: jobForm.isRush,
+        setupFee: Number(jobForm.setupFee || 0),
+        deliveryCharge: Number(jobForm.deliveryCharge || 0),
+        isSetupFee: Number(jobForm.setupFee || 0) > 0,
+        isDelivery: Number(jobForm.deliveryCharge || 0) > 0,
+        paymentStatus: jobForm.paymentStatus,
+        depositPaidAmount: Number(jobForm.depositPaidAmount || 0),
+        status: jobForm.status,
+        materials: toApiJobMaterials(jobMaterialEntries),
+      });
 
-    if (rawCustomerName && !existingCustomer) {
-      setCustomerCaptureForm({ name: rawCustomerName, address: "", email: "", phone: "", notes: "" });
-      setShowCustomerCaptureModal(true);
+      const createdForUi = normalizeJobsForUi([created])[0];
+      setJobs((current) => [createdForUi, ...current.filter((job) => job.id !== createdForUi.id)]);
+
+      setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+      setJobMaterialEntries([]);
+
+      try {
+        await loadData();
+      } catch {
+        const jobsData = await api.getJobs();
+        setJobs(normalizeJobsForUi(jobsData));
+      }
+
+      setDashboardJobMessage(`Job ${created.jobNumber || created.name} created.`);
+
+      if (rawCustomerName && !existingCustomer) {
+        setCustomerCaptureForm({ name: rawCustomerName, address: "", email: "", phone: "", notes: "" });
+        setShowCustomerCaptureModal(true);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create job";
+      setDashboardJobMessage(message);
+    } finally {
+      setIsCreatingDashboardJob(false);
     }
   };
 
@@ -762,12 +819,44 @@ function App() {
 
   const openNewJobEditor = () => {
     setJobEditorMode("create");
-    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "100" }] : []);
     setMakerWorldUrl("");
     setMakerWorldMessage("");
     setMakerWorldMetadata(null);
     setMakerWorldProfile(null);
+  };
+
+  const applyEstimateTemplate = (template: Job) => {
+    setActiveTab("jobs");
+    setJobEditorMode("create");
+    setNewJobForm({
+      name: template.name,
+      customer: "",
+      sourceUrl: template.sourceUrl || "",
+      machineType: template.machineType || machineOptions[0] || "Other",
+      machineRunTimeMinutes: String(template.machineRunTimeMinutes ?? template.estTimeMinutes ?? 0),
+      labourTimeMinutes: String(template.labourTimeMinutes ?? template.estTimeMinutes ?? 0),
+      dueDate: "",
+      queuePosition: "0",
+      qaChecklistText: (template.qaChecklist || []).join("\n"),
+      qaPassed: Boolean(template.qaPassed),
+      reworkCost: String(template.reworkCost || 0),
+      reworkNotes: String(template.reworkNotes || ""),
+      isRush: Boolean(template.isRush),
+      setupFee: String(template.setupFee ?? 0),
+      deliveryCharge: String(template.deliveryCharge ?? 0),
+      paymentStatus: "Unpaid",
+      depositPaidAmount: "0",
+      status: "Pending",
+    });
+    setNewJobMaterialEntries(
+      (template.materials || []).length
+        ? (template.materials || []).map((entry) => ({ materialId: entry.materialId, usageQuantity: String(entry.usageQuantity || 0) }))
+        : (materials.length ? [{ materialId: materials[0].id, usageQuantity: "100" }] : []),
+    );
+    setMakerWorldUrl(template.sourceUrl || "");
+    setMakerWorldMessage("Estimate template loaded into Add Job. Add customer/details and create job.");
   };
 
   const openAddMachineForm = () => {
@@ -868,6 +957,10 @@ function App() {
       reworkCost: Number(newJobForm.reworkCost || 0),
       reworkNotes: String(newJobForm.reworkNotes || ""),
       isRush: newJobForm.isRush,
+      setupFee: Number(newJobForm.setupFee || 0),
+      deliveryCharge: Number(newJobForm.deliveryCharge || 0),
+      isSetupFee: Number(newJobForm.setupFee || 0) > 0,
+      isDelivery: Number(newJobForm.deliveryCharge || 0) > 0,
       paymentStatus: newJobForm.paymentStatus,
       depositPaidAmount: Number(newJobForm.depositPaidAmount || 0),
       status: newJobForm.status,
@@ -933,20 +1026,28 @@ function App() {
   const calculateJobCost = async (job: Job) => {
     const machineRunTimeMinutes = Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
     const labourTimeMinutes = Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0);
-    await api.calculateCost(job.id, {
-      mode: getJobMode(job.machineType),
-      machineName: job.machineType,
-      isRush: Boolean(job.isRush),
-      machineRunTimeMinutes,
-      labourTimeMinutes,
-      materials: (job.materials || []).map((entry) => ({
-        materialId: entry.materialId,
-        usageQuantity: entry.usageQuantity,
-        usageUnit: entry.usageUnit,
-        usageUnitCost: entry.usageUnitCost,
-      })),
-    });
-    await loadData();
+    try {
+      await api.calculateCost(job.id, {
+        mode: getJobMode(job.machineType),
+        machineName: job.machineType,
+        isRush: Boolean(job.isRush),
+        machineRunTimeMinutes,
+        labourTimeMinutes,
+        materials: (job.materials || []).map((entry) => ({
+          materialId: entry.materialId,
+          usageQuantity: entry.usageQuantity,
+          usageUnit: entry.usageUnit,
+          usageUnitCost: entry.usageUnitCost,
+        })),
+        setupFee: Number(job.setupFee || 0),
+        deliveryCharge: Number(job.deliveryCharge || 0),
+        isSetupFee: Number(job.setupFee || 0) > 0,
+        isDelivery: Number(job.deliveryCharge || 0) > 0,
+      });
+      await loadData();
+    } catch (_error) {
+      window.alert("Could not calculate cost. Please check backend status and try again.");
+    }
   };
 
   const updateJobStatusQuick = async (job: Job, status: string) => {
@@ -964,7 +1065,11 @@ function App() {
       qaPassed: Boolean(job.qaPassed),
       reworkCost: Number(job.reworkCost || 0),
       reworkNotes: String(job.reworkNotes || ""),
+      setupFee: Number(job.setupFee || 0),
+      deliveryCharge: Number(job.deliveryCharge || 0),
       isRush: Boolean(job.isRush),
+      isSetupFee: Number(job.setupFee || 0) > 0,
+      isDelivery: Number(job.deliveryCharge || 0) > 0,
       paymentStatus: job.paymentStatus || "Unpaid",
       depositPaidAmount: Number(job.depositPaidAmount || 0),
       status,
@@ -1036,6 +1141,10 @@ function App() {
         reworkCost: Number(selectedJobForm.reworkCost || 0),
         reworkNotes: String(selectedJobForm.reworkNotes || ""),
         isRush: selectedJobForm.isRush,
+        setupFee: Number(selectedJobForm.setupFee || 0),
+        deliveryCharge: Number(selectedJobForm.deliveryCharge || 0),
+        isSetupFee: Number(selectedJobForm.setupFee || 0) > 0,
+        isDelivery: Number(selectedJobForm.deliveryCharge || 0) > 0,
         paymentStatus: selectedJobForm.paymentStatus,
         depositPaidAmount: Number(selectedJobForm.depositPaidAmount || 0),
         status: selectedJobForm.status,
@@ -1043,7 +1152,15 @@ function App() {
       });
       await loadData();
       if (nextStatus === "Completed") {
-        await calculateJobCost({ ...selectedJob, status: nextStatus, isRush: selectedJobForm.isRush });
+        await calculateJobCost({
+          ...selectedJob,
+          status: nextStatus,
+          isRush: selectedJobForm.isRush,
+          setupFee: Number(selectedJobForm.setupFee || 0),
+          deliveryCharge: Number(selectedJobForm.deliveryCharge || 0),
+          isSetupFee: Number(selectedJobForm.setupFee || 0) > 0,
+          isDelivery: Number(selectedJobForm.deliveryCharge || 0) > 0,
+        });
         setExpandedJobId(selectedJob.id);
         setSelectedJobId(selectedJob.id);
         setJobEditorMode("invoice");
@@ -1084,7 +1201,15 @@ function App() {
     e.preventDefault();
     setSavingBilling(true);
     try {
-      await api.saveBillingSettings(billingSettings);
+      const saved = await api.saveBillingSettings(billingSettings);
+      const normalized = normalizeBillingSettingsForUi((saved || billingSettings) as BillingSettings);
+      setBillingSettings(normalized);
+      saveBillingSettingsToLocalBackup(normalized);
+      setBillingSaveMessage("Billing settings saved.");
+    } catch (error) {
+      saveBillingSettingsToLocalBackup(billingSettings);
+      const message = error instanceof Error ? error.message : "Could not save billing settings.";
+      setBillingSaveMessage(`${message} Local browser backup was updated.`);
     } finally {
       setSavingBilling(false);
     }
@@ -1199,13 +1324,16 @@ function App() {
     const labourCharge = baseLabourCost;
     const overheadCharge = baseOverheadCost;
     const preGuardrailCustomerCharge = materialCharge + electricityCharge + depreciationCharge + labourCharge + overheadCharge;
-    const setupFeeAmount = Math.max(0, Number(billingSettings.setupFee || 0));
+    const setupFeeAmount = Math.max(0, Number(job.setupFee || 0));
     const rushFeeAmount = job.isRush
       ? (preGuardrailCustomerCharge + setupFeeAmount) * (Math.max(0, Number(billingSettings.rushFeePercent || 0)) / 100)
       : 0;
-    const guardrailSubtotal = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount;
-    const minimumChargeApplied = Math.max(0, Math.max(0, Number(billingSettings.minimumCharge || 0)) - guardrailSubtotal);
-    const customerCharge = guardrailSubtotal + minimumChargeApplied;
+    const deliveryCharge = Math.max(0, Number(job.deliveryCharge || 0));
+    const qaReworkCharge = Math.max(0, Number(job.reworkCost || 0));
+    const customerSubtotalBeforeMinimum = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount + deliveryCharge + qaReworkCharge;
+    const minimumChargeApplied = Math.max(0, Math.max(0, Number(billingSettings.minimumCharge || 0)) - customerSubtotalBeforeMinimum);
+    const productionCharge = electricityCharge + depreciationCharge + overheadCharge + setupFeeAmount + rushFeeAmount + deliveryCharge + qaReworkCharge + minimumChargeApplied;
+    const customerCharge = customerSubtotalBeforeMinimum + minimumChargeApplied;
 
     return {
       materialCharge,
@@ -1215,7 +1343,10 @@ function App() {
       overheadCharge,
       setupFeeAmount,
       rushFeeAmount,
+      deliveryCharge,
+      qaReworkCharge,
       minimumChargeApplied,
+      productionCharge,
       customerCharge,
     };
   };
@@ -1565,13 +1696,12 @@ function App() {
     const labourRuntime = Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0);
     const chargeBreakdown = getInvoiceChargeBreakdown(job);
     const materialAmount = chargeBreakdown.materialCharge;
-    const productionAmount = chargeBreakdown.electricityCharge + chargeBreakdown.depreciationCharge + chargeBreakdown.overheadCharge;
+    const productionAmount = chargeBreakdown.productionCharge;
     const labourAmount = chargeBreakdown.labourCharge;
     const subTotal = chargeBreakdown.customerCharge;
-    const deliveryAmount = Number(billingSettings.deliveryAmount || 0);
     const vatPercent = Number(billingSettings.vatPercent || 0);
-    const vatAmount = (subTotal + deliveryAmount) * (vatPercent / 100);
-    const grandTotal = subTotal + deliveryAmount + vatAmount;
+    const vatAmount = subTotal * (vatPercent / 100);
+    const grandTotal = subTotal + vatAmount;
     const suggestedDepositAmount = grandTotal * (Math.max(0, Number(billingSettings.depositPercent || 0)) / 100);
     const depositPaidAmount = Number(job.depositPaidAmount || 0);
     const balanceDue = Math.max(0, grandTotal - depositPaidAmount);
@@ -1634,13 +1764,12 @@ function App() {
     <div class="table">
       <div class="thead"><div>Description</div><div style="text-align:right;">Amount</div></div>
       <div class="trow"><div><strong>Materials</strong></div><div style="text-align:right;"><strong>${safe(formatCurrency(materialAmount))}</strong></div></div>
-      <div class="trow"><div><strong>Production costs</strong></div><div style="text-align:right;"><strong>${safe(formatCurrency(productionAmount))}</strong></div></div>
+      <div class="trow"><div><strong>Production costs subtotal</strong></div><div style="text-align:right;"><strong>${safe(formatCurrency(productionAmount))}</strong></div></div>
       <div class="trow"><div><strong>Labour (${safe(String(labourRuntime))} mins)</strong></div><div style="text-align:right;"><strong>${safe(formatCurrency(labourAmount))}</strong></div></div>
     </div>
 
     <div class="totals">
       <div class="row"><span class="muted">SubTotal</span><span class="muted">${safe(formatCurrency(subTotal))}</span></div>
-      <div class="row"><span class="muted">Delivery</span><span class="muted">${safe(formatCurrency(deliveryAmount))}</span></div>
       <div class="row"><span class="muted">VAT (${safe(vatPercent.toFixed(0))}%)</span><span class="muted">${safe(formatCurrency(vatAmount))}</span></div>
       <div class="row"><span class="muted">Suggested deposit (${safe(Number(billingSettings.depositPercent || 0).toFixed(0))}%)</span><span class="muted">${safe(formatCurrency(suggestedDepositAmount))}</span></div>
       <div class="row"><span class="muted">Deposit paid</span><span class="muted">${safe(formatCurrency(depositPaidAmount))}</span></div>
@@ -1890,6 +2019,18 @@ function App() {
     setMachineBackupMessage("Machines backup exported.");
   };
 
+  const exportBillingBackup = async () => {
+    const backup = await api.exportBillingBackup();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "billing-backup.json";
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setBillingBackupMessage("Billing backup exported.");
+  };
+
   const importFullBackup = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1932,6 +2073,16 @@ function App() {
     setMachineBackupMessage("Machines backup restored successfully.");
   };
 
+  const importBillingBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    await api.importBillingBackup(payload);
+    await loadBillingSettings();
+    setBillingBackupMessage("Billing backup restored successfully.");
+  };
+
   const exportHelpIntakeInbox = async () => {
     const payload = await api.exportHelpIntakeRequests();
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8;" });
@@ -1945,10 +2096,6 @@ function App() {
   };
 
   const importHelpIntakeToBacklog = async (event: ChangeEvent<HTMLInputElement>) => {
-    if (!isOwnerAuthenticated) {
-      setHelpIntakeBackupMessage("Only the app owner can import requests into backlog.");
-      return;
-    }
     const file = event.target.files?.[0];
     if (!file) return;
     const text = await file.text();
@@ -1963,27 +2110,6 @@ function App() {
     }
   };
 
-  const openOwnerOauth = (provider: "github" | "microsoft") => {
-    const url = api.getOwnerOauthStartUrl(provider);
-    const popup = window.open(url, "owner-oauth-login", "width=560,height=720");
-    if (!popup) {
-      setOwnerAuthMessage("Popup blocked. Allow popups and try owner login again.");
-      return;
-    }
-    setOwnerAuthMessage(`Continue ${provider === "github" ? "GitHub" : "Microsoft"} sign-in in the popup, then click Refresh owner status.`);
-  };
-
-  const ownerLogout = async () => {
-    try {
-      await api.logoutOwner();
-      await loadOwnerSessionStatus();
-      setOwnerAuthMessage("Owner session locked.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Owner logout failed";
-      setOwnerAuthMessage(message);
-    }
-  };
-
   const submitHelpRequest = async (e: FormEvent) => {
     e.preventDefault();
     const title = helpRequestForm.title.trim();
@@ -1991,17 +2117,27 @@ function App() {
     if (!title || !details) return;
 
     try {
-      const created = await api.logHelpIntakeRequest({
-        requestType: helpRequestForm.requestType,
-        priority: helpRequestForm.priority,
-        title,
-        details,
-      });
-      setQueuedHelpRequests((current) => {
-        const next = [...current, created];
-        setHelpRequestMessage(`Request ${created.id} queued (${next.length} total). Add more requests, then download one email file.`);
-        return next;
-      });
+      if (directToBacklog) {
+        const created = await api.submitBacklogIntake({
+          requestType: helpRequestForm.requestType,
+          priority: helpRequestForm.priority,
+          title,
+          details,
+        });
+        setHelpRequestMessage(`Added ${created.id} directly to backlog (${created.status}, ${created.reviewStatus}).`);
+      } else {
+        const created = await api.logHelpIntakeRequest({
+          requestType: helpRequestForm.requestType,
+          priority: helpRequestForm.priority,
+          title,
+          details,
+        });
+        setQueuedHelpRequests((current) => {
+          const next = [...current, created];
+          setHelpRequestMessage(`Request ${created.id} queued (${next.length} total). Add more requests, then download one email file.`);
+          return next;
+        });
+      }
 
       setHelpRequestForm({
         requestType: "Feature Request",
@@ -2015,24 +2151,37 @@ function App() {
     }
   };
 
-  const downloadQueuedHelpRequests = () => {
-    if (!queuedHelpRequests.length) {
+  const downloadQueuedHelpRequests = async () => {
+    let requestsToDownload = queuedHelpRequests;
+
+    if (!requestsToDownload.length) {
+      try {
+        const payload = await api.exportHelpIntakeRequests();
+        requestsToDownload = Array.isArray(payload.requests) ? payload.requests : [];
+      } catch {
+        requestsToDownload = [];
+      }
+    }
+
+    if (!requestsToDownload.length) {
       setHelpRequestMessage("No queued requests yet. Add at least one request before downloading.");
       return;
     }
 
     const downloadable = {
       exportedAt: new Date().toISOString(),
-      requests: queuedHelpRequests,
+      requests: requestsToDownload,
     };
     const blob = new Blob([JSON.stringify(downloadable, null, 2)], { type: "application/json;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = `help-requests-batch-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
     link.click();
+    link.remove();
     window.URL.revokeObjectURL(url);
-    setHelpRequestMessage(`Downloaded ${queuedHelpRequests.length} queued request(s). Email this file, then import it from Admin.`);
+    setHelpRequestMessage(`Downloaded ${requestsToDownload.length} queued request(s). Email this file, then import it from Admin.`);
     setQueuedHelpRequests([]);
   };
 
@@ -2105,109 +2254,44 @@ function App() {
                 </div>
               </section>
 
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Pending jobs</h2>
-                <p className="mt-2 text-3xl font-semibold">{pendingJobs.length}</p>
-              </section>
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Low stock</h2>
-                <p className="mt-2 text-3xl font-semibold">{lowStockMaterials.length}</p>
-              </section>
-              <section className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Total jobs</h2>
-                <p className="mt-2 text-3xl font-semibold">{jobs.length}</p>
-              </section>
               <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-              <h2 className="text-xl font-semibold">Quick add job</h2>
-              <form onSubmit={createJob} className="mt-4 space-y-4">
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-2 block">Job name</span>
-                  <input value={jobForm.name} onChange={(e) => setJobForm({ ...jobForm, name: e.target.value })} placeholder="Job name" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" required />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-2 block">Customer</span>
-                  <input value={jobForm.customer} onChange={(e) => setJobForm({ ...jobForm, customer: e.target.value })} placeholder="Customer" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                </label>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="block text-sm text-slate-300">
-                    <span className="mb-2 block">Machine type</span>
-                    <select value={jobForm.machineType} onChange={(e) => setJobForm({ ...jobForm, machineType: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                      {machineOptions.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-sm text-slate-300">
-                    <span className="mb-2 block">Machine runtime (mins)</span>
-                    <input value={jobForm.machineRunTimeMinutes} onChange={(e) => setJobForm({ ...jobForm, machineRunTimeMinutes: e.target.value })} placeholder="Minutes" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                  </label>
-                  <label className="block text-sm text-slate-300 md:col-span-2">
-                    <span className="mb-2 block">Labour time (mins)</span>
-                    <input value={jobForm.labourTimeMinutes} onChange={(e) => setJobForm({ ...jobForm, labourTimeMinutes: e.target.value })} placeholder="Minutes" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                  </label>
-                  <label className="block text-sm text-slate-300">
-                    <span className="mb-2 block">Status</span>
-                    <select value={jobForm.status} onChange={(e) => setJobForm({ ...jobForm, status: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                      {jobStatusOptions.map((statusOption) => (
-                        <option key={statusOption} value={statusOption}>{statusOption}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-sm text-slate-300">
-                    <span className="mb-2 block">Payment status</span>
-                    <select value={jobForm.paymentStatus} onChange={(e) => setJobForm({ ...jobForm, paymentStatus: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                      {paymentStatusOptions.map((paymentStatusOption) => (
-                        <option key={paymentStatusOption} value={paymentStatusOption}>{paymentStatusOption}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-sm text-slate-300">
-                    <span className="mb-2 block">Deposit paid (£)</span>
-                    <input type="number" step="0.01" value={jobForm.depositPaidAmount} onChange={(e) => setJobForm({ ...jobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                  </label>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-xl font-semibold">Jobs</h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("jobs");
+                      openNewJobEditor();
+                    }}
+                    className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300"
+                  >
+                    Create job
+                  </button>
                 </div>
-                <label className="flex items-center gap-3 text-sm text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={jobForm.isRush}
-                    onChange={(e) => setJobForm({ ...jobForm, isRush: e.target.checked })}
-                    className="h-4 w-4 rounded border-slate-600 bg-slate-950"
-                  />
-                  Apply rush fee for this job
-                </label>
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-white">Materials used</h3>
-                    <button type="button" onClick={addJobMaterialEntry} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Add material</button>
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Pending jobs</h3>
+                    <p className="mt-2 text-3xl font-semibold">{pendingJobs.length}</p>
                   </div>
-                  <div className="space-y-3">
-                    {jobMaterialEntries.map((entry, index) => (
-                      <div key={`${entry.materialId}-${index}`} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3 md:grid-cols-[1.6fr_1fr_auto]">
-                        <label className="text-sm text-slate-300">
-                          <span className="mb-2 block">Material</span>
-                          <select value={entry.materialId} onChange={(e) => updateJobMaterialEntry(index, "materialId", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                            {materials.map((material) => (
-                              <option key={material.id} value={material.id}>{material.name} {material.color ? `• ${material.color}` : ""}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="text-sm text-slate-300">
-                          <span className="mb-2 block">Quantity (g)</span>
-                          <input type="number" min="0" step="0.01" value={entry.usageQuantity} onChange={(e) => updateJobMaterialEntry(index, "usageQuantity", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                        </label>
-                        <button type="button" onClick={() => removeJobMaterialEntry(index)} className="self-end rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">Remove</button>
-                      </div>
-                    ))}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Total jobs</h3>
+                    <p className="mt-2 text-3xl font-semibold">{jobs.length}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">New jobs waiting payment</h3>
+                    <p className="mt-2 text-3xl font-semibold">{jobsWaitingPayment}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">New jobs waiting dispatch</h3>
+                    <p className="mt-2 text-3xl font-semibold">{jobsWaitingDispatch}</p>
                   </div>
                 </div>
-                <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Create job</button>
-              </form>
               </section>
 
               <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
                 <h2 className="text-xl font-semibold">Recent jobs</h2>
                 <div className="mt-4 space-y-3">
-                  {jobs.slice(0, 5).map((job) => (
+                  {recentJobs.map((job) => (
                     <div key={job.id} className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3">
                       <div>
                         <p className="font-medium">{job.name}</p>
@@ -2443,6 +2527,31 @@ function App() {
             </div>
             <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
               <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Estimate catalogue</h3>
+                <span className="text-xs text-slate-400">{estimateTemplates.length} saved templates</span>
+              </div>
+              <p className="mb-3 text-xs text-slate-400">Set any job to status <strong>Estimate Template</strong> to save it in your reusable pricing catalogue.</p>
+              <div className="space-y-2">
+                {estimateTemplates.slice(0, 8).map((job) => (
+                  <div key={`estimate-template-${job.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-medium text-white">{job.name}</p>
+                      <p className="text-slate-400">{job.machineType} • Runtime {job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0} mins • Labour {job.labourTimeMinutes ?? job.estTimeMinutes ?? 0} mins</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => applyEstimateTemplate(job)}
+                      className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300"
+                    >
+                      Use template
+                    </button>
+                  </div>
+                ))}
+                {!estimateTemplates.length ? <p className="text-sm text-slate-400">No estimate templates yet. Open a job and set status to Estimate Template.</p> : null}
+              </div>
+            </div>
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">Machine queue and schedule</h3>
                 <span className="text-xs text-slate-400">{queuedJobs.length} active queue items</span>
               </div>
@@ -2514,6 +2623,8 @@ function App() {
                           <p><span className="text-slate-500">Due date:</span> {job.dueDate ? new Date(job.dueDate).toLocaleDateString() : "Not set"}</p>
                           <p><span className="text-slate-500">Payment:</span> {job.paymentStatus || "Unpaid"}</p>
                           <p><span className="text-slate-500">Rush:</span> {job.isRush ? "Yes" : "No"}</p>
+                          <p><span className="text-slate-500">Setup fee:</span> {formatCurrency(Number(job.setupFee || 0))}</p>
+                          <p><span className="text-slate-500">Delivery charge:</span> {formatCurrency(Number(job.deliveryCharge || 0))}</p>
                           <p><span className="text-slate-500">Deposit paid:</span> {formatCurrency(Number(job.depositPaidAmount || 0))}</p>
                           <p><span className="text-slate-500">Materials:</span> {job.materials?.length || 0}</p>
                           <p><span className="text-slate-500">QA passed:</span> {job.qaPassed ? "Yes" : "No"}</p>
@@ -2637,6 +2748,11 @@ function App() {
                           {job.status === "Quote Approved" ? (
                             <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="rounded-full border border-emerald-700 px-3 py-1 text-sm text-emerald-300">Convert to job</button>
                           ) : null}
+                          {job.status !== "Estimate Template" ? (
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Estimate Template")} className="rounded-full border border-violet-700 px-3 py-1 text-sm text-violet-300">Save as estimate template</button>
+                          ) : (
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="rounded-full border border-violet-700 px-3 py-1 text-sm text-violet-300">Convert estimate to pending</button>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
@@ -2771,6 +2887,16 @@ function App() {
                               />
                               Apply rush fee for this job
                             </label>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Setup fee for this job (£)</span>
+                                <input type="number" min="0" step="0.01" value={selectedJobForm.setupFee} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, setupFee: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Delivery charge for this job (£)</span>
+                                <input type="number" min="0" step="0.01" value={selectedJobForm.deliveryCharge} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, deliveryCharge: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                            </div>
 
                             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                               <div className="mb-3 flex items-center justify-between">
@@ -2863,9 +2989,9 @@ function App() {
                                     </div>
                                     <div className="grid grid-cols-[2fr_1fr] px-4 py-3 text-sm">
                                       <div>
-                                        <p className="font-medium text-white">Production costs</p>
+                                        <p className="font-medium text-white">Production costs subtotal</p>
                                       </div>
-                                      <span className="text-right font-medium text-white">{formatCurrency(getInvoiceChargeBreakdown(selectedJob).electricityCharge + getInvoiceChargeBreakdown(selectedJob).overheadCharge)}</span>
+                                      <span className="text-right font-medium text-white">{formatCurrency(getInvoiceChargeBreakdown(selectedJob).productionCharge)}</span>
                                     </div>
                                     <div className="grid grid-cols-[2fr_1fr] px-4 py-3 text-sm">
                                       <div>
@@ -2881,9 +3007,8 @@ function App() {
                                     {(() => {
                                       const chargeBreakdown = getInvoiceChargeBreakdown(selectedJob);
                                       const subTotal = Number(chargeBreakdown.customerCharge || 0);
-                                      const deliveryAmount = Number(billingSettings.deliveryAmount || 0);
-                                      const vatAmount = (subTotal + deliveryAmount) * (Number(billingSettings.vatPercent || 0) / 100);
-                                      const grandTotal = subTotal + deliveryAmount + vatAmount;
+                                      const vatAmount = subTotal * (Number(billingSettings.vatPercent || 0) / 100);
+                                      const grandTotal = subTotal + vatAmount;
                                       const suggestedDepositAmount = grandTotal * (Math.max(0, Number(billingSettings.depositPercent || 0)) / 100);
                                       const depositPaidAmount = Number(selectedJob.depositPaidAmount || 0);
                                       const balanceDue = Math.max(0, grandTotal - depositPaidAmount);
@@ -2893,10 +3018,6 @@ function App() {
                                           <div className="flex items-center justify-between text-slate-400">
                                             <span>SubTotal</span>
                                             <span>{formatCurrency(subTotal)}</span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-slate-400">
-                                            <span>Delivery</span>
-                                            <span>{formatCurrency(deliveryAmount)}</span>
                                           </div>
                                           <div className="flex items-center justify-between text-slate-400">
                                             <span>VAT ({Number(billingSettings.vatPercent || 0).toFixed(0)}%)</span>
@@ -3126,6 +3247,16 @@ function App() {
                       />
                       Apply rush fee for this job
                     </label>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Setup fee for this job (£)</span>
+                        <input type="number" min="0" step="0.01" value={newJobForm.setupFee} onChange={(e) => setNewJobForm({ ...newJobForm, setupFee: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Delivery charge for this job (£)</span>
+                        <input type="number" min="0" step="0.01" value={newJobForm.deliveryCharge} onChange={(e) => setNewJobForm({ ...newJobForm, deliveryCharge: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                    </div>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
                       <div className="mb-3 flex items-center justify-between">
@@ -3832,82 +3963,27 @@ function App() {
                   </div>
 
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Help requests inbox</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export separate help-request files for email. Backlog import is owner-only and unlocked by GitHub or Microsoft owner sign-in.</p>
-                    <div className="mt-2">
-                      {isOwnerAuthenticated ? (
-                        <span className="inline-flex items-center rounded-full border border-cyan-700/70 bg-cyan-900/20 px-3 py-1 text-xs text-cyan-300">
-                          Owner authenticated as {ownerIdentityHint || "owner"}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-300">
-                          Owner session locked
-                        </span>
-                      )}
+                    <h4 className="text-sm font-semibold text-white">Billing backup</h4>
+                    <p className="mt-1 text-xs text-slate-400">Export or restore billing settings and theme colors in JSON.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={exportBillingBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
+                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
+                        <span>Restore</span>
+                        <input type="file" accept=".json" className="hidden" onChange={importBillingBackup} />
+                      </label>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Owner auth: {ownerAuthConfigured ? `configured${ownerIdentityHint ? ` (${ownerIdentityHint})` : ""}` : "not configured on server"}
-                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <h4 className="text-sm font-semibold text-white">Help requests inbox</h4>
+                    <p className="mt-1 text-xs text-slate-400">Export help-request files for email, then manually import a downloaded file into backlog from here.</p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <button type="button" onClick={exportHelpIntakeInbox} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
-                      {isOwnerAuthenticated ? (
-                        <>
-                          <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                            <span>Import to backlog</span>
-                            <input type="file" accept=".json" className="hidden" onChange={importHelpIntakeToBacklog} />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              loadOwnerSessionStatus().catch(() => undefined);
-                              loadOwnerAuthDiagnostics().catch(() => undefined);
-                            }}
-                            className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200"
-                          >
-                            Refresh owner status
-                          </button>
-                          <button type="button" onClick={ownerLogout} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Owner logout</button>
-                        </>
-                      ) : (
-                        <>
-                          <button type="button" onClick={() => setShowOwnerLoginOptions((current) => !current)} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">
-                            {showOwnerLoginOptions ? "Hide owner login" : "App owner login"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              loadOwnerSessionStatus().catch(() => undefined);
-                              loadOwnerAuthDiagnostics().catch(() => undefined);
-                            }}
-                            className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200"
-                          >
-                            Refresh owner status
-                          </button>
-                        </>
-                      )}
+                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
+                        <span>Import to backlog</span>
+                        <input type="file" accept=".json" className="hidden" onChange={importHelpIntakeToBacklog} />
+                      </label>
                     </div>
-                    {!isOwnerAuthenticated && showOwnerLoginOptions ? (
-                      <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
-                        {ownerAuthConfigured ? (
-                          <div className="flex flex-wrap gap-2">
-                            {ownerGithubEnabled ? <button type="button" onClick={() => openOwnerOauth("github")} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Login with GitHub</button> : null}
-                            {ownerMicrosoftEnabled ? <button type="button" onClick={() => openOwnerOauth("microsoft")} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">Login with Microsoft</button> : null}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-400">Owner OAuth is not configured yet. Set owner OAuth environment variables on the backend, restart the server, then refresh owner status.</p>
-                        )}
-                      </div>
-                    ) : null}
-                    {ownerAuthMessage ? <p className="mt-2 text-xs text-cyan-300">{ownerAuthMessage}</p> : null}
-                    {ownerAuthDiagnostics ? (
-                      <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
-                        <p className="font-semibold text-white">Owner auth diagnostics</p>
-                        <p className="mt-1">GitHub: {ownerAuthDiagnostics.providers.github.enabled ? "Ready" : "Not ready"} (identity: {ownerAuthDiagnostics.providers.github.ownerIdentityConfigured ? "set" : "missing"}, client ID: {ownerAuthDiagnostics.providers.github.clientIdConfigured ? "set" : "missing"}, client secret: {ownerAuthDiagnostics.providers.github.clientSecretConfigured ? "set" : "missing"})</p>
-                        <p className="mt-1">Microsoft: {ownerAuthDiagnostics.providers.microsoft.enabled ? "Ready" : "Not ready"} (identity: {ownerAuthDiagnostics.providers.microsoft.ownerIdentityConfigured ? "set" : "missing"}, client ID: {ownerAuthDiagnostics.providers.microsoft.clientIdConfigured ? "set" : "missing"}, client secret: {ownerAuthDiagnostics.providers.microsoft.clientSecretConfigured ? "set" : "missing"})</p>
-                        <p className="mt-2 text-slate-400">Expected GitHub callback: {ownerAuthDiagnostics.providers.github.callbackUrl}</p>
-                        <p className="text-slate-400">Expected Microsoft callback: {ownerAuthDiagnostics.providers.microsoft.callbackUrl}</p>
-                      </div>
-                    ) : null}
                   </div>
 
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2">
@@ -3928,6 +4004,7 @@ function App() {
                 {customerBackupMessage ? <p className="text-sm text-cyan-300">{customerBackupMessage}</p> : null}
                 {supplierBackupMessage ? <p className="text-sm text-cyan-300">{supplierBackupMessage}</p> : null}
                 {machineBackupMessage ? <p className="text-sm text-cyan-300">{machineBackupMessage}</p> : null}
+                {billingBackupMessage ? <p className="text-sm text-cyan-300">{billingBackupMessage}</p> : null}
                 {helpIntakeBackupMessage ? <p className="text-sm text-cyan-300">{helpIntakeBackupMessage}</p> : null}
                 {fullBackupMessage ? <p className="text-sm text-cyan-300">{fullBackupMessage}</p> : null}
               </div>
@@ -3944,6 +4021,7 @@ function App() {
                   <p className="mt-2 text-sm text-slate-400">Configure business identity and billing rules in one dedicated area.</p>
                 </div>
               </div>
+              {billingSaveMessage ? <p className="mt-3 text-sm text-cyan-300">{billingSaveMessage}</p> : null}
 
               <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
                 <summary className="cursor-pointer list-none text-lg font-semibold text-white">Business personalization</summary>
@@ -4072,16 +4150,12 @@ function App() {
                 <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
                   <summary className="cursor-pointer list-none text-lg font-semibold text-white">Pricing guardrails</summary>
                   <div className="mb-4">
-                    <p className="mt-1 text-sm text-slate-400">Apply minimum charge, setup fee, rush multiplier, and waste factor controls.</p>
+                    <p className="mt-1 text-sm text-slate-400">Apply minimum charge, rush multiplier, and waste factor controls.</p>
                   </div>
                   <div className="space-y-3">
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Minimum charge (£)</span>
                       <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.minimumCharge)} onChange={(e) => updateBilling("minimumCharge", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Setup fee (£)</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.setupFee)} onChange={(e) => updateBilling("setupFee", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Rush fee %</span>
@@ -4097,13 +4171,9 @@ function App() {
                 <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
                   <summary className="cursor-pointer list-none text-lg font-semibold text-white">Invoice add-ons</summary>
                   <div className="mb-4">
-                    <p className="mt-1 text-sm text-slate-400">Set delivery, VAT, deposits, and payment terms shown in invoice totals.</p>
+                    <p className="mt-1 text-sm text-slate-400">Set VAT, deposits, and payment terms shown in invoice totals.</p>
                   </div>
                   <div className="space-y-3">
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Delivery amount</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.deliveryAmount)} onChange={(e) => updateBilling("deliveryAmount", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">VAT %</span>
                       <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.vatPercent)} onChange={(e) => updateBilling("vatPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
@@ -4131,11 +4201,11 @@ function App() {
             <div className="mt-6 space-y-4 text-sm text-slate-300">
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Creating a job</h3>
-                <p className="mt-2">Use Dashboard quick add or Jobs &gt; Add job. Enter customer, machine type, machine runtime, labour time, status, payment status, optional deposit paid, and one or more materials. In Jobs &gt; Add Job you can also paste a MakerWorld URL and use Import metadata, Autofill job, or Import profile to prefill model details and costing hints. The model URL is saved on the job record so you can reopen the original MakerWorld model later. Use Quote Draft/Quote Sent/Quote Approved statuses when preparing quotes before production. Each new job receives an automatic job number. If the customer name is new, a popup appears so you can add customer details into CRM Lite right away.</p>
+                <p className="mt-2">Use Jobs &gt; Add job (or the Create job button in the Dashboard Jobs card). Enter customer, machine type, machine runtime, labour time, status, payment status, optional deposit paid, and one or more materials. In Jobs &gt; Add Job you can also paste a MakerWorld URL and use Import metadata, Autofill job, or Import profile to prefill model details and costing hints. The model URL is saved on the job record so you can reopen the original MakerWorld model later. Use Quote Draft/Quote Sent/Quote Approved statuses when preparing quotes before production. Use Estimate Template status to save reusable estimate records in the Jobs estimate catalogue, then click Use template to prefill a new Add Job draft without customer details. Each new job receives an automatic job number. If the customer name is new, a popup appears so you can add customer details into CRM Lite right away.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Calculating costs</h3>
-                <p className="mt-2">Use Calculate cost from Dashboard or Jobs. Costing uses material usage, machine runtime electricity/depreciation, labour time, and workshop hourly rate, plus guardrails from Billing Rules (minimum charge, setup fee, rush fee %, waste factor %). Mark a job as Rush to apply rush-fee logic. Job cards show internal breakdown lines; invoices show customer-facing totals.</p>
+                <p className="mt-2">Use Calculate cost from Dashboard or Jobs. Costing uses material usage, machine runtime electricity/depreciation, labour time, workshop hourly rate, plus guardrails from Billing Rules (minimum charge, rush fee %, waste factor %). Setup fee and delivery charge are entered per job in the job forms/cards. Mark a job as Rush to apply rush-fee logic. Job cards show internal breakdown lines; invoices show customer-facing totals.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Quote to job workflow</h3>
@@ -4143,7 +4213,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Machines and billing rules</h3>
-                <p className="mt-2">Manage machine profiles in Machines (add/edit/remove wattage, depreciation, replacement runtime). In Billing, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, setup fee, rush fee %, waste factor %), and invoice finance settings (delivery, VAT, suggested deposit %, payment terms days). Billing and personalization sections are collapsible for easier navigation.</p>
+                <p className="mt-2">Manage machine profiles in Machines (add/edit/remove wattage, depreciation, replacement runtime). In Billing, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, rush fee %, waste factor %), and invoice finance settings (VAT, suggested deposit %, payment terms days). Setup fee and delivery charge are job-level fields in the job forms/cards. Billing and personalization sections are collapsible for easier navigation.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Site theme customization</h3>
@@ -4155,7 +4225,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Invoices and backup</h3>
-                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoice totals include SubTotal, Delivery, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, customers JSON backup/restore, suppliers JSON backup/restore (with purchase history), machines JSON backup/restore (machine profiles + Bambu telemetry), and full JSON backup download/restore. Full backup includes all customizable and operational data, including theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu machine data.</p>
+                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoice totals include SubTotal, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. Delivery (when checked on a job) is included in the Production costs subtotal. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, customers JSON backup/restore, suppliers JSON backup/restore (with purchase history), machines JSON backup/restore (machine profiles + Bambu telemetry), billing JSON backup/restore, and full JSON backup download/restore. Full backup includes all customizable and operational data, including theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu machine data.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Reporting page</h3>
@@ -4185,10 +4255,31 @@ function App() {
               </div>
               <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Raise a bug or feature request</h3>
-                <p className="mt-2 text-slate-300">Submit here to queue requests in a separate intake workflow, then download one combined email-ready JSON file.</p>
-                <p className="mt-1 text-xs text-slate-400">After emailing the file, import it from Admin using Help requests inbox → Import to backlog.</p>
+                <p className="mt-2 text-slate-300">Submit here to either queue requests into an email-ready file or add them directly to backlog.</p>
+                <p className="mt-1 text-xs text-slate-400">When Direct to backlog is OFF, use Download email file and manually import from Admin.</p>
 
                 <div className="mt-4 space-y-3">
+                  <label className="flex items-center gap-4 text-sm text-slate-300">
+                    <span className="w-56 shrink-0">Submission mode</span>
+                    <div className="w-full">
+                      <button
+                        type="button"
+                        onClick={() => setDirectToBacklog((current) => !current)}
+                        className={`rounded-full border px-4 py-2 text-sm ${directToBacklog ? "border-cyan-600 bg-cyan-900/20 text-cyan-300" : "border-slate-700 text-slate-200"}`}
+                        aria-pressed={directToBacklog}
+                      >
+                        {directToBacklog ? "Direct to backlog: ON" : "Direct to backlog: OFF"}
+                      </button>
+                      <p className="mt-2 text-xs">
+                        <span className={`inline-flex items-center rounded-full border px-2 py-1 ${directToBacklog ? "border-cyan-700/70 bg-cyan-900/20 text-cyan-300" : "border-slate-700 bg-slate-900 text-slate-300"}`}>
+                          {directToBacklog
+                            ? "Status: New submissions are added directly to backlog."
+                            : "Status: New submissions are queued for download/email import."}
+                        </span>
+                      </p>
+                    </div>
+                  </label>
+
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Request type</span>
                     <select
@@ -4242,10 +4333,10 @@ function App() {
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <p className="text-xs text-slate-400">Queued requests: {queuedHelpRequests.length}</p>
                   <div className="flex items-center gap-2">
+                    <button type="submit" className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{directToBacklog ? "Add to backlog" : "Queue request"}</button>
                     <button type="button" onClick={downloadQueuedHelpRequests} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">
                       Download email file
                     </button>
-                    <button type="submit" className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Queue request</button>
                   </div>
                 </div>
 
@@ -4256,7 +4347,7 @@ function App() {
                   <ol className="mt-2 list-decimal space-y-1 pl-4">
                     <li>Each submission is logged in a separate help-intake record with a unique request ID and added to this local queue.</li>
                     <li>Users can submit multiple requests, then download one combined JSON file for email handoff.</li>
-                    <li>The backlog owner imports emailed files from Admin using Help requests inbox.</li>
+                    <li>Emailed files are imported manually from Admin using Help requests inbox.</li>
                     <li>Imported items are inserted into docs/backlog.md with Human Review and On Hold status for manual review.</li>
                   </ol>
                 </div>
