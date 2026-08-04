@@ -198,7 +198,10 @@ const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to restore full backup");
+    if (!res.ok) {
+      const errorPayload = await res.json().catch(() => null);
+      throw new Error(String(errorPayload?.error || "Failed to restore full backup"));
+    }
     return res.json();
   },
   async exportCustomersBackup() {

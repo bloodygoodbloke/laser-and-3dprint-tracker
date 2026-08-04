@@ -2048,12 +2048,18 @@ function App() {
   const importFullBackup = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    await api.importFullBackup(payload);
-    await loadData();
-    await loadBillingSettings();
-    setFullBackupMessage("Full backup restored successfully.");
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      const result = await api.importFullBackup(payload);
+      await loadData();
+      await loadBillingSettings();
+      const warning = typeof result?.warning === "string" && result.warning.trim() ? ` ${result.warning}` : "";
+      setFullBackupMessage(`Full backup restored successfully.${warning}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to restore full backup";
+      setFullBackupMessage(message);
+    }
   };
 
   const importCustomersBackup = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2083,7 +2089,7 @@ function App() {
     const payload = JSON.parse(text);
     await api.importMachinesBackup(payload);
     await loadBillingSettings();
-    await loadBambuDashboard();
+    await refreshBambuDashboard();
     setMachineBackupMessage("Machines backup restored successfully.");
   };
 

@@ -45,6 +45,13 @@ trap cleanup INT TERM EXIT
 install_if_needed "$BACKEND_DIR"
 install_if_needed "$FRONTEND_DIR"
 
+echo "Preparing backend database and Prisma client..."
+(
+  cd "$BACKEND_DIR"
+  npm run prisma -- migrate deploy
+  npm run prisma -- generate
+)
+
 echo "Starting backend on http://127.0.0.1:4000 ..."
 (
   cd "$BACKEND_DIR"

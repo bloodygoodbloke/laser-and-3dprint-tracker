@@ -42,11 +42,29 @@ const isBillingSchemaCompatibilityError = (error: unknown) => {
   );
 };
 
-const getFullBackupPayload = async () => {
+const isPrismaClientSchemaDriftError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return message.includes("Unknown argument") || message.includes("Unknown arg");
+};
+
+const hasBillingBackupSchemaSupport = async () => {
+  try {
+    const columns = await prisma.$queryRawUnsafe<Array<{ name: string }>>("PRAGMA table_info('BillingSetting')");
+    const columnSet = new Set(columns.map((column) => String(column.name || "")).filter(Boolean));
+    return columnSet.has("adminBackgroundColor")
+      && columnSet.has("siteInputColor")
+      && columnSet.has("siteAccentColor")
+      && columnSet.has("siteAccentTextColor");
+  } catch (_error) {
+    return false;
+  }
+};
+
+const getFullBackupPayload = async (includeBillingSettings = true) => {
   const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
-    prisma.billingSetting.findMany(),
+    includeBillingSettings ? prisma.billingSetting.findMany() : Promise.resolve([]),
     prisma.jobCost.findMany(),
     prisma.customer.findMany(),
     prisma.supplier.findMany(),
@@ -71,8 +89,6 @@ const getFullBackupPayload = async () => {
       "customers",
       "suppliers",
       "supplier purchases",
-      "billing settings",
-      "theme colors",
       "machine profile settings",
       "bambu devices",
       "bambu statuses",
@@ -82,6 +98,7 @@ const getFullBackupPayload = async () => {
       "bambu maintenance predictions",
       "bambu failure logs",
       "reports (derived from jobs, costs, customers, and materials)",
+      ...(includeBillingSettings ? ["billing settings", "theme colors"] : []),
     ],
     jobs,
     materials,
@@ -229,8 +246,23 @@ const appendBacklogItem = async (row: string, todayIso: string) => {
 };
 
 router.get("/backup", async (_req, res) => {
-  const payload = await getFullBackupPayload();
-  res.json(payload);
+  try {
+    const includeBillingSettings = await hasBillingBackupSchemaSupport();
+    const payload = await getFullBackupPayload(includeBillingSettings);
+    if (!includeBillingSettings) {
+      return res.json({
+        ...payload,
+        warnings: ["Billing settings were omitted because the local database schema is behind current billing columns. Run Prisma migrations to include billing/theme settings in full backups."],
+      });
+    }
+    return res.json(payload);
+  } catch (error) {
+    if (isBillingSchemaCompatibilityError(error)) {
+      return res.status(503).json({ error: "Billing settings schema is behind expected version. Run migrations before exporting full backup." });
+    }
+    const message = error instanceof Error ? error.message : "Failed to export backup";
+    return res.status(500).json({ error: message });
+  }
 });
 
 router.post("/backup", async (req, res) => {
@@ -289,8 +321,23 @@ router.post("/backup", async (req, res) => {
 });
 
 router.get("/backup/full", async (_req, res) => {
-  const payload = await getFullBackupPayload();
-  res.json(payload);
+  try {
+    const includeBillingSettings = await hasBillingBackupSchemaSupport();
+    const payload = await getFullBackupPayload(includeBillingSettings);
+    if (!includeBillingSettings) {
+      return res.json({
+        ...payload,
+        warnings: ["Billing settings were omitted because the local database schema is behind current billing columns. Run Prisma migrations to include billing/theme settings in full backups."],
+      });
+    }
+    return res.json(payload);
+  } catch (error) {
+    if (isBillingSchemaCompatibilityError(error)) {
+      return res.status(503).json({ error: "Billing settings schema is behind expected version. Run migrations before exporting full backup." });
+    }
+    const message = error instanceof Error ? error.message : "Failed to export full backup";
+    return res.status(500).json({ error: message });
+  }
 });
 
 router.get("/backup/customers", async (_req, res) => {
@@ -656,7 +703,10 @@ router.post("/backup/billing", async (req, res) => {
 router.post("/backup/full", async (req, res) => {
   const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [], bambuDevices = [], bambuStatuses = [], bambuEvents = [], bambuSpools = [], bambuUsageLogs = [], bambuMaintenance = [], bambuFailureLogs = [] } = req.body || {};
 
-  await prisma.$transaction(async (tx) => {
+  try {
+    const includeBillingSettings = await hasBillingBackupSchemaSupport();
+
+    await prisma.$transaction(async (tx) => {
     await tx.bambuFailureLog.deleteMany();
     await tx.bambuMaintenancePrediction.deleteMany();
     await tx.bambuUsageLog.deleteMany();
@@ -670,7 +720,9 @@ router.post("/backup/full", async (req, res) => {
     await tx.customer.deleteMany();
     await tx.materialPurchase.deleteMany();
     await tx.supplier.deleteMany();
-    await tx.billingSetting.deleteMany();
+    if (includeBillingSettings) {
+      await tx.billingSetting.deleteMany();
+    }
 
     const materialIdMap = new Map<string, string>();
 
@@ -692,7 +744,7 @@ router.post("/backup/full", async (req, res) => {
     }
 
     const billingSettingPayload = Array.isArray(billingSettings) ? billingSettings[0] : billingSettings;
-    if (billingSettingPayload) {
+    if (includeBillingSettings && billingSettingPayload) {
       await tx.billingSetting.create({
         data: {
           ...billingSettingPayload,
@@ -934,9 +986,38 @@ router.post("/backup/full", async (req, res) => {
         },
       });
     }
-  });
+    });
 
-  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, billingSettingsCount: Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0, customersCount: customers.length, suppliersCount: suppliers.length, purchasesCount: purchases.length, bambuDevicesCount: bambuDevices.length, bambuStatusesCount: bambuStatuses.length, bambuEventsCount: bambuEvents.length, bambuSpoolsCount: bambuSpools.length, bambuUsageLogsCount: bambuUsageLogs.length, bambuMaintenanceCount: bambuMaintenance.length, bambuFailureLogsCount: bambuFailureLogs.length });
+    return res.json({
+      restored: true,
+      jobsCount: jobs.length,
+      materialsCount: materials.length,
+      billingSettingsCount: includeBillingSettings ? (Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0) : 0,
+      billingSettingsRestored: includeBillingSettings,
+      warning: includeBillingSettings
+        ? null
+        : "Billing settings were skipped because the local database schema is behind current billing columns. Run Prisma migrations, then restore billing/full backup again.",
+      customersCount: customers.length,
+      suppliersCount: suppliers.length,
+      purchasesCount: purchases.length,
+      bambuDevicesCount: bambuDevices.length,
+      bambuStatusesCount: bambuStatuses.length,
+      bambuEventsCount: bambuEvents.length,
+      bambuSpoolsCount: bambuSpools.length,
+      bambuUsageLogsCount: bambuUsageLogs.length,
+      bambuMaintenanceCount: bambuMaintenance.length,
+      bambuFailureLogsCount: bambuFailureLogs.length,
+    });
+  } catch (error) {
+    if (isBillingSchemaCompatibilityError(error)) {
+      return res.status(503).json({ error: "Billing settings schema is behind expected version. Run migrations before restoring full backup billing settings." });
+    }
+    if (isPrismaClientSchemaDriftError(error)) {
+      return res.status(503).json({ error: "Prisma client/schema mismatch detected. Run backend Prisma migrate + generate, restart backend, then retry full restore." });
+    }
+    const message = error instanceof Error ? error.message : "Failed to restore full backup";
+    return res.status(500).json({ error: message });
+  }
 });
 
 router.post("/backlog-intake", async (req, res) => {
