@@ -1,5 +1,5 @@
 {
-  "name": "laser-and-3dprint-backend",
+  "name": "fab-work-tracker-backend",
   "version": "0.6.0",
   "private": true,
   "main": "dist/index.js",

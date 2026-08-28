@@ -2,6 +2,13 @@ import { Router } from "express";
 import prisma from "../prisma";
 
 const router = Router();
+const DASHBOARD_CACHE_TTL_MS = 10000;
+
+let dashboardCache: { expiresAt: number; payload: unknown } | null = null;
+
+const invalidateDashboardCache = () => {
+  dashboardCache = null;
+};
 
 const MAINTENANCE_COMPONENT_INTERVALS: Array<{ component: string; intervalHours: number }> = [
   { component: "Nozzle", intervalHours: 250 },
@@ -174,43 +181,175 @@ const deductMaterialStockFromJobUsage = async (jobId: string, materialGrams: num
   }
 };
 
-router.get("/dashboard", async (_req, res) => {
+const getDashboardPayload = async () => {
   const [devices, latestStatuses, openFailures, maintenance, events, spools] = await Promise.all([
-    prisma.bambuDevice.findMany({ orderBy: { name: "asc" } }),
+    prisma.bambuDevice.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        serial: true,
+        ipAddress: true,
+        isOnline: true,
+        lastSeenAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
     prisma.bambuMachineStatus.findMany({
       orderBy: { reportedAt: "desc" },
-      take: 25,
-      include: { device: true, job: true },
+      take: 12,
+      select: {
+        id: true,
+        deviceId: true,
+        jobId: true,
+        nozzleTempC: true,
+        bedTempC: true,
+        chamberTempC: true,
+        progressPct: true,
+        amsSummary: true,
+        errorCode: true,
+        errorMessage: true,
+        reportedAt: true,
+        device: {
+          select: {
+            id: true,
+            name: true,
+            serial: true,
+            isOnline: true,
+            lastSeenAt: true,
+          },
+        },
+        job: {
+          select: {
+            id: true,
+            name: true,
+            jobNumber: true,
+            status: true,
+          },
+        },
+      },
     }),
     prisma.bambuFailureLog.findMany({
       where: { isResolved: false },
       orderBy: { createdAt: "desc" },
-      take: 50,
-      include: { device: true, job: true },
+      take: 20,
+      select: {
+        id: true,
+        deviceId: true,
+        jobId: true,
+        errorCode: true,
+        message: true,
+        severity: true,
+        isResolved: true,
+        createdAt: true,
+        resolvedAt: true,
+        device: {
+          select: {
+            id: true,
+            name: true,
+            serial: true,
+          },
+        },
+        job: {
+          select: {
+            id: true,
+            name: true,
+            jobNumber: true,
+          },
+        },
+      },
     }),
     prisma.bambuMaintenancePrediction.findMany({
       orderBy: [{ riskLevel: "desc" }, { component: "asc" }],
-      include: { device: true },
+      select: {
+        id: true,
+        deviceId: true,
+        component: true,
+        currentHours: true,
+        intervalHours: true,
+        predictedDueHours: true,
+        riskLevel: true,
+        updatedAt: true,
+        device: {
+          select: {
+            id: true,
+            name: true,
+            serial: true,
+          },
+        },
+      },
     }),
     prisma.bambuEvent.findMany({
       orderBy: { createdAt: "desc" },
-      take: 100,
-      include: { device: true, job: true },
+      take: 30,
+      select: {
+        id: true,
+        deviceId: true,
+        jobId: true,
+        eventType: true,
+        payload: true,
+        createdAt: true,
+        device: {
+          select: {
+            id: true,
+            name: true,
+            serial: true,
+          },
+        },
+        job: {
+          select: {
+            id: true,
+            name: true,
+            jobNumber: true,
+          },
+        },
+      },
     }),
     prisma.bambuSpoolInventory.findMany({
       orderBy: [{ deviceId: "asc" }, { slotName: "asc" }],
-      include: { device: true },
+      take: 24,
+      select: {
+        id: true,
+        deviceId: true,
+        slotName: true,
+        materialName: true,
+        color: true,
+        remainingGrams: true,
+        updatedAt: true,
+        device: {
+          select: {
+            id: true,
+            name: true,
+            serial: true,
+          },
+        },
+      },
     }),
   ]);
 
-  res.json({
+  return {
     devices,
     latestStatuses,
     openFailures,
     maintenance,
     events,
     spools,
-  });
+  };
+};
+
+router.get("/dashboard", async (_req, res) => {
+  if (dashboardCache && dashboardCache.expiresAt > Date.now()) {
+    return res.json(dashboardCache.payload);
+  }
+
+  const payload = await getDashboardPayload();
+  dashboardCache = {
+    payload,
+    expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+  };
+
+  res.json(payload);
 });
 
 router.get("/status", async (_req, res) => {
@@ -290,6 +429,7 @@ router.post("/ingest/status", async (req, res) => {
   }
 
   await updateMaintenancePredictions(device.id);
+  invalidateDashboardCache();
 
   res.status(201).json({ ingested: true, deviceId: device.id, jobId: job?.id || null });
 });
@@ -358,6 +498,7 @@ router.post("/ingest/event", async (req, res) => {
 
   await applySpoolAdjustments(device.id, payload.spoolAdjustments);
   await updateMaintenancePredictions(device.id);
+  invalidateDashboardCache();
 
   res.status(201).json({ ingested: true, deviceId: device.id, jobId: job?.id || null, eventType });
 });
@@ -415,6 +556,7 @@ router.post("/simulate/tick", async (req, res) => {
   }
 
   await updateMaintenancePredictions(device.id);
+  invalidateDashboardCache();
   res.status(201).json({ simulated: true, deviceId: device.id, progressPct });
 });
 

@@ -1,4 +1,4 @@
-Markdown: Open Preview to the Side (New Editor)# laser-and-3dprint-tracker
+Markdown: Open Preview to the Side (New Editor)# Fab-Work-Tracker
 
 Fabrication Workshop Tracker is a lightweight system for managing jobs, materials, and usage in small-scale fabrication environments such as makerspaces, fabrication labs, and small production shops.
 

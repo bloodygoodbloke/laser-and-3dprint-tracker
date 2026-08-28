@@ -12,6 +12,8 @@ const DEFAULT_SITE_INPUT_COLOR = "#111827";
 const DEFAULT_SITE_ACCENT_COLOR = "#22d3ee";
 const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#001219";
 const BILLING_LOCAL_STORAGE_KEY = "billing-settings-local-backup-v1";
+const BAMBU_POLL_INTERVAL_ACTIVE_MS = 30000;
+const BAMBU_POLL_INTERVAL_IDLE_MS = 90000;
 
 type ThemePreset = {
   name: string;
@@ -249,6 +251,32 @@ const initialReportStartDate = () => {
   return toIsoDate(start);
 };
 const initialReportEndDate = () => toIsoDate(new Date());
+const buildBambuDashboardFingerprint = (payload: BambuDashboardPayload | null) => {
+  if (!payload) return "";
+  const latestStatus = payload.latestStatuses?.[0];
+  const latestFailure = payload.openFailures?.[0];
+  const latestMaintenance = payload.maintenance?.[0];
+  const latestEvent = payload.events?.[0];
+  const latestSpool = payload.spools?.[0];
+  return [
+    payload.devices?.length || 0,
+    payload.latestStatuses?.length || 0,
+    latestStatus?.id || "",
+    String(latestStatus?.reportedAt || ""),
+    payload.openFailures?.length || 0,
+    latestFailure?.id || "",
+    String(latestFailure?.createdAt || ""),
+    payload.maintenance?.length || 0,
+    latestMaintenance?.id || "",
+    String(latestMaintenance?.updatedAt || ""),
+    payload.events?.length || 0,
+    latestEvent?.id || "",
+    String(latestEvent?.createdAt || ""),
+    payload.spools?.length || 0,
+    latestSpool?.id || "",
+    String(latestSpool?.updatedAt || ""),
+  ].join("|");
+};
 
 function App() {
   const KG_TO_G = 1000;
@@ -327,6 +355,8 @@ function App() {
   const [dashboardJobMessage, setDashboardJobMessage] = useState("");
   const [isCreatingDashboardJob, setIsCreatingDashboardJob] = useState(false);
   const addJobFormRef = useRef<HTMLFormElement | null>(null);
+  const bambuPollInFlightRef = useRef(false);
+  const bambuDashboardFingerprintRef = useRef("");
 
   const scrollToAddJobForm = () => {
     window.requestAnimationFrame(() => {
@@ -428,17 +458,56 @@ function App() {
   useEffect(() => {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
-    api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
   }, []);
+
+  const applyBambuDashboardUpdate = (payload: BambuDashboardPayload, force = false) => {
+    const nextFingerprint = buildBambuDashboardFingerprint(payload);
+    if (!force && nextFingerprint && nextFingerprint === bambuDashboardFingerprintRef.current) {
+      return false;
+    }
+    bambuDashboardFingerprintRef.current = nextFingerprint;
+    setBambuDashboard(payload);
+    return true;
+  };
+
+  const refreshBambuDashboard = async (force = false) => {
+    if (bambuPollInFlightRef.current) return;
+    bambuPollInFlightRef.current = true;
+    try {
+      const payload = await api.getBambuDashboard();
+      applyBambuDashboardUpdate(payload, force);
+    } finally {
+      bambuPollInFlightRef.current = false;
+    }
+  };
 
   useEffect(() => {
     if (activeTab !== "machines") return;
-    const timer = window.setInterval(() => {
-      api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
-    }, 10000);
 
-    return () => window.clearInterval(timer);
-  }, [activeTab]);
+    const pollIntervalMs = (bambuDashboard?.devices?.length || 0) > 0
+      ? BAMBU_POLL_INTERVAL_ACTIVE_MS
+      : BAMBU_POLL_INTERVAL_IDLE_MS;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshBambuDashboard().catch(() => undefined);
+    };
+
+    refreshIfVisible();
+
+    const timer = window.setInterval(() => {
+      refreshIfVisible();
+    }, pollIntervalMs);
+
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("focus", refreshIfVisible);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("focus", refreshIfVisible);
+    };
+  }, [activeTab, bambuDashboard?.devices?.length]);
 
   const selectedJob = useMemo(() => jobs.find((job) => job.id === selectedJobId) ?? jobs[0] ?? null, [jobs, selectedJobId]);
 
@@ -1570,13 +1639,9 @@ function App() {
     link.click();
     window.URL.revokeObjectURL(url);
   };
-  const refreshBambuDashboard = async () => {
-    const payload = await api.getBambuDashboard();
-    setBambuDashboard(payload);
-  };
   const simulateBambuTick = async () => {
     await api.simulateBambuTick({ serial: bambuSerialInput || "BAMBU-SIM-001" });
-    await refreshBambuDashboard();
+    await refreshBambuDashboard(true);
     setBambuMessage("Simulated Bambu status tick ingested.");
   };
   const sendBambuEvent = async (eventType: "PRINT_STARTED" | "PRINT_FINISHED" | "PRINT_FAILED") => {
@@ -1592,7 +1657,7 @@ function App() {
       errorCode: eventType === "PRINT_FAILED" ? "NOZZLE_CLOG" : "",
       message: eventType === "PRINT_FAILED" ? "Nozzle clog detected" : "",
     });
-    await refreshBambuDashboard();
+    await refreshBambuDashboard(true);
     setBambuMessage(`${eventType} event ingested.`);
   };
   const importMakerWorldMetadata = async () => {
@@ -4275,7 +4340,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Release notes and change history</h3>
-                <p className="mt-2">Review project updates and release notes in the changelog: <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">CHANGELOG.md</a>.</p>
+                <p className="mt-2">Review project updates and release notes in the changelog: <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/Fab-Work-Tracker/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">CHANGELOG.md</a>.</p>
               </div>
               <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Raise a bug or feature request</h3>
