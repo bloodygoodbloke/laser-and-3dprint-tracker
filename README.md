@@ -68,7 +68,7 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 
 **Running locally**
 - Prerequisites:
-- Install `Node.js` (recommended: v20 LTS or newer).
+- Install `Node.js` (recommended: v24 LTS or newer).
 - Install `npm` (bundled with Node.js).
 - Optional: install `Docker Desktop` if you prefer Docker Compose instead of running Node directly.
 - No required `.env` file for local default setup.
