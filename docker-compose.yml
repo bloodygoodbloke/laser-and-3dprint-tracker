@@ -1,22 +1,22 @@
 services:
   backend:
     build: ./backend
-    command: sh -c "npx prisma generate && npm run dev"
+    command: sh -c "npx prisma migrate deploy && npm start"
     ports:
       - "4000:4000"
     volumes:
-      - ./backend:/app
       - /app/node_modules
       - backend_uploads:/app/uploads
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - DATABASE_URL=file:./prisma/dev.db
+      - PORT=4000
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
-      retries: 8
-      start_period: 10s
+      retries: 12
+      start_period: 30s
     restart: unless-stopped
   frontend:
     build: ./frontend
