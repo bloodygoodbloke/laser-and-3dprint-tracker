@@ -19,10 +19,26 @@ jobs:
     permissions: 
       id-token: write #This is required for requesting the OIDC JWT Token
       contents: read #Required when GH token is used to authenticate with private repo
+      packages: write #Required to push images to GitHub Container Registry
 
     steps:
       - name: Checkout to the branch
         uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push container image to GitHub Container Registry
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ github.workspace }}/backend
+          file: ${{ github.workspace }}/backend/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/workshoptrackv1:${{ github.sha }},ghcr.io/${{ github.repository_owner }}/workshoptrackv1:latest
 
       - name: Azure Login
         uses: azure/login@v2
@@ -31,16 +47,14 @@ jobs:
           tenant-id: ${{ secrets.WORKSHOPTRACKV1_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.WORKSHOPTRACKV1_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and push container image to registry
+      - name: Deploy to Azure Container Apps
         uses: azure/container-apps-deploy-action@v2
         with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: backend/Dockerfile
-          registryUrl: ${{ secrets.WORKSHOPTRACKV1_REGISTRY_URL }}
-          registryUsername: ${{ secrets.WORKSHOPTRACKV1_REGISTRY_USERNAME }}
-          registryPassword: ${{ secrets.WORKSHOPTRACKV1_REGISTRY_PASSWORD }}
           containerAppName: workshoptrackv1
           resourceGroup: ACA-WST
-          imageToBuild: ${{ secrets.WORKSHOPTRACKV1_REGISTRY_URL }}/workshoptrackv1:${{ github.sha }}
+          imageToDeploy: ghcr.io/${{ github.repository_owner }}/workshoptrackv1:${{ github.sha }}
+          registryUrl: ghcr.io
+          registryUsername: ${{ github.actor }}
+          registryPassword: ${{ secrets.GITHUB_TOKEN }}
 
 
