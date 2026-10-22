@@ -10,6 +10,8 @@ import customersRouter from "./routes/customers";
 import suppliersRouter from "./routes/suppliers";
 import bambuRouter from "./routes/bambu";
 import makerworldRouter from "./routes/makerworld";
+import estimatesRouter from "./routes/estimates";
+import billingAuditRouter from "./routes/billing-audit";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -24,6 +26,8 @@ app.use("/api/customers", customersRouter);
 app.use("/api/suppliers", suppliersRouter);
 app.use("/api/bambu", bambuRouter);
 app.use("/api/makerworld", makerworldRouter);
+app.use("/api/estimates", estimatesRouter);
+app.use("/api/billing-audit", billingAuditRouter);
 app.use("/api/admin", adminRouter);
 app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
 

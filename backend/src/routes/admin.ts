@@ -61,7 +61,7 @@ const hasBillingBackupSchemaSupport = async () => {
 };
 
 const getFullBackupPayload = async (includeBillingSettings = true) => {
-  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
+  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, estimateTemplates, billingAuditLogs, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
     includeBillingSettings ? prisma.billingSetting.findMany() : Promise.resolve([]),
@@ -69,6 +69,8 @@ const getFullBackupPayload = async (includeBillingSettings = true) => {
     prisma.customer.findMany(),
     prisma.supplier.findMany(),
     prisma.materialPurchase.findMany(),
+    prisma.estimateTemplate.findMany(),
+    prisma.billingAuditLog.findMany(),
     prisma.bambuDevice.findMany(),
     prisma.bambuMachineStatus.findMany(),
     prisma.bambuEvent.findMany(),
@@ -89,6 +91,8 @@ const getFullBackupPayload = async (includeBillingSettings = true) => {
       "customers",
       "suppliers",
       "supplier purchases",
+      "estimate templates",
+      "billing audit logs",
       "machine profile settings",
       "bambu devices",
       "bambu statuses",
@@ -107,6 +111,8 @@ const getFullBackupPayload = async (includeBillingSettings = true) => {
     customers,
     suppliers,
     purchases,
+    estimateTemplates,
+    billingAuditLogs,
     bambuDevices,
     bambuStatuses,
     bambuEvents,
@@ -170,79 +176,76 @@ const getNextChgId = async () => {
   const [backlogMarkdown, implementationMarkdown] = await Promise.all([
     fs.readFile(backlogPath, "utf8"),
     fs.readFile(implementationLogPath, "utf8"),
+    return columnSet.has("adminBackgroundColor")
+      && columnSet.has("siteInputColor")
+      && columnSet.has("siteAccentColor")
+      && columnSet.has("siteAccentTextColor");
+  } catch (_error) {
+    return false;
+  }
+};
+
+const getFullBackupPayload = async (includeBillingSettings = true) => {
+  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, estimateTemplates, billingAuditLogs, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
+    prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
+    prisma.material.findMany(),
+    includeBillingSettings ? prisma.billingSetting.findMany() : Promise.resolve([]),
+    prisma.jobCost.findMany(),
+    prisma.customer.findMany(),
+    prisma.supplier.findMany(),
+    prisma.materialPurchase.findMany(),
+    prisma.estimateTemplate.findMany(),
+    prisma.billingAuditLog.findMany(),
+    prisma.bambuDevice.findMany(),
+    prisma.bambuMachineStatus.findMany(),
+    prisma.bambuEvent.findMany(),
+    prisma.bambuSpoolInventory.findMany(),
+    prisma.bambuUsageLog.findMany(),
+    prisma.bambuMaintenancePrediction.findMany(),
+    prisma.bambuFailureLog.findMany(),
   ]);
 
-  const maxId = Math.max(extractMaxChgId(backlogMarkdown), extractMaxChgId(implementationMarkdown));
-  return `CHG-${String(maxId + 1).padStart(3, "0")}`;
-};
-
-const classifyReviewPath = (requestType: string, title: string, details: string) => {
-  const haystack = `${title} ${details}`.toLowerCase();
-  const highRiskSignals = [
-    "delete",
-    "remove",
-    "payment",
-    "invoice total",
-    "security",
-    "authentication",
-    "permission",
-    "backup",
-    "restore",
-    "migration",
-    "database",
-    "prisma",
-    "billing",
-  ];
-  const autoCandidateSignals = [
-    "help text",
-    "copy",
-    "wording",
-    "label",
-    "placeholder",
-    "tooltip",
-    "readme",
-    "changelog",
-    "docs",
-    "ui tweak",
-  ];
-
-  const hasHighRiskSignal = highRiskSignals.some((signal) => haystack.includes(signal));
-  if (requestType === "Bug" || hasHighRiskSignal) {
-    return {
-      reviewRecommendation: "Human Review Required",
-      triageReason: hasHighRiskSignal
-        ? "Contains high-impact keywords (billing/data/security/restore style changes)."
-        : "Bug reports default to human review before automation.",
-    };
-  }
-
-  const hasAutoSignal = autoCandidateSignals.some((signal) => haystack.includes(signal));
-  if (hasAutoSignal) {
-    return {
-      reviewRecommendation: "Auto Candidate",
-      triageReason: "Looks like a low-risk content or UI refinement request.",
-    };
-  }
-
   return {
-    reviewRecommendation: "Human Review Required",
-    triageReason: "No strong low-risk automation signal detected.",
+    schemaVersion: BACKUP_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    coverage: [
+      "jobs",
+      "job materials",
+      "job costs",
+      "materials",
+      "customers",
+      "suppliers",
+      "supplier purchases",
+      "estimate templates",
+      "billing audit logs",
+      "machine profile settings",
+      "bambu devices",
+      "bambu statuses",
+      "bambu events",
+      "bambu spool inventory",
+      "bambu usage logs",
+      "bambu maintenance predictions",
+      "bambu failure logs",
+      "reports (derived from jobs, costs, customers, and materials)",
+      ...(includeBillingSettings ? ["billing settings", "theme colors"] : []),
+    ],
+    jobs,
+    materials,
+    billingSettings,
+    jobCosts,
+    customers,
+    suppliers,
+    purchases,
+    estimateTemplates,
+    billingAuditLogs,
+    bambuDevices,
+    bambuStatuses,
+    bambuEvents,
+    bambuSpools,
+    bambuUsageLogs,
+    bambuMaintenance,
+    bambuFailureLogs,
   };
-};
-
-const appendBacklogItem = async (row: string, todayIso: string) => {
-  const backlogMarkdown = await fs.readFile(backlogPath, "utf8");
-  const marker = "## Next 3";
-  const markerIndex = backlogMarkdown.indexOf(marker);
-  if (markerIndex === -1) {
-    throw new Error("Could not locate Next 3 section in docs/backlog.md");
-  }
-
-  const beforeMarker = backlogMarkdown.slice(0, markerIndex).replace(/\s*$/, "");
-  const afterMarker = backlogMarkdown.slice(markerIndex);
-  const withRow = `${beforeMarker}\n${row}\n\n${afterMarker}`;
-  const updated = withRow.replace(/^Last updated:\s+\d{4}-\d{2}-\d{2}/m, `Last updated: ${todayIso}`);
-  await fs.writeFile(backlogPath, updated, "utf8");
 };
 
 router.get("/backup", async (_req, res) => {
@@ -297,7 +300,9 @@ router.post("/backup", async (req, res) => {
           machineType: job.machineType,
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
-          labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          setupTimeMinutes: Number(job.setupTimeMinutes ?? 0),
+          postProcessingMinutes: Number(job.postProcessingMinutes ?? 0),
+          labourTimeMinutes: Number(job.labourTimeMinutes ?? (Number(job.setupTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0))),
           dueDate: job.dueDate ? new Date(String(job.dueDate)) : null,
           queuePosition: Number(job.queuePosition || 0),
           qaChecklist: JSON.stringify(Array.isArray(job.qaChecklist) ? job.qaChecklist : []),
@@ -306,6 +311,9 @@ router.post("/backup", async (req, res) => {
           reworkNotes: String(job.reworkNotes || ""),
           setupFee: Math.max(0, Number(job.setupFee || 0)),
           deliveryCharge: Math.max(0, Number(job.deliveryCharge || 0)),
+          failureReason: String(job.failureReason || ""),
+          failureWasteGrams: Number(job.failureWasteGrams || 0),
+          failureCost: Number(job.failureCost || 0),
           isRush: Boolean(job.isRush),
           isSetupFee: Boolean(job.isSetupFee),
           isDelivery: Boolean(job.isDelivery),
@@ -701,7 +709,7 @@ router.post("/backup/billing", async (req, res) => {
 });
 
 router.post("/backup/full", async (req, res) => {
-  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [], bambuDevices = [], bambuStatuses = [], bambuEvents = [], bambuSpools = [], bambuUsageLogs = [], bambuMaintenance = [], bambuFailureLogs = [] } = req.body || {};
+  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [], estimateTemplates = [], billingAuditLogs = [], bambuDevices = [], bambuStatuses = [], bambuEvents = [], bambuSpools = [], bambuUsageLogs = [], bambuMaintenance = [], bambuFailureLogs = [] } = req.body || {};
 
   try {
     const includeBillingSettings = await hasBillingBackupSchemaSupport();
@@ -715,6 +723,8 @@ router.post("/backup/full", async (req, res) => {
     await tx.bambuMachineStatus.deleteMany();
     await tx.bambuDevice.deleteMany();
     await tx.jobCost.deleteMany();
+    await tx.billingAuditLog.deleteMany();
+    await tx.estimateTemplate.deleteMany();
     await tx.job.deleteMany();
     await tx.material.deleteMany();
     await tx.customer.deleteMany();
@@ -812,7 +822,9 @@ router.post("/backup/full", async (req, res) => {
           machineType: job.machineType,
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
-          labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          setupTimeMinutes: Number(job.setupTimeMinutes ?? 0),
+          postProcessingMinutes: Number(job.postProcessingMinutes ?? 0),
+          labourTimeMinutes: Number(job.labourTimeMinutes ?? (Number(job.setupTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0))),
           dueDate: job.dueDate ? new Date(String(job.dueDate)) : null,
           queuePosition: Number(job.queuePosition || 0),
           qaChecklist: JSON.stringify(Array.isArray(job.qaChecklist) ? job.qaChecklist : []),
@@ -821,6 +833,9 @@ router.post("/backup/full", async (req, res) => {
           reworkNotes: String(job.reworkNotes || ""),
           setupFee: Math.max(0, Number(job.setupFee || 0)),
           deliveryCharge: Math.max(0, Number(job.deliveryCharge || 0)),
+          failureReason: String(job.failureReason || ""),
+          failureWasteGrams: Number(job.failureWasteGrams || 0),
+          failureCost: Number(job.failureCost || 0),
           isRush: Boolean(job.isRush),
           isSetupFee: Boolean(job.isSetupFee),
           isDelivery: Boolean(job.isDelivery),

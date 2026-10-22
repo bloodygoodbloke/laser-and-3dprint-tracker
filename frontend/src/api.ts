@@ -1,4 +1,4 @@
-import { BacklogIntakeRequest, BacklogIntakeResponse, BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
+import { BacklogIntakeRequest, BacklogIntakeResponse, BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, HelpIntakeRequestRecord, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
@@ -340,6 +340,38 @@ const api = {
       body: JSON.stringify({ url }),
     });
     if (!res.ok) throw new Error("Failed to import MakerWorld print profile");
+    return res.json();
+  },
+  async getEstimateTemplates(): Promise<EstimateTemplate[]> {
+    const res = await fetch("/api/estimates/templates");
+    if (!res.ok) throw new Error("Failed to load estimate templates");
+    return res.json();
+  },
+  async createEstimateTemplate(payload: Partial<EstimateTemplate>): Promise<EstimateTemplate> {
+    const res = await fetch("/api/estimates/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to create estimate template");
+    return res.json();
+  },
+  async updateEstimateTemplate(id: string, payload: Partial<EstimateTemplate>): Promise<EstimateTemplate> {
+    const res = await fetch(`/api/estimates/templates/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to update estimate template");
+    return res.json();
+  },
+  async deleteEstimateTemplate(id: string): Promise<void> {
+    const res = await fetch(`/api/estimates/templates/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete estimate template");
+  },
+  async getBillingAuditLogs(limit = 100): Promise<BillingAuditLog[]> {
+    const res = await fetch(`/api/billing-audit?limit=${limit}`);
+    if (!res.ok) throw new Error("Failed to load billing audit logs");
     return res.json();
   },
   async submitBacklogIntake(payload: BacklogIntakeRequest): Promise<BacklogIntakeResponse> {

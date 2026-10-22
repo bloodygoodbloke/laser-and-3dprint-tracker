@@ -46,11 +46,15 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
-  const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, sourceUrl } = req.body;
+  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, setupTimeMinutes, postProcessingMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
+  const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, failureReason, failureWasteGrams, failureCost, sourceUrl } = req.body;
 
   const jobsCount = await prisma.job.count();
   const generatedNumber = jobNumber || `JOB-${String(jobsCount + 1).padStart(4, "0")}`;
+
+  const normalizedSetup = Number(setupTimeMinutes ?? 0);
+  const normalizedPost = Number(postProcessingMinutes ?? 0);
+  const normalizedLabour = Number(labourTimeMinutes ?? (normalizedSetup + normalizedPost));
 
   const baseData = {
     jobNumber: generatedNumber,
@@ -60,7 +64,9 @@ router.post("/", async (req, res) => {
     machineType,
     estTimeMinutes: Number(estTimeMinutes || 0),
     machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
-    labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+    setupTimeMinutes: normalizedSetup,
+    postProcessingMinutes: normalizedPost,
+    labourTimeMinutes: normalizedLabour,
     dueDate: dueDate ? new Date(String(dueDate)) : null,
     queuePosition: Number(queuePosition || 0),
     qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
@@ -69,6 +75,9 @@ router.post("/", async (req, res) => {
     reworkNotes: String(reworkNotes || ""),
     setupFee: Math.max(0, Number(setupFee || 0)),
     deliveryCharge: Math.max(0, Number(deliveryCharge || 0)),
+    failureReason: String(failureReason || ""),
+    failureWasteGrams: Number(failureWasteGrams || 0),
+    failureCost: Number(failureCost || 0),
     isRush: Boolean(isRush),
     isSetupFee: Boolean(isSetupFee),
     isDelivery: Boolean(isDelivery),
@@ -133,11 +142,20 @@ router.get("/:id", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
-  const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, sourceUrl } = req.body;
+  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, setupTimeMinutes, postProcessingMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
+  const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, failureReason, failureWasteGrams, failureCost, sourceUrl } = req.body;
 
   try {
+    const previousJob = await prisma.job.findUnique({ where: { id } });
+    if (!previousJob) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
     await prisma.jobMaterial.deleteMany({ where: { jobId: id } });
+
+    const normalizedSetup = Number(setupTimeMinutes ?? 0);
+    const normalizedPost = Number(postProcessingMinutes ?? 0);
+    const normalizedLabour = Number(labourTimeMinutes ?? (normalizedSetup + normalizedPost));
 
     const baseData = {
       jobNumber: jobNumber || undefined,
@@ -147,7 +165,9 @@ router.put("/:id", async (req, res) => {
       machineType,
       estTimeMinutes: Number(estTimeMinutes || 0),
       machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
-      labourTimeMinutes: Number(labourTimeMinutes ?? estTimeMinutes ?? 0),
+      setupTimeMinutes: normalizedSetup,
+      postProcessingMinutes: normalizedPost,
+      labourTimeMinutes: normalizedLabour,
       dueDate: dueDate ? new Date(String(dueDate)) : null,
       queuePosition: Number(queuePosition || 0),
       qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
@@ -156,6 +176,9 @@ router.put("/:id", async (req, res) => {
       reworkNotes: String(reworkNotes || ""),
       setupFee: Math.max(0, Number(setupFee || 0)),
       deliveryCharge: Math.max(0, Number(deliveryCharge || 0)),
+      failureReason: String(failureReason || ""),
+      failureWasteGrams: Number(failureWasteGrams || 0),
+      failureCost: Number(failureCost || 0),
       isRush: Boolean(isRush),
       isSetupFee: Boolean(isSetupFee),
       isDelivery: Boolean(isDelivery),
@@ -188,6 +211,39 @@ router.put("/:id", async (req, res) => {
         where: { id },
         data: { ...baseData, reworkNotes: fallbackNotes } as any,
         include: { materials: { include: { material: true } }, cost: true },
+      });
+    }
+
+    const auditFields: Array<{ field: string; before: string; after: string }> = [];
+    const pushAuditField = (field: string, beforeValue: unknown, afterValue: unknown) => {
+      const before = String(beforeValue ?? "");
+      const after = String(afterValue ?? "");
+      if (before !== after) {
+        auditFields.push({ field, before, after });
+      }
+    };
+
+    pushAuditField("paymentStatus", previousJob.paymentStatus, job.paymentStatus);
+    pushAuditField("depositPaidAmount", previousJob.depositPaidAmount, job.depositPaidAmount);
+    pushAuditField("isRush", previousJob.isRush, job.isRush);
+    pushAuditField("status", previousJob.status, job.status);
+    pushAuditField("machineRunTimeMinutes", previousJob.machineRunTimeMinutes, job.machineRunTimeMinutes);
+    pushAuditField("setupTimeMinutes", previousJob.setupTimeMinutes, job.setupTimeMinutes);
+    pushAuditField("postProcessingMinutes", previousJob.postProcessingMinutes, job.postProcessingMinutes);
+    pushAuditField("labourTimeMinutes", previousJob.labourTimeMinutes, job.labourTimeMinutes);
+    pushAuditField("failureReason", previousJob.failureReason, job.failureReason);
+    pushAuditField("failureWasteGrams", previousJob.failureWasteGrams, job.failureWasteGrams);
+    pushAuditField("failureCost", previousJob.failureCost, job.failureCost);
+
+    if (auditFields.length) {
+      await prisma.billingAuditLog.create({
+        data: {
+          entityType: "job",
+          entityId: job.id,
+          action: "invoice-update",
+          fieldChanges: JSON.stringify(auditFields),
+          summary: `Updated ${auditFields.length} invoice/billing field(s) on job ${job.jobNumber || job.id}.`,
+        },
       });
     }
 
@@ -269,7 +325,9 @@ router.post('/:id/calculate-cost', async (req, res) => {
     let labourCost = 0;
 
     const machineRunTimeMinutes = Number(payload.machineRunTimeMinutes ?? payload.printTimeMinutes ?? payload.laserMinutes ?? job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
-    const labourTimeMinutes = Number(payload.labourTimeMinutes ?? job.labourTimeMinutes ?? machineRunTimeMinutes);
+    const setupTimeMinutes = Number(payload.setupTimeMinutes ?? job.setupTimeMinutes ?? 0);
+    const postProcessingMinutes = Number(payload.postProcessingMinutes ?? job.postProcessingMinutes ?? 0);
+    const labourTimeMinutes = Number(payload.labourTimeMinutes ?? (setupTimeMinutes + postProcessingMinutes));
     const isRushJob = Boolean(payload.isRush ?? job.isRush);
     const jobSetupFee = Math.max(0, Number(payload.setupFee ?? job.setupFee ?? 0));
     const jobDeliveryCharge = Math.max(0, Number(payload.deliveryCharge ?? job.deliveryCharge ?? 0));
@@ -327,7 +385,8 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const subtotal = materialCost + electricityCost + labourCost;
     const overheadCost = (machineRunTimeMinutes / 60) * WORKSHOP_HOURLY_RATE;
     const qaReworkCost = Number(job.reworkCost || 0);
-    const totalCost = subtotal + overheadCost + qaReworkCost;
+    const failureCostAmount = Number(job.failureCost || 0);
+    const totalCost = subtotal + overheadCost + qaReworkCost + failureCostAmount;
     const electricityOnlyCost = Math.max(0, electricityCost - depreciationCost);
 
     const materialCharge = materialCost + materialTypeMarkupCharge + (materialCost * (MATERIAL_MARKUP_PERCENT / 100));
@@ -370,11 +429,16 @@ router.post('/:id/calculate-cost', async (req, res) => {
       labourCharge,
       overheadCharge,
       qaReworkCost,
+      failureCostAmount,
       setupFeeAmount,
       rushFeeAmount,
       deliveryFeeAmount,
       minimumChargeApplied,
       wasteFactorPercent: Math.max(0, WASTE_FACTOR_PERCENT),
+      machineRunTimeMinutes,
+      setupTimeMinutes,
+      postProcessingMinutes,
+      labourTimeMinutes,
       isRush: isRushJob,
       isSetupFee: isSetupFeeJob,
       isDelivery: isDeliveryJob,

@@ -103,6 +103,8 @@ export interface Job {
   machineType: string;
   estTimeMinutes: number;
   machineRunTimeMinutes?: number;
+  setupTimeMinutes?: number;
+  postProcessingMinutes?: number;
   labourTimeMinutes?: number;
   dueDate?: string | null;
   queuePosition?: number;
@@ -112,6 +114,9 @@ export interface Job {
   reworkNotes?: string;
   setupFee?: number;
   deliveryCharge?: number;
+  failureReason?: string;
+  failureWasteGrams?: number;
+  failureCost?: number;
   isRush?: boolean;
   isSetupFee?: boolean;
   isDelivery?: boolean;
@@ -292,4 +297,38 @@ export interface BacklogIntakeResponse {
   triageReason: string;
   title: string;
   details: string;
+}
+
+export interface BillingAuditFieldChange {
+  field: string;
+  before: string;
+  after: string;
+}
+
+export interface BillingAuditLog {
+  id: string;
+  entityType: "billing-settings" | "job";
+  entityId?: string;
+  action: string;
+  summary: string;
+  fieldChanges: BillingAuditFieldChange[];
+  createdAt: string;
+}
+
+export interface EstimateTemplate {
+  id: string;
+  name: string;
+  sourceUrl?: string;
+  machineType: string;
+  machineRunTimeMinutes: number;
+  setupTimeMinutes: number;
+  postProcessingMinutes: number;
+  labourTimeMinutes: number;
+  suggestedMaterialGrams: number;
+  notes?: string;
+  lastEstimatedBaseCost: number;
+  lastEstimatedCharge: number;
+  lastUsedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }

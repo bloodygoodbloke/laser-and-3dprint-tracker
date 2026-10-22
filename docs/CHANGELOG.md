@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Added backup/restore compatibility updates so billing and job-level setup/delivery fields are preserved reliably across full snapshot workflows.
 - Updated Jobs dashboard workflows by removing Quick Add and Low Stock cards, adding a focused Jobs summary card, and adding Add Job shortcuts that scroll/focus directly to the Add Job form.
 - Added first-pass estimate catalogue workflow for CHG-087: jobs can be marked as `Estimate Template`, listed in a reusable Jobs estimate catalogue, and applied into Add Job as prefilled drafts for quick pricing without requiring customer details up front.
+- Added failure tracking on jobs with failure reason, waste grams, and failure cost fields, surfaced in job create/edit/detail workflows and included in cost totals and backup/import payloads.
+- Added estimate catalog support for reusable model-based pricing templates, including save/apply/delete actions in the Jobs add flow and MakerWorld-linked template metadata.
+- Added billing/invoice audit logging for billing settings changes and key invoice-related job updates, plus a Billing audit log viewer.
+- Expanded job time tracking to include setup time and post-processing time alongside machine runtime and labour time across forms, costing, and backups.
 - Moved Bambu telemetry and dashboard workflows into the Machines tab, linked to the Bambu machine profile, and removed the standalone Bambu top-level tab.
 - Updated dashboard layout to prioritize Delivery and Utilization at the top, reduced visual weight of Pending Jobs and Low Stock cards, and expanded Quick Add Job to full width.
 - Moved margin reporting breakdown widgets from Dashboard to the Reports tab.

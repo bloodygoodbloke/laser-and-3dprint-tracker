@@ -2,12 +2,9 @@
 
 Tracks planned and in-progress implementation work.
 
-Last updated: 2026-08-04
+Last updated: 2026-10-29
 
 ## Next 3
-- CHG-087
-- CHG-055
-- CHG-058
 
 ## How To Use This Backlog
 1. Add new requests to the backlog table with status `Planned` and the next `CHG-XXX` ID.
@@ -29,10 +26,6 @@ Last updated: 2026-08-04
 ## Backlog Table
 | ID | Type | Priority | Status | Title | Details | Review Status | Review Reason | Target Date |
 |---|---|---|---|---|---|---|---|---|
-| CHG-087 | Feature Request | P1 High | In Progress | job estimates | Id like to have a feature where i can put in the information or bring in from makerworld to do a job estimate without actually having to fill in customer details, id like to save the job per the model and have a sort of catalogue that i can reference for quick pricing. [Source: Help page intake] Progress: first slice delivered - added Estimate Template status, Jobs estimate catalogue panel, and Use template prefill into Add Job. Remaining: dedicated estimate-only records and deeper catalogue controls. | Reviewed | Implementable with existing MakerWorld metadata/autofill pipeline and internal job data model extensions. | - |
-| CHG-055 | Feature | P3 Low | In Progress | Billing/invoice audit log | Track and report edits to billing and invoice values. | Reviewed | Implementable using append-only audit records on existing billing and invoice update workflows. | - |
-| CHG-058 | Feature | P3 Low | In Progress | Proper time tracking | Track setup, post-processing, and actual manufacture time. | Reviewed | Implementable by extending existing runtime/labour model with setup/post-processing segments. | - |
-| CHG-059 | Feature | P3 Low | Planned | Failure tracking | Capture failure reason, waste, and failure cost. | Reviewed | Implementable with current job and telemetry structures plus failure taxonomy fields. | - |
 | CHG-060 | Integration | Integrations | On Hold | Octopus Go tariff API updates | Pull electricity prices from API with GUI-configurable tariff. | Human Review | External API behavior, tariff mapping, and fallback rules require owner validation. | - |
 | CHG-061 | Integration | Integrations | On Hold | Energy-aware scheduling | Schedule jobs into off-peak windows from tariff data. | Human Review | Scheduling constraints and exceptions can impact delivery commitments. | - |
 | CHG-062 | Integration | Integrations | On Hold | SumUp payment links | Create payment links from invoice records. | Human Review | Payment-link generation touches customer billing and requires compliance checks. | - |
@@ -46,7 +39,6 @@ Last updated: 2026-08-04
 | CHG-080 | Automation | Integrations | On Hold | Telemetry progress automation | Auto-update progress/completion timestamps from telemetry. | Human Review | Automated status transitions can affect invoicing and workflow controls. | - |
 | CHG-081 | Automation | Integrations | On Hold | Metadata auto-tagging | Auto-tag machine/material/complexity from imported metadata. | Human Review | Auto-tagging quality thresholds and override rules need policy decisions. | - |
 | CHG-082 | Automation | Integrations | On Hold | Multi-machine load balancer | Auto-assign jobs to best available machine. | Human Review | Assignment strategy can conflict with operator constraints and due-date priorities. | - |
-| CHG-088 | Integration | Integrations | On Hold | Revisit owner OAuth | Reintroduce owner authentication for Help intake backlog imports after the temporary removal is replaced with a simpler, lower-friction approach. | Human Review | Authentication flow changes admin access and should be re-specified before reimplementation. | - |
 
 ## New Entry Template
 
