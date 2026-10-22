@@ -20,7 +20,7 @@ const toRecordArray = (value: unknown): RawRecord[] => Array.isArray(value)
   : [];
 
 const getFullBackupPayload = async () => {
-  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
+  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, estimateTemplates, billingAuditLogs, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
     prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
     prisma.material.findMany(),
     prisma.billingSetting.findMany(),
@@ -28,6 +28,8 @@ const getFullBackupPayload = async () => {
     prisma.customer.findMany(),
     prisma.supplier.findMany(),
     prisma.materialPurchase.findMany(),
+    prisma.estimateTemplate.findMany(),
+    prisma.billingAuditLog.findMany(),
     prisma.bambuDevice.findMany(),
     prisma.bambuMachineStatus.findMany(),
     prisma.bambuEvent.findMany(),
@@ -48,6 +50,8 @@ const getFullBackupPayload = async () => {
       "customers",
       "suppliers",
       "supplier purchases",
+      "estimate templates",
+      "billing audit logs",
       "billing settings",
       "theme colors",
       "machine profile settings",
@@ -67,6 +71,8 @@ const getFullBackupPayload = async () => {
     customers,
     suppliers,
     purchases,
+    estimateTemplates,
+    billingAuditLogs,
     bambuDevices,
     bambuStatuses,
     bambuEvents,
@@ -242,13 +248,18 @@ router.post("/backup", async (req, res) => {
           machineType: job.machineType,
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
-          labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          setupTimeMinutes: Number(job.setupTimeMinutes ?? 0),
+          postProcessingMinutes: Number(job.postProcessingMinutes ?? 0),
+          labourTimeMinutes: Number(job.labourTimeMinutes ?? (Number(job.setupTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0))),
           dueDate: job.dueDate ? new Date(String(job.dueDate)) : null,
           queuePosition: Number(job.queuePosition || 0),
           qaChecklist: JSON.stringify(Array.isArray(job.qaChecklist) ? job.qaChecklist : []),
           qaPassed: Boolean(job.qaPassed),
           reworkCost: Number(job.reworkCost || 0),
           reworkNotes: String(job.reworkNotes || ""),
+          failureReason: String(job.failureReason || ""),
+          failureWasteGrams: Number(job.failureWasteGrams || 0),
+          failureCost: Number(job.failureCost || 0),
           isRush: Boolean(job.isRush),
           paymentStatus: String(job.paymentStatus || "Unpaid"),
           depositPaidAmount: Number(job.depositPaidAmount || 0),
@@ -556,7 +567,7 @@ router.post("/backup/machines", async (req, res) => {
 });
 
 router.post("/backup/full", async (req, res) => {
-  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [], bambuDevices = [], bambuStatuses = [], bambuEvents = [], bambuSpools = [], bambuUsageLogs = [], bambuMaintenance = [], bambuFailureLogs = [] } = req.body || {};
+  const { jobs = [], materials = [], billingSettings = [], jobCosts = [], customers = [], suppliers = [], purchases = [], estimateTemplates = [], billingAuditLogs = [], bambuDevices = [], bambuStatuses = [], bambuEvents = [], bambuSpools = [], bambuUsageLogs = [], bambuMaintenance = [], bambuFailureLogs = [] } = req.body || {};
 
   await prisma.$transaction(async (tx) => {
     await tx.bambuFailureLog.deleteMany();
@@ -567,6 +578,8 @@ router.post("/backup/full", async (req, res) => {
     await tx.bambuMachineStatus.deleteMany();
     await tx.bambuDevice.deleteMany();
     await tx.jobCost.deleteMany();
+    await tx.billingAuditLog.deleteMany();
+    await tx.estimateTemplate.deleteMany();
     await tx.job.deleteMany();
     await tx.material.deleteMany();
     await tx.customer.deleteMany();
@@ -662,13 +675,18 @@ router.post("/backup/full", async (req, res) => {
           machineType: job.machineType,
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
-          labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+          setupTimeMinutes: Number(job.setupTimeMinutes ?? 0),
+          postProcessingMinutes: Number(job.postProcessingMinutes ?? 0),
+          labourTimeMinutes: Number(job.labourTimeMinutes ?? (Number(job.setupTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0))),
           dueDate: job.dueDate ? new Date(String(job.dueDate)) : null,
           queuePosition: Number(job.queuePosition || 0),
           qaChecklist: JSON.stringify(Array.isArray(job.qaChecklist) ? job.qaChecklist : []),
           qaPassed: Boolean(job.qaPassed),
           reworkCost: Number(job.reworkCost || 0),
           reworkNotes: String(job.reworkNotes || ""),
+          failureReason: String(job.failureReason || ""),
+          failureWasteGrams: Number(job.failureWasteGrams || 0),
+          failureCost: Number(job.failureCost || 0),
           isRush: Boolean(job.isRush),
           paymentStatus: String(job.paymentStatus || "Unpaid"),
           depositPaidAmount: Number(job.depositPaidAmount || 0),

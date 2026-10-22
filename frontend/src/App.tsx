@@ -1,6 +1,6 @@
 import { createElement, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
-import { BambuDashboardPayload, BillingSettings, Customer, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
 const APP_VERSION = "0.6.0";
@@ -196,16 +196,16 @@ function App() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
-  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(blankBillingSettings());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
-  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", postProcessingMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
-  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [showMaterialEditor, setShowMaterialEditor] = useState(false);
@@ -251,6 +251,8 @@ function App() {
   const [makerWorldMessage, setMakerWorldMessage] = useState("");
   const [makerWorldMetadata, setMakerWorldMetadata] = useState<MakerWorldMetadata | null>(null);
   const [makerWorldProfile, setMakerWorldProfile] = useState<MakerWorldPrintProfile | null>(null);
+  const [estimateTemplates, setEstimateTemplates] = useState<EstimateTemplate[]>([]);
+  const [billingAuditLogs, setBillingAuditLogs] = useState<BillingAuditLog[]>([]);
   const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
   const [jobFileMessage, setJobFileMessage] = useState<Record<string, string>>({});
   const [helpRequestForm, setHelpRequestForm] = useState({
@@ -263,7 +265,14 @@ function App() {
   const [queuedHelpRequests, setQueuedHelpRequests] = useState<HelpIntakeRequestRecord[]>([]);
 
   const loadData = async () => {
-    const [jobsData, materialsData, customersData, suppliersData] = await Promise.all([api.getJobs(), api.getMaterials(), api.getCustomers(), api.getSuppliers()]);
+    const [jobsData, materialsData, customersData, suppliersData, templatesData, auditData] = await Promise.all([
+      api.getJobs(),
+      api.getMaterials(),
+      api.getCustomers(),
+      api.getSuppliers(),
+      api.getEstimateTemplates(),
+      api.getBillingAuditLogs(100),
+    ]);
     const normalizedJobs = jobsData.map((job) => {
       const rawChecklist = (job as Job & { qaChecklist?: unknown }).qaChecklist;
       let qaChecklist: string[] = [];
@@ -290,6 +299,8 @@ function App() {
     setMaterials(finalMaterials);
     setCustomers(customersData);
     setSuppliers(suppliersData);
+    setEstimateTemplates(templatesData);
+    setBillingAuditLogs(auditData);
     if (!jobMaterialEntries.length && finalMaterials.length) {
       setJobMaterialEntries([{ materialId: finalMaterials[0].id, usageQuantity: "100" }]);
     }
@@ -394,6 +405,8 @@ function App() {
       sourceUrl: selectedJob.sourceUrl || "",
       machineType: selectedJob.machineType || machineOptions[0],
       machineRunTimeMinutes: String(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
+      setupTimeMinutes: String(selectedJob.setupTimeMinutes ?? 0),
+      postProcessingMinutes: String(selectedJob.postProcessingMinutes ?? 0),
       labourTimeMinutes: String(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
       dueDate: selectedJob.dueDate ? String(selectedJob.dueDate).slice(0, 10) : "",
       queuePosition: String(selectedJob.queuePosition ?? 0),
@@ -401,6 +414,9 @@ function App() {
       qaPassed: Boolean(selectedJob.qaPassed),
       reworkCost: String(selectedJob.reworkCost ?? 0),
       reworkNotes: selectedJob.reworkNotes || "",
+      failureReason: selectedJob.failureReason || "",
+      failureWasteGrams: String(selectedJob.failureWasteGrams ?? 0),
+      failureCost: String(selectedJob.failureCost ?? 0),
       isRush: Boolean(selectedJob.isRush),
       paymentStatus: selectedJob.paymentStatus || "Unpaid",
       depositPaidAmount: String(selectedJob.depositPaidAmount ?? 0),
@@ -410,7 +426,7 @@ function App() {
       materialId: entry.materialId,
       usageQuantity: String(entry.usageQuantity || 0),
     })));
-  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.sourceUrl, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.labourTimeMinutes, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.isRush, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
+  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.sourceUrl, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.setupTimeMinutes, selectedJob?.postProcessingMinutes, selectedJob?.labourTimeMinutes, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.failureReason, selectedJob?.failureWasteGrams, selectedJob?.failureCost, selectedJob?.isRush, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
 
   useEffect(() => {
     if (!newJobMaterialEntries.length && materials.length) {
@@ -629,6 +645,8 @@ function App() {
       machineType: jobForm.machineType,
       estTimeMinutes: Number(jobForm.machineRunTimeMinutes),
       machineRunTimeMinutes: Number(jobForm.machineRunTimeMinutes || 0),
+      setupTimeMinutes: Number(jobForm.setupTimeMinutes || 0),
+      postProcessingMinutes: Number(jobForm.postProcessingMinutes || 0),
       labourTimeMinutes: Number(jobForm.labourTimeMinutes || 0),
       dueDate: jobForm.dueDate || null,
       queuePosition: Number(jobForm.queuePosition || 0),
@@ -636,13 +654,16 @@ function App() {
       qaPassed: Boolean(jobForm.qaPassed),
       reworkCost: Number(jobForm.reworkCost || 0),
       reworkNotes: String(jobForm.reworkNotes || ""),
+      failureReason: String(jobForm.failureReason || ""),
+      failureWasteGrams: Number(jobForm.failureWasteGrams || 0),
+      failureCost: Number(jobForm.failureCost || 0),
       isRush: jobForm.isRush,
       paymentStatus: jobForm.paymentStatus,
       depositPaidAmount: Number(jobForm.depositPaidAmount || 0),
       status: jobForm.status,
       materials: toApiJobMaterials(jobMaterialEntries),
     });
-    setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+    setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setJobMaterialEntries([]);
     await loadData();
 
@@ -721,7 +742,7 @@ function App() {
 
   const openNewJobEditor = () => {
     setJobEditorMode("create");
-    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "100" }] : []);
     setMakerWorldUrl("");
     setMakerWorldMessage("");
@@ -819,6 +840,8 @@ function App() {
       machineType: newJobForm.machineType,
       estTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
       machineRunTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
+      setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
+      postProcessingMinutes: Number(newJobForm.postProcessingMinutes || 0),
       labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
       dueDate: newJobForm.dueDate || null,
       queuePosition: Number(newJobForm.queuePosition || 0),
@@ -826,6 +849,9 @@ function App() {
       qaPassed: Boolean(newJobForm.qaPassed),
       reworkCost: Number(newJobForm.reworkCost || 0),
       reworkNotes: String(newJobForm.reworkNotes || ""),
+      failureReason: String(newJobForm.failureReason || ""),
+      failureWasteGrams: Number(newJobForm.failureWasteGrams || 0),
+      failureCost: Number(newJobForm.failureCost || 0),
       isRush: newJobForm.isRush,
       paymentStatus: newJobForm.paymentStatus,
       depositPaidAmount: Number(newJobForm.depositPaidAmount || 0),
@@ -891,12 +917,16 @@ function App() {
 
   const calculateJobCost = async (job: Job) => {
     const machineRunTimeMinutes = Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
-    const labourTimeMinutes = Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0);
+    const setupTimeMinutes = Number(job.setupTimeMinutes ?? 0);
+    const postProcessingMinutes = Number(job.postProcessingMinutes ?? 0);
+    const labourTimeMinutes = Number(job.labourTimeMinutes ?? (setupTimeMinutes + postProcessingMinutes));
     await api.calculateCost(job.id, {
       mode: getJobMode(job.machineType),
       machineName: job.machineType,
       isRush: Boolean(job.isRush),
       machineRunTimeMinutes,
+      setupTimeMinutes,
+      postProcessingMinutes,
       labourTimeMinutes,
       materials: (job.materials || []).map((entry) => ({
         materialId: entry.materialId,
@@ -916,13 +946,18 @@ function App() {
       machineType: job.machineType,
       estTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
       machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
-      labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0),
+      setupTimeMinutes: Number(job.setupTimeMinutes ?? 0),
+      postProcessingMinutes: Number(job.postProcessingMinutes ?? 0),
+      labourTimeMinutes: Number(job.labourTimeMinutes ?? (Number(job.setupTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0))),
       dueDate: job.dueDate || null,
       queuePosition: Number(job.queuePosition || 0),
       qaChecklist: job.qaChecklist || [],
       qaPassed: Boolean(job.qaPassed),
       reworkCost: Number(job.reworkCost || 0),
       reworkNotes: String(job.reworkNotes || ""),
+      failureReason: String(job.failureReason || ""),
+      failureWasteGrams: Number(job.failureWasteGrams || 0),
+      failureCost: Number(job.failureCost || 0),
       isRush: Boolean(job.isRush),
       paymentStatus: job.paymentStatus || "Unpaid",
       depositPaidAmount: Number(job.depositPaidAmount || 0),
@@ -987,6 +1022,8 @@ function App() {
         machineType: selectedJobForm.machineType,
         estTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
         machineRunTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
+        setupTimeMinutes: Number(selectedJobForm.setupTimeMinutes || 0),
+        postProcessingMinutes: Number(selectedJobForm.postProcessingMinutes || 0),
         labourTimeMinutes: Number(selectedJobForm.labourTimeMinutes || 0),
         dueDate: selectedJobForm.dueDate || null,
         queuePosition: Number(selectedJobForm.queuePosition || 0),
@@ -994,6 +1031,9 @@ function App() {
         qaPassed: Boolean(selectedJobForm.qaPassed),
         reworkCost: Number(selectedJobForm.reworkCost || 0),
         reworkNotes: String(selectedJobForm.reworkNotes || ""),
+        failureReason: String(selectedJobForm.failureReason || ""),
+        failureWasteGrams: Number(selectedJobForm.failureWasteGrams || 0),
+        failureCost: Number(selectedJobForm.failureCost || 0),
         isRush: selectedJobForm.isRush,
         paymentStatus: selectedJobForm.paymentStatus,
         depositPaidAmount: Number(selectedJobForm.depositPaidAmount || 0),
@@ -1418,16 +1458,23 @@ function App() {
   const importMakerWorldAutofill = async () => {
     const payload = await api.autofillMakerWorldJob(makerWorldUrl);
     setMakerWorldMetadata(payload.metadata);
-    setNewJobForm((current) => ({
-      ...current,
-      name: payload.jobDraft.name,
-      sourceUrl: payload.jobDraft.sourceUrl || current.sourceUrl,
-      machineType: payload.jobDraft.machineType,
-      machineRunTimeMinutes: String(payload.jobDraft.machineRunTimeMinutes),
-      labourTimeMinutes: String(payload.jobDraft.labourTimeMinutes),
-      status: payload.jobDraft.status,
-      reworkNotes: [current.reworkNotes, payload.jobDraft.notes].filter(Boolean).join("\n"),
-    }));
+    setNewJobForm((current) => {
+      const nextLabour = Number(payload.jobDraft.labourTimeMinutes || 0);
+      const nextSetup = Math.max(0, Math.round(nextLabour * 0.5));
+      const nextPost = Math.max(0, nextLabour - nextSetup);
+      return {
+        ...current,
+        name: payload.jobDraft.name,
+        sourceUrl: payload.jobDraft.sourceUrl || current.sourceUrl,
+        machineType: payload.jobDraft.machineType,
+        machineRunTimeMinutes: String(payload.jobDraft.machineRunTimeMinutes),
+        setupTimeMinutes: String(nextSetup),
+        postProcessingMinutes: String(nextPost),
+        labourTimeMinutes: String(nextLabour),
+        status: payload.jobDraft.status,
+        reworkNotes: [current.reworkNotes, payload.jobDraft.notes].filter(Boolean).join("\n"),
+      };
+    });
     if (payload.jobDraft.suggestedMaterialGrams > 0) {
       setNewJobMaterialEntries((current) => {
         if (!current.length && materials.length) {
@@ -1443,17 +1490,25 @@ function App() {
     const payload = await api.importMakerWorldPrintProfile(makerWorldUrl);
     setMakerWorldMetadata(payload.metadata);
     setMakerWorldProfile(payload.profile);
-    setNewJobForm((current) => ({
-      ...current,
-      sourceUrl: payload.metadata.url || current.sourceUrl,
-      machineRunTimeMinutes: String(payload.profile.estimatedMinutes || current.machineRunTimeMinutes),
-      labourTimeMinutes: String(Math.max(10, Math.round((payload.profile.estimatedMinutes || Number(current.labourTimeMinutes || 0)) * 0.15))),
-      reworkNotes: [
-        current.reworkNotes,
-        `Print profile: ${payload.profile.profileName}`,
-        `Layer ${payload.profile.layerHeightMm}mm, Nozzle ${payload.profile.nozzleTempC}C, Bed ${payload.profile.bedTempC}C, Speed ${payload.profile.speedMmPerSec}mm/s, Infill ${payload.profile.infillPercent}%`,
-      ].filter(Boolean).join("\n"),
-    }));
+    setNewJobForm((current) => {
+      const estimatedRuntime = Number(payload.profile.estimatedMinutes || current.machineRunTimeMinutes || 0);
+      const estimatedLabour = Math.max(10, Math.round(estimatedRuntime * 0.15));
+      const estimatedSetup = Math.max(0, Math.round(estimatedLabour * 0.5));
+      const estimatedPost = Math.max(0, estimatedLabour - estimatedSetup);
+      return {
+        ...current,
+        sourceUrl: payload.metadata.url || current.sourceUrl,
+        machineRunTimeMinutes: String(estimatedRuntime),
+        setupTimeMinutes: String(estimatedSetup),
+        postProcessingMinutes: String(estimatedPost),
+        labourTimeMinutes: String(estimatedLabour),
+        reworkNotes: [
+          current.reworkNotes,
+          `Print profile: ${payload.profile.profileName}`,
+          `Layer ${payload.profile.layerHeightMm}mm, Nozzle ${payload.profile.nozzleTempC}C, Bed ${payload.profile.bedTempC}C, Speed ${payload.profile.speedMmPerSec}mm/s, Infill ${payload.profile.infillPercent}%`,
+        ].filter(Boolean).join("\n"),
+      };
+    });
     if (payload.profile.estimatedMaterialGrams > 0) {
       setNewJobMaterialEntries((current) => {
         if (!current.length && materials.length) {
@@ -1465,6 +1520,68 @@ function App() {
     setJobEditorMode("create");
     setMakerWorldMessage("MakerWorld print profile imported for costing estimation.");
   };
+  const saveCurrentEstimateTemplate = async () => {
+    if (!newJobForm.name.trim()) {
+      setMakerWorldMessage("Enter a job name before saving to the estimate catalog.");
+      return;
+    }
+
+    const charge = Number(reportSummary.revenue || 0);
+    const base = Number(reportSummary.base || 0);
+
+    await api.createEstimateTemplate({
+      name: newJobForm.name,
+      sourceUrl: newJobForm.sourceUrl || makerWorldUrl || "",
+      machineType: newJobForm.machineType,
+      machineRunTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
+      setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
+      postProcessingMinutes: Number(newJobForm.postProcessingMinutes || 0),
+      labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
+      suggestedMaterialGrams: Number(newJobMaterialEntries[0]?.usageQuantity || 0),
+      notes: String(newJobForm.reworkNotes || ""),
+      lastEstimatedBaseCost: base,
+      lastEstimatedCharge: charge,
+      lastUsedAt: new Date().toISOString(),
+    });
+
+    const templates = await api.getEstimateTemplates();
+    setEstimateTemplates(templates);
+    setMakerWorldMessage("Saved to estimate catalog.");
+  };
+
+  const applyEstimateTemplate = async (template: EstimateTemplate) => {
+    setNewJobForm((current) => ({
+      ...current,
+      name: template.name,
+      sourceUrl: template.sourceUrl || current.sourceUrl,
+      machineType: template.machineType,
+      machineRunTimeMinutes: String(template.machineRunTimeMinutes || 0),
+      setupTimeMinutes: String(template.setupTimeMinutes || 0),
+      postProcessingMinutes: String(template.postProcessingMinutes || 0),
+      labourTimeMinutes: String(template.labourTimeMinutes || 0),
+    }));
+
+    if (template.suggestedMaterialGrams > 0) {
+      setNewJobMaterialEntries((current) => {
+        if (!current.length && materials.length) {
+          return [{ materialId: materials[0].id, usageQuantity: String(template.suggestedMaterialGrams) }];
+        }
+        return current.map((entry, index) => index === 0 ? { ...entry, usageQuantity: String(template.suggestedMaterialGrams) } : entry);
+      });
+    }
+
+    await api.updateEstimateTemplate(template.id, { markUsed: true } as Partial<EstimateTemplate>);
+    const templates = await api.getEstimateTemplates();
+    setEstimateTemplates(templates);
+    setMakerWorldMessage(`Applied estimate template: ${template.name}`);
+  };
+
+  const deleteEstimateTemplate = async (templateId: string) => {
+    await api.deleteEstimateTemplate(templateId);
+    const templates = await api.getEstimateTemplates();
+    setEstimateTemplates(templates);
+  };
+
   const selectedCustomerProfile = useMemo(
     () => customers.find((customer) => customer.name.trim().toLowerCase() === String(selectedJob?.customer || "").trim().toLowerCase()) || null,
     [customers, selectedJob?.customer],
@@ -1887,7 +2004,7 @@ function App() {
     const payload = JSON.parse(text);
     await api.importMachinesBackup(payload);
     await loadBillingSettings();
-    await loadBambuDashboard();
+    await refreshBambuDashboard();
     setMachineBackupMessage("Machines backup restored successfully.");
   };
 
@@ -1904,10 +2021,6 @@ function App() {
   };
 
   const importHelpIntakeToBacklog = async (event: ChangeEvent<HTMLInputElement>) => {
-    if (!isOwnerAuthenticated) {
-      setHelpIntakeBackupMessage("Only the app owner can import requests into backlog.");
-      return;
-    }
     const file = event.target.files?.[0];
     if (!file) return;
     const text = await file.text();
@@ -2079,7 +2192,15 @@ function App() {
                     <span className="mb-2 block">Machine runtime (mins)</span>
                     <input value={jobForm.machineRunTimeMinutes} onChange={(e) => setJobForm({ ...jobForm, machineRunTimeMinutes: e.target.value })} placeholder="Minutes" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                   </label>
-                  <label className="block text-sm text-slate-300 md:col-span-2">
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-2 block">Setup time (mins)</span>
+                    <input value={jobForm.setupTimeMinutes} onChange={(e) => setJobForm({ ...jobForm, setupTimeMinutes: e.target.value })} placeholder="Minutes" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                  </label>
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-2 block">Post-processing (mins)</span>
+                    <input value={jobForm.postProcessingMinutes} onChange={(e) => setJobForm({ ...jobForm, postProcessingMinutes: e.target.value })} placeholder="Minutes" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                  </label>
+                  <label className="block text-sm text-slate-300">
                     <span className="mb-2 block">Labour time (mins)</span>
                     <input value={jobForm.labourTimeMinutes} onChange={(e) => setJobForm({ ...jobForm, labourTimeMinutes: e.target.value })} placeholder="Minutes" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                   </label>
@@ -2446,6 +2567,8 @@ function App() {
                           <p><span className="text-slate-500">Model URL:</span> {job.sourceUrl ? <a className="text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer">{job.sourceUrl}</a> : "None"}</p>
                           <p><span className="text-slate-500">Machine:</span> {job.machineType}</p>
                           <p><span className="text-slate-500">Machine runtime:</span> {job.machineRunTimeMinutes ?? job.estTimeMinutes} mins</p>
+                          <p><span className="text-slate-500">Setup time:</span> {job.setupTimeMinutes ?? 0} mins</p>
+                          <p><span className="text-slate-500">Post-processing:</span> {job.postProcessingMinutes ?? 0} mins</p>
                           <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
                           <p><span className="text-slate-500">Status:</span> {job.status}</p>
                           <p><span className="text-slate-500">Queue position:</span> {job.queuePosition ?? 0}</p>
@@ -2456,6 +2579,9 @@ function App() {
                           <p><span className="text-slate-500">Materials:</span> {job.materials?.length || 0}</p>
                           <p><span className="text-slate-500">QA passed:</span> {job.qaPassed ? "Yes" : "No"}</p>
                           <p><span className="text-slate-500">Rework cost:</span> {formatCurrency(Number(job.reworkCost || 0))}</p>
+                          <p><span className="text-slate-500">Failure reason:</span> {job.failureReason || "None"}</p>
+                          <p><span className="text-slate-500">Failure waste:</span> {Number(job.failureWasteGrams || 0)} g</p>
+                          <p><span className="text-slate-500">Failure cost:</span> {formatCurrency(Number(job.failureCost || 0))}</p>
                           <p className="md:col-span-2"><span className="text-slate-500">QA checklist:</span> {(job.qaChecklist || []).length ? (job.qaChecklist || []).join(", ") : "No checklist items"}</p>
                           <p className="md:col-span-2"><span className="text-slate-500">Rework notes:</span> {job.reworkNotes || "None"}</p>
                           <p className="md:col-span-2"><span className="text-slate-500">File:</span> {job.filePath || "No file uploaded"}</p>
@@ -2652,6 +2778,14 @@ function App() {
                                 <input value={selectedJobForm.machineRunTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, machineRunTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
                               <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Setup time (mins)</span>
+                                <input value={selectedJobForm.setupTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, setupTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Post-processing (mins)</span>
+                                <input value={selectedJobForm.postProcessingMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, postProcessingMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Labour time (mins)</span>
                                 <input value={selectedJobForm.labourTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, labourTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
@@ -2681,6 +2815,14 @@ function App() {
                                 <p className="mt-1 text-xs text-slate-500">Use a negative value (for example -5.00) to apply a manual pricing correction.</p>
                               </label>
                               <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Failure waste (g)</span>
+                                <input type="number" step="0.01" value={selectedJobForm.failureWasteGrams} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, failureWasteGrams: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
+                                <span className="mb-2 block">Failure cost (£)</span>
+                                <input type="number" step="0.01" value={selectedJobForm.failureCost} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, failureCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">QA passed</span>
                                 <select value={selectedJobForm.qaPassed ? "yes" : "no"} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, qaPassed: e.target.value === "yes" })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
                                   <option value="no">No</option>
@@ -2697,6 +2839,10 @@ function App() {
                               <label className="block text-sm text-slate-300 md:col-span-2">
                                 <span className="mb-2 block">Rework notes</span>
                                 <textarea value={selectedJobForm.reworkNotes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, reworkNotes: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                              </label>
+                              <label className="block text-sm text-slate-300 md:col-span-2">
+                                <span className="mb-2 block">Failure reason</span>
+                                <input value={selectedJobForm.failureReason} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, failureReason: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
                             </div>
 
@@ -2782,7 +2928,7 @@ function App() {
                                   <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
                                     <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Job summary</p>
                                     <p className="mt-2 font-medium text-white">{selectedJob.status}</p>
-                                    <p className="text-sm text-slate-400">Runtime {selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes} mins • Labour {selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins</p>
+                                    <p className="text-sm text-slate-400">Runtime {selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes} mins • Setup {selectedJob.setupTimeMinutes ?? 0} mins • Post {selectedJob.postProcessingMinutes ?? 0} mins • Labour {selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins</p>
                                     <p className="text-sm text-slate-400">Payment {selectedJob.paymentStatus || "Unpaid"}</p>
                                   </div>
                                 </div>
@@ -2970,6 +3116,37 @@ function App() {
                       ) : null}
                     </div>
 
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-semibold text-white">Estimate catalog</h4>
+                          <p className="mt-1 text-xs text-slate-400">Save model-based templates for quick pricing without customer details.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => saveCurrentEstimateTemplate().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "Failed to save estimate template"))}
+                          className="rounded-xl border border-cyan-700 px-3 py-2 text-xs text-cyan-300"
+                        >
+                          Save current as template
+                        </button>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {estimateTemplates.slice(0, 8).map((template) => (
+                          <div key={template.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs">
+                            <div>
+                              <p className="font-medium text-white">{template.name}</p>
+                              <p className="text-slate-400">{template.machineType} • Runtime {template.machineRunTimeMinutes}m • Labour {template.labourTimeMinutes}m</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => applyEstimateTemplate(template).catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-cyan-300">Use</button>
+                              <button type="button" onClick={() => deleteEstimateTemplate(template.id).catch(() => undefined)} className="rounded-full border border-rose-700 px-3 py-1 text-rose-300">Delete</button>
+                            </div>
+                          </div>
+                        ))}
+                        {!estimateTemplates.length ? <p className="text-xs text-slate-500">No saved templates yet.</p> : null}
+                      </div>
+                    </div>
+
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Job name</span>
@@ -3015,6 +3192,14 @@ function App() {
                         <input value={newJobForm.machineRunTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, machineRunTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       </label>
                       <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Setup time (mins)</span>
+                        <input value={newJobForm.setupTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, setupTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Post-processing (mins)</span>
+                        <input value={newJobForm.postProcessingMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, postProcessingMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Labour time (mins)</span>
                         <input value={newJobForm.labourTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, labourTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       </label>
@@ -3036,6 +3221,14 @@ function App() {
                         <p className="mt-1 text-xs text-slate-500">Use a negative value (for example -5.00) to apply a manual pricing correction.</p>
                       </label>
                       <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Failure waste (g)</span>
+                        <input type="number" step="0.01" value={newJobForm.failureWasteGrams} onChange={(e) => setNewJobForm({ ...newJobForm, failureWasteGrams: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
+                        <span className="mb-2 block">Failure cost (£)</span>
+                        <input type="number" step="0.01" value={newJobForm.failureCost} onChange={(e) => setNewJobForm({ ...newJobForm, failureCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">QA passed</span>
                         <select value={newJobForm.qaPassed ? "yes" : "no"} onChange={(e) => setNewJobForm({ ...newJobForm, qaPassed: e.target.value === "yes" })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
                           <option value="no">No</option>
@@ -3052,6 +3245,10 @@ function App() {
                       <label className="block text-sm text-slate-300 md:col-span-2">
                         <span className="mb-2 block">Rework notes</span>
                         <textarea value={newJobForm.reworkNotes} onChange={(e) => setNewJobForm({ ...newJobForm, reworkNotes: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      </label>
+                      <label className="block text-sm text-slate-300 md:col-span-2">
+                        <span className="mb-2 block">Failure reason</span>
+                        <input value={newJobForm.failureReason} onChange={(e) => setNewJobForm({ ...newJobForm, failureReason: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       </label>
                     </div>
 
@@ -3990,6 +4187,28 @@ function App() {
                   </div>
                 </details>
               </form>
+
+              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">Billing and invoice audit log</h3>
+                  <button
+                    type="button"
+                    onClick={() => api.getBillingAuditLogs(100).then(setBillingAuditLogs).catch(() => undefined)}
+                    className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300"
+                  >
+                    Refresh log
+                  </button>
+                </div>
+                <div className="mt-3 space-y-2 text-xs">
+                  {billingAuditLogs.slice(0, 15).map((entry) => (
+                    <div key={entry.id} className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
+                      <p className="font-medium text-white">{entry.summary || `${entry.entityType} ${entry.action}`}</p>
+                      <p className="text-slate-400">{new Date(entry.createdAt).toLocaleString()} • {entry.entityType}</p>
+                    </div>
+                  ))}
+                  {!billingAuditLogs.length ? <p className="text-slate-500">No audit entries yet.</p> : null}
+                </div>
+              </div>
               </details>
             </section>
           </div>

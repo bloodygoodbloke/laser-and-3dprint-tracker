@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Added failure tracking on jobs with failure reason, waste grams, and failure cost fields, surfaced in job create/edit/detail workflows and included in cost totals and backup/import payloads.
+- Added estimate catalog support for reusable model-based pricing templates, including save/apply/delete actions in the Jobs add flow and MakerWorld-linked template metadata.
+- Added billing/invoice audit logging for billing settings changes and key invoice-related job updates, plus a Billing audit log viewer.
+- Expanded job time tracking to include setup time and post-processing time alongside machine runtime and labour time across forms, costing, and backups.
 - Moved Bambu telemetry and dashboard workflows into the Machines tab, linked to the Bambu machine profile, and removed the standalone Bambu top-level tab.
 - Updated dashboard layout to prioritize Delivery and Utilization at the top, reduced visual weight of Pending Jobs and Low Stock cards, and expanded Quick Add Job to full width.
 - Moved margin reporting breakdown widgets from Dashboard to the Reports tab.

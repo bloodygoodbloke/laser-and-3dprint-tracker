@@ -3,6 +3,27 @@ import prisma from "../prisma";
 
 const router = Router();
 
+const AUDIT_IGNORE_KEYS = new Set(["id", "createdAt", "updatedAt"]);
+
+const toAuditChanges = (beforeValue: Record<string, any> | null, afterValue: Record<string, any>) => {
+  const keys = Array.from(new Set([
+    ...Object.keys(beforeValue || {}),
+    ...Object.keys(afterValue || {}),
+  ])).filter((key) => !AUDIT_IGNORE_KEYS.has(key));
+
+  return keys
+    .map((key) => {
+      const before = beforeValue?.[key];
+      const after = afterValue?.[key];
+      return {
+        field: key,
+        before: typeof before === "string" ? before : JSON.stringify(before ?? ""),
+        after: typeof after === "string" ? after : JSON.stringify(after ?? ""),
+      };
+    })
+    .filter((entry) => entry.before !== entry.after);
+};
+
 router.get("/", async (_req, res) => {
   const settings = await prisma.billingSetting.findMany();
   const setting = settings[0];
@@ -45,6 +66,19 @@ router.post("/", async (req, res) => {
       data: normalizedPayload,
     });
 
+    const changes = toAuditChanges(existing[0] as any, updated as any);
+    if (changes.length) {
+      await prisma.billingAuditLog.create({
+        data: {
+          entityType: "billing-settings",
+          entityId: updated.id,
+          action: "update",
+          fieldChanges: JSON.stringify(changes),
+          summary: `Updated ${changes.length} billing setting field(s).`,
+        },
+      });
+    }
+
     return res.json({
       ...updated,
       machineElectricitySettings: typeof updated.machineElectricitySettings === "string"
@@ -57,6 +91,15 @@ router.post("/", async (req, res) => {
   }
 
   const created = await prisma.billingSetting.create({ data: normalizedPayload });
+  await prisma.billingAuditLog.create({
+    data: {
+      entityType: "billing-settings",
+      entityId: created.id,
+      action: "create",
+      fieldChanges: JSON.stringify([]),
+      summary: "Created initial billing settings.",
+    },
+  });
   res.status(201).json({
     ...created,
     machineElectricitySettings: typeof created.machineElectricitySettings === "string"

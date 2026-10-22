@@ -354,6 +354,17 @@ router.post("/ingest/event", async (req, res) => {
         severity: "Critical",
       },
     });
+
+    if (job?.id) {
+      await prisma.job.update({
+        where: { id: job.id },
+        data: {
+          failureReason: String(payload.message || payload.errorCode || "Print failed"),
+          failureWasteGrams: Math.max(0, Number(payload.materialGrams || 0)),
+          failureCost: Number(payload.failureCost || 0),
+        },
+      });
+    }
   }
 
   await applySpoolAdjustments(device.id, payload.spoolAdjustments);
