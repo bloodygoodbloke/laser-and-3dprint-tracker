@@ -2,6 +2,7 @@ import "./loadEnv";
 import express from "express";
 import cors from "cors";
 import path from "path";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import jobsRouter from "./routes/jobs";
 import materialsRouter from "./routes/materials";
 import billingRouter from "./routes/billing";
@@ -33,6 +34,46 @@ app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
+});
+
+app.get("/makerworld-test", async (req, res) => {
+  const rawUrl = String(req.query.url || "").trim();
+  let targetUrl: URL;
+  try {
+    targetUrl = new URL(rawUrl);
+  } catch {
+    return res.status(400).json({ error: "A valid MakerWorld URL is required." });
+  }
+
+  const hostname = targetUrl.hostname.toLowerCase();
+  if (targetUrl.protocol !== "https:" || (hostname !== "makerworld.com" && !hostname.endsWith(".makerworld.com"))) {
+    return res.status(400).json({ error: "A valid MakerWorld URL is required." });
+  }
+
+  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
+  let page: Page | undefined;
+  try {
+    browser = await chromium.launch({ headless: true });
+    context = await browser.newContext({
+      userAgent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${browser.version()} Safari/537.36`,
+    });
+    page = await context.newPage();
+    try {
+      await page.goto(targetUrl.toString(), { waitUntil: "networkidle", timeout: 60000 });
+    } catch (error) {
+      if (!(error instanceof Error) || error.name !== "TimeoutError") throw error;
+      console.warn("[MakerWorld test] Timed out waiting for networkidle; returning current page details.");
+    }
+    const html = await page.content();
+    return res.json({ title: await page.title(), finalUrl: page.url(), htmlLength: html.length });
+  } catch (error) {
+    return res.status(502).json({ error: error instanceof Error ? error.message : "MakerWorld page test failed" });
+  } finally {
+    if (page) await page.close().catch(() => undefined);
+    if (context) await context.close().catch(() => undefined);
+    if (browser) await browser.close().catch(() => undefined);
+  }
 });
 
 app.listen(PORT, () => {

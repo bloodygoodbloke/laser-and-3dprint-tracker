@@ -380,6 +380,15 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (jobEditorMode !== "create") return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [jobEditorMode]);
+
+  useEffect(() => {
     if (activeTab !== "machines") return;
     const timer = window.setInterval(() => {
       api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
@@ -3041,13 +3050,25 @@ function App() {
                 ) : null}
               </div>
 
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                {jobEditorMode === "create" ? (
-                  <form onSubmit={createJobFromJobsTab} className="space-y-5">
+              <div
+                className={jobEditorMode === "create" ? "fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 no-print sm:p-6" : "hidden"}
+                style={{ overflowY: "auto", overscrollBehavior: "contain" }}
+                onClick={() => setJobEditorMode("none")}
+              >
+                {jobEditorMode === "create" && (
+                  <form
+                    onSubmit={createJobFromJobsTab}
+                    onClick={(event) => event.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="add-job-dialog-title"
+                    className="w-full max-w-5xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl sm:p-6"
+                    style={{ maxHeight: "92vh", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm uppercase tracking-[0.3em] text-cyan-400">New job</p>
-                        <h3 className="mt-2 text-xl font-semibold">Add Job</h3>
+                        <h3 id="add-job-dialog-title" className="mt-2 text-xl font-semibold">Add Job</h3>
                       </div>
                       <div className="flex gap-2">
                         <button type="button" onClick={() => setJobEditorMode("none")} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Cancel</button>
@@ -3056,13 +3077,8 @@ function App() {
                     </div>
 
                     <div className="rounded-2xl border border-cyan-800/50 bg-slate-950 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h4 className="text-sm font-semibold text-white">MakerWorld import</h4>
-                          <p className="mt-1 text-xs text-slate-400">Paste a MakerWorld model URL to import metadata, autofill fields, or load a print profile estimate.</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 grid gap-3 md:grid-cols-[2fr_auto_auto_auto] md:items-end">
+                      <h4 className="text-sm font-semibold text-white">MakerWorld import</h4>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
                         <label className="block text-sm text-slate-300">
                           <span className="mb-2 block">MakerWorld URL</span>
                           <input
@@ -3074,46 +3090,13 @@ function App() {
                         </label>
                         <button
                           type="button"
-                          onClick={() => importMakerWorldMetadata().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "MakerWorld metadata import failed"))}
-                          className="rounded-xl border border-cyan-700 px-3 py-2 text-xs text-cyan-300"
-                        >
-                          Import metadata
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => importMakerWorldAutofill().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "MakerWorld autofill failed"))}
-                          className="rounded-xl border border-cyan-700 px-3 py-2 text-xs text-cyan-300"
+                          className="rounded-xl border border-cyan-700 px-4 py-2 text-sm text-cyan-300"
                         >
-                          Autofill job
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => importMakerWorldPrintProfile().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "MakerWorld profile import failed"))}
-                          className="rounded-xl border border-cyan-700 px-3 py-2 text-xs text-cyan-300"
-                        >
-                          Import profile
+                          Import
                         </button>
                       </div>
                       {makerWorldMessage ? <p className="mt-3 text-xs text-cyan-300">{makerWorldMessage}</p> : null}
-                      {makerWorldMetadata ? (
-                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-slate-300">
-                          <p className="font-medium text-white">{makerWorldMetadata.title || "Imported model"}</p>
-                          <p className="mt-1 text-slate-400">{makerWorldMetadata.description || "No description available."}</p>
-                          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                            <span className="rounded-full border border-slate-700 px-2 py-1">Est. runtime: {makerWorldMetadata.estimatedMinutes || 0} min</span>
-                            <span className="rounded-full border border-slate-700 px-2 py-1">Est. material: {makerWorldMetadata.estimatedMaterialGrams || 0} g</span>
-                            {(makerWorldMetadata.tags || []).slice(0, 6).map((tag) => (
-                              <span key={`makerworld-tag-${tag}`} className="rounded-full border border-slate-700 px-2 py-1">#{tag}</span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      {makerWorldProfile ? (
-                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-slate-300">
-                          <p className="font-medium text-white">{makerWorldProfile.profileName}</p>
-                          <p className="mt-1 text-slate-400">Layer {makerWorldProfile.layerHeightMm} mm • Nozzle {makerWorldProfile.nozzleTempC} C • Bed {makerWorldProfile.bedTempC} C • Speed {makerWorldProfile.speedMmPerSec} mm/s • Infill {makerWorldProfile.infillPercent}%</p>
-                        </div>
-                      ) : null}
                     </div>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -3288,12 +3271,6 @@ function App() {
                       </div>
                     </div>
                   </form>
-                ) : jobEditorMode === "edit" ? (
-                  <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">Edit mode now opens directly under the expanded job card.</div>
-                ) : jobEditorMode === "invoice" ? (
-                  <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">Invoice mode now opens directly under the expanded job card.</div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">Expand a job card and choose Edit job or Create invoice.</div>
                 )}
               </div>
             </div>

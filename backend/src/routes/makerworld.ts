@@ -1,7 +1,7 @@
 import { Router } from "express";
-import http from "http";
-import https from "https";
 import { URL } from "url";
+import { load } from "cheerio";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 const router = Router();
 
@@ -25,6 +25,23 @@ type MakerWorldProfile = {
   estimatedMinutes: number;
   estimatedMaterialGrams: number;
 };
+
+export function extractPrintMetrics(html: string): {
+  printTimeHours: number | null;
+  materialType: string | null;
+  materialWeightGrams: number | null;
+} {
+  const text = load(html).text();
+  const timeMatch = text.match(/(\d+(\.\d+)?)\s*h/i);
+  const materialMatch = text.match(/(PLA|PETG|ABS|ASA|TPU|PC|PA|NYLON)/i);
+  const weightMatch = text.match(/(\d+(\.\d+)?)\s*g/i);
+
+  return {
+    printTimeHours: timeMatch ? Number(timeMatch[1]) : null,
+    materialType: materialMatch ? materialMatch[1].toUpperCase() : null,
+    materialWeightGrams: weightMatch ? Number(weightMatch[1]) : null,
+  };
+}
 
 const isMockModeEnabled = (mockFlag?: unknown) => String(process.env.MAKERWORLD_MOCK_MODE || "").trim().toLowerCase() === "1"
   || String(mockFlag || "").trim().toLowerCase() === "1";
@@ -50,61 +67,48 @@ const buildMockProfile = (): MakerWorldProfile => ({
   estimatedMaterialGrams: 82,
 });
 
-const BROWSER_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-  "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-  "Cache-Control": "no-cache",
-  Pragma: "no-cache",
-  "Upgrade-Insecure-Requests": "1",
-} as const;
+const fetchHtml = async (targetUrl: string, _redirectDepth = 0, bodyLogLength = 500): Promise<string> => {
+  console.log("[MakerWorld] Requested URL:", targetUrl);
+  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
+  let page: Page | undefined;
 
-const fetchHtml = (targetUrl: string, redirectDepth = 0): Promise<string> => new Promise((resolve, reject) => {
-  if (redirectDepth > 5) {
-    reject(new Error("Too many redirects fetching MakerWorld URL"));
-    return;
-  }
+  try {
+    browser = await chromium.launch({ headless: true });
+    context = await browser.newContext({
+      userAgent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${browser.version()} Safari/537.36`,
+    });
+    page = await context.newPage();
+    const response = await page.goto(targetUrl, { waitUntil: "networkidle", timeout: 60000 });
+    const statusCode = response?.status() ?? 0;
+    const responseHeaders = response ? await response.allHeaders() : {};
+    const html = await page.content();
 
-  const parsed = new URL(targetUrl);
-  const requester = parsed.protocol === "http:" ? http : https;
+    console.log("[MakerWorld] Response status:", statusCode);
+    console.log("[MakerWorld] Response headers:", responseHeaders);
+    console.log(`[MakerWorld] Response body (first ${bodyLogLength} characters):`, html.slice(0, bodyLogLength));
 
-  const request = requester.request({
-    protocol: parsed.protocol,
-    hostname: parsed.hostname,
-    port: parsed.port || undefined,
-    path: `${parsed.pathname}${parsed.search}`,
-    method: "GET",
-    headers: {
-      ...BROWSER_HEADERS,
-      Host: parsed.hostname,
-      Referer: `${parsed.protocol}//${parsed.hostname}/`,
-      Origin: `${parsed.protocol}//${parsed.hostname}`,
-    },
-  }, (response) => {
-    const statusCode = Number(response.statusCode || 0);
-
-    if (statusCode >= 300 && statusCode < 400 && response.headers.location) {
-      const redirectUrl = new URL(String(response.headers.location), targetUrl).toString();
-      fetchHtml(redirectUrl, redirectDepth + 1).then(resolve).catch(reject);
-      return;
+    const bodyText = await page.locator("body").innerText().catch(() => "");
+    const isCloudflareChallenge = responseHeaders["cf-mitigated"] === "challenge"
+      || /just a moment|checking your browser|verify you are human|cf-challenge/i.test(`${await page.title()} ${bodyText.slice(0, 2000)}`);
+    if (isCloudflareChallenge) {
+      console.error("[MakerWorld] Cloudflare challenge page detected:", targetUrl);
     }
 
     if (statusCode >= 400) {
-      reject(new Error(`Failed to fetch MakerWorld page (${statusCode})`));
-      return;
+      throw new Error(`Failed to fetch MakerWorld page (${statusCode})`);
     }
 
-    const chunks: Buffer[] = [];
-    response.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-    response.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-  });
-
-  request.on("error", reject);
-  request.setTimeout(10000, () => {
-    request.destroy(new Error("Timed out fetching MakerWorld URL"));
-  });
-  request.end();
-});
+    return html;
+  } catch (error) {
+    console.error("[MakerWorld] Playwright navigation failed:", error instanceof Error ? error.stack : error);
+    throw error;
+  } finally {
+    if (page) await page.close().catch(() => undefined);
+    if (context) await context.close().catch(() => undefined);
+    if (browser) await browser.close().catch(() => undefined);
+  }
+};
 
 const decodeHtml = (value: string) => value
   .replaceAll("&amp;", "&")
@@ -235,7 +239,9 @@ router.post("/metadata", async (req, res) => {
 });
 
 router.post("/autofill", async (req, res) => {
-  const targetUrl = ensureMakerWorldUrl(String(req.body?.url || ""));
+  const incomingUrl = String(req.body?.url || "");
+  console.log("[MakerWorld autofill] Incoming URL:", incomingUrl);
+  const targetUrl = ensureMakerWorldUrl(incomingUrl);
   if (!targetUrl) {
     return res.status(400).json({ error: "A valid MakerWorld URL is required." });
   }
@@ -258,7 +264,8 @@ router.post("/autofill", async (req, res) => {
   }
 
   try {
-    const html = await fetchHtml(targetUrl);
+    console.log("[MakerWorld autofill] Outbound MakerWorld URL:", targetUrl);
+    const html = await fetchHtml(targetUrl, 0, 1000);
     const metadata = buildMetadata(targetUrl, html);
 
     const jobDraft = {
@@ -276,6 +283,7 @@ router.post("/autofill", async (req, res) => {
 
     res.json({ metadata, jobDraft });
   } catch (error) {
+    console.error("[MakerWorld autofill] Exception stack:", error instanceof Error ? error.stack : error);
     res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build MakerWorld job autofill" });
   }
 });

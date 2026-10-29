@@ -5,6 +5,11 @@ const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThresho
 const makerWorldEnv = (import.meta as unknown as { env?: Record<string, string> }).env || {};
 const makerWorldMockEnabled = String(makerWorldEnv.VITE_MAKERWORLD_MOCK || "").trim() === "1";
 const makerWorldQuerySuffix = makerWorldMockEnabled ? "?mock=1" : "";
+const normalizeMakerWorldUrl = (value: string) => {
+  const input = String(value || "").trim();
+  const anchorHref = new DOMParser().parseFromString(input, "text/html").querySelector("a[href]")?.getAttribute("href");
+  return String(anchorHref || input).trim();
+};
 
 const api = {
   async getJobs(): Promise<Job[]> {
@@ -296,28 +301,31 @@ const api = {
     return res.json();
   },
   async importMakerWorldMetadata(url: string): Promise<MakerWorldMetadata> {
+    const rawUrl = normalizeMakerWorldUrl(url);
     const res = await fetch(`/api/makerworld/metadata${makerWorldQuerySuffix}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url: rawUrl }),
     });
     if (!res.ok) throw new Error("Failed to import MakerWorld metadata");
     return res.json();
   },
   async autofillMakerWorldJob(url: string): Promise<{ metadata: MakerWorldMetadata; jobDraft: MakerWorldJobDraft }> {
+    const rawUrl = normalizeMakerWorldUrl(url);
     const res = await fetch(`/api/makerworld/autofill${makerWorldQuerySuffix}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url: rawUrl }),
     });
     if (!res.ok) throw new Error("Failed to import MakerWorld job autofill");
     return res.json();
   },
   async importMakerWorldPrintProfile(url: string): Promise<{ metadata: MakerWorldMetadata; profile: MakerWorldPrintProfile }> {
+    const rawUrl = normalizeMakerWorldUrl(url);
     const res = await fetch(`/api/makerworld/print-profile${makerWorldQuerySuffix}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url: rawUrl }),
     });
     if (!res.ok) throw new Error("Failed to import MakerWorld print profile");
     return res.json();
