@@ -1,7 +1,8 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     entrypoint: ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && npm start"]
     environment:
       NODE_ENV: production

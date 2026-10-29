@@ -16,6 +16,7 @@ import billingAuditRouter from "./routes/billing-audit";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
+const frontendDistPath = path.resolve(__dirname, "../../frontend/dist");
 
 app.use(cors());
 app.use(express.json());
@@ -31,6 +32,7 @@ app.use("/api/estimates", estimatesRouter);
 app.use("/api/billing-audit", billingAuditRouter);
 app.use("/api/admin", adminRouter);
 app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
+app.use(express.static(frontendDistPath));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });
@@ -74,6 +76,15 @@ app.get("/makerworld-test", async (req, res) => {
     if (context) await context.close().catch(() => undefined);
     if (browser) await browser.close().catch(() => undefined);
   }
+});
+
+app.get("*", (req, res, next) => {
+  if (req.path === "/api" || req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) {
+    return next();
+  }
+  res.sendFile(path.join(frontendDistPath, "index.html"), (error) => {
+    if (error) next(error);
+  });
 });
 
 app.listen(PORT, () => {
