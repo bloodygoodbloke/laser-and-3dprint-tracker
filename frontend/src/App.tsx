@@ -291,7 +291,6 @@ function App() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
-  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", postProcessingMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", postProcessingMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
@@ -342,7 +341,7 @@ function App() {
   const [makerWorldMessage, setMakerWorldMessage] = useState("");
   const [makerWorldMetadata, setMakerWorldMetadata] = useState<MakerWorldMetadata | null>(null);
   const [makerWorldProfile, setMakerWorldProfile] = useState<MakerWorldPrintProfile | null>(null);
-  const [estimateTemplates, setEstimateTemplates] = useState<EstimateTemplate[]>([]);
+  const [savedEstimateTemplates, setSavedEstimateTemplates] = useState<EstimateTemplate[]>([]);
   const [billingAuditLogs, setBillingAuditLogs] = useState<BillingAuditLog[]>([]);
   const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
   const [jobFileMessage, setJobFileMessage] = useState<Record<string, string>>({});
@@ -410,7 +409,7 @@ function App() {
     setMaterials(finalMaterials);
     setCustomers(customersData);
     setSuppliers(suppliersData);
-    setEstimateTemplates(templatesData);
+    setSavedEstimateTemplates(templatesData);
     setBillingAuditLogs(auditData);
     if (!jobMaterialEntries.length && finalMaterials.length) {
       setJobMaterialEntries([{ materialId: finalMaterials[0].id, usageQuantity: "100" }]);
@@ -951,6 +950,8 @@ function App() {
       sourceUrl: template.sourceUrl || "",
       machineType: template.machineType || machineOptions[0] || "Other",
       machineRunTimeMinutes: String(template.machineRunTimeMinutes ?? template.estTimeMinutes ?? 0),
+      setupTimeMinutes: String(template.setupTimeMinutes ?? 0),
+      postProcessingMinutes: String(template.postProcessingMinutes ?? 0),
       labourTimeMinutes: String(template.labourTimeMinutes ?? template.estTimeMinutes ?? 0),
       dueDate: "",
       queuePosition: "0",
@@ -958,6 +959,9 @@ function App() {
       qaPassed: Boolean(template.qaPassed),
       reworkCost: String(template.reworkCost || 0),
       reworkNotes: String(template.reworkNotes || ""),
+      failureReason: String(template.failureReason || ""),
+      failureWasteGrams: String(template.failureWasteGrams || 0),
+      failureCost: String(template.failureCost || 0),
       isRush: Boolean(template.isRush),
       setupFee: String(template.setupFee ?? 0),
       deliveryCharge: String(template.deliveryCharge ?? 0),
@@ -1807,11 +1811,11 @@ function App() {
     });
 
     const templates = await api.getEstimateTemplates();
-    setEstimateTemplates(templates);
+    setSavedEstimateTemplates(templates);
     setMakerWorldMessage("Saved to estimate catalog.");
   };
 
-  const applyEstimateTemplate = async (template: EstimateTemplate) => {
+  const applySavedEstimateTemplate = async (template: EstimateTemplate) => {
     setNewJobForm((current) => ({
       ...current,
       name: template.name,
@@ -1834,14 +1838,14 @@ function App() {
 
     await api.updateEstimateTemplate(template.id, { markUsed: true } as Partial<EstimateTemplate>);
     const templates = await api.getEstimateTemplates();
-    setEstimateTemplates(templates);
+    setSavedEstimateTemplates(templates);
     setMakerWorldMessage(`Applied estimate template: ${template.name}`);
   };
 
   const deleteEstimateTemplate = async (templateId: string) => {
     await api.deleteEstimateTemplate(templateId);
     const templates = await api.getEstimateTemplates();
-    setEstimateTemplates(templates);
+    setSavedEstimateTemplates(templates);
   };
 
   const selectedCustomerProfile = useMemo(
@@ -3381,19 +3385,19 @@ function App() {
                         </button>
                       </div>
                       <div className="mt-3 space-y-2">
-                        {estimateTemplates.slice(0, 8).map((template) => (
+                        {savedEstimateTemplates.slice(0, 8).map((template) => (
                           <div key={template.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs">
                             <div>
                               <p className="font-medium text-white">{template.name}</p>
                               <p className="text-slate-400">{template.machineType} • Runtime {template.machineRunTimeMinutes}m • Labour {template.labourTimeMinutes}m</p>
                             </div>
                             <div className="flex gap-2">
-                              <button type="button" onClick={() => applyEstimateTemplate(template).catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-cyan-300">Use</button>
+                              <button type="button" onClick={() => applySavedEstimateTemplate(template).catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-cyan-300">Use</button>
                               <button type="button" onClick={() => deleteEstimateTemplate(template.id).catch(() => undefined)} className="rounded-full border border-rose-700 px-3 py-1 text-rose-300">Delete</button>
                             </div>
                           </div>
                         ))}
-                        {!estimateTemplates.length ? <p className="text-xs text-slate-500">No saved templates yet.</p> : null}
+                        {!savedEstimateTemplates.length ? <p className="text-xs text-slate-500">No saved templates yet.</p> : null}
                       </div>
                     </div>
 

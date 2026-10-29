@@ -176,76 +176,53 @@ const getNextChgId = async () => {
   const [backlogMarkdown, implementationMarkdown] = await Promise.all([
     fs.readFile(backlogPath, "utf8"),
     fs.readFile(implementationLogPath, "utf8"),
-    return columnSet.has("adminBackgroundColor")
-      && columnSet.has("siteInputColor")
-      && columnSet.has("siteAccentColor")
-      && columnSet.has("siteAccentTextColor");
-  } catch (_error) {
-    return false;
-  }
-};
-
-const getFullBackupPayload = async (includeBillingSettings = true) => {
-  const [jobs, materials, billingSettings, jobCosts, customers, suppliers, purchases, estimateTemplates, billingAuditLogs, bambuDevices, bambuStatuses, bambuEvents, bambuSpools, bambuUsageLogs, bambuMaintenance, bambuFailureLogs] = await Promise.all([
-    prisma.job.findMany({ include: { materials: { include: { material: true } }, cost: true } }),
-    prisma.material.findMany(),
-    includeBillingSettings ? prisma.billingSetting.findMany() : Promise.resolve([]),
-    prisma.jobCost.findMany(),
-    prisma.customer.findMany(),
-    prisma.supplier.findMany(),
-    prisma.materialPurchase.findMany(),
-    prisma.estimateTemplate.findMany(),
-    prisma.billingAuditLog.findMany(),
-    prisma.bambuDevice.findMany(),
-    prisma.bambuMachineStatus.findMany(),
-    prisma.bambuEvent.findMany(),
-    prisma.bambuSpoolInventory.findMany(),
-    prisma.bambuUsageLog.findMany(),
-    prisma.bambuMaintenancePrediction.findMany(),
-    prisma.bambuFailureLog.findMany(),
   ]);
 
+  const maxId = Math.max(extractMaxChgId(backlogMarkdown), extractMaxChgId(implementationMarkdown));
+  return `CHG-${String(maxId + 1).padStart(3, "0")}`;
+};
+
+const classifyReviewPath = (requestType: string, title: string, details: string) => {
+  const haystack = `${title} ${details}`.toLowerCase();
+  const highRiskSignals = ["delete", "remove", "payment", "invoice total", "security", "authentication", "permission", "backup", "restore", "migration", "database", "prisma", "billing"];
+  const autoCandidateSignals = ["help text", "copy", "wording", "label", "placeholder", "tooltip", "readme", "changelog", "docs", "ui tweak"];
+  const hasHighRiskSignal = highRiskSignals.some((signal) => haystack.includes(signal));
+
+  if (requestType === "Bug" || hasHighRiskSignal) {
+    return {
+      reviewRecommendation: "Human Review Required",
+      triageReason: hasHighRiskSignal
+        ? "Contains high-impact keywords (billing/data/security/restore style changes)."
+        : "Bug reports default to human review before automation.",
+    };
+  }
+
+  if (autoCandidateSignals.some((signal) => haystack.includes(signal))) {
+    return {
+      reviewRecommendation: "Auto Candidate",
+      triageReason: "Looks like a low-risk content or UI refinement request.",
+    };
+  }
+
   return {
-    schemaVersion: BACKUP_SCHEMA_VERSION,
-    exportedAt: new Date().toISOString(),
-    coverage: [
-      "jobs",
-      "job materials",
-      "job costs",
-      "materials",
-      "customers",
-      "suppliers",
-      "supplier purchases",
-      "estimate templates",
-      "billing audit logs",
-      "machine profile settings",
-      "bambu devices",
-      "bambu statuses",
-      "bambu events",
-      "bambu spool inventory",
-      "bambu usage logs",
-      "bambu maintenance predictions",
-      "bambu failure logs",
-      "reports (derived from jobs, costs, customers, and materials)",
-      ...(includeBillingSettings ? ["billing settings", "theme colors"] : []),
-    ],
-    jobs,
-    materials,
-    billingSettings,
-    jobCosts,
-    customers,
-    suppliers,
-    purchases,
-    estimateTemplates,
-    billingAuditLogs,
-    bambuDevices,
-    bambuStatuses,
-    bambuEvents,
-    bambuSpools,
-    bambuUsageLogs,
-    bambuMaintenance,
-    bambuFailureLogs,
+    reviewRecommendation: "Human Review Required",
+    triageReason: "No strong low-risk automation signal detected.",
   };
+};
+
+const appendBacklogItem = async (row: string, todayIso: string) => {
+  const backlogMarkdown = await fs.readFile(backlogPath, "utf8");
+  const marker = "## Next 3";
+  const markerIndex = backlogMarkdown.indexOf(marker);
+  if (markerIndex === -1) {
+    throw new Error("Could not locate Next 3 section in docs/backlog.md");
+  }
+
+  const beforeMarker = backlogMarkdown.slice(0, markerIndex).replace(/\s*$/, "");
+  const afterMarker = backlogMarkdown.slice(markerIndex);
+  const withRow = `${beforeMarker}\n${row}\n\n${afterMarker}`;
+  const updated = withRow.replace(/^Last updated:\s+\d{4}-\d{2}-\d{2}/m, `Last updated: ${todayIso}`);
+  await fs.writeFile(backlogPath, updated, "utf8");
 };
 
 router.get("/backup", async (_req, res) => {
