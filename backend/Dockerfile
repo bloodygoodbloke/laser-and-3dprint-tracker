@@ -1,11 +1,11 @@
-FROM mcr.microsoft.com/playwright:v1.55.0-jammy
+FROM node:24-bookworm
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 WORKDIR /app
 COPY backend/package.json backend/package-lock.json ./backend/
 WORKDIR /app/backend
 RUN npm ci --engine-strict=false
 COPY backend/ ./
-RUN npx prisma generate && npx playwright install chromium && npm run build
+RUN npx prisma generate && npx playwright install --with-deps chromium && npm run build
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --engine-strict=false

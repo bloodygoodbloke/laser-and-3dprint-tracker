@@ -83,12 +83,14 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Help requests inbox now imports backlog files directly, so no OAuth setup is required for local development.
 - Start locally (two options):
 - Option 1: one command from repo root: `bash start-local.sh`
+- Stop the local frontend and backend from another terminal: `bash stop-local.sh`
 - Option 2: start each service manually:
 - Backend: `cd backend && npm run dev` (API: `http://localhost:4000`)
 - Frontend: `cd frontend && npm run dev -- --host 127.0.0.1 --port 5173` (UI: `http://127.0.0.1:5173`)
 - Verify backend is running: `curl http://127.0.0.1:4000/api/health`
 - Common fixes:
 - If `start-local.sh` fails with permissions, run: `chmod +x start-local.sh`
+- If `stop-local.sh` fails with permissions, run: `chmod +x stop-local.sh`
 - If Prisma/table errors appear, rerun in `backend`: `npx prisma migrate deploy`
 - If ports are already in use, stop old dev servers using ports `4000` and `5173` and restart.
 
