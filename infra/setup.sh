@@ -54,6 +54,9 @@ APP_ID_OBJ=$(az ad sp show --id "$APP_ID" --query id -o tsv)
 # Least privilege: push to ACR, update only this container app
 az role assignment create --assignee-object-id "$APP_ID_OBJ" --assignee-principal-type ServicePrincipal \
   --role AcrPush --scope "$ACR_ID"
+# Reader lets `az acr login` resolve the registry by name in CI
+az role assignment create --assignee-object-id "$APP_ID_OBJ" --assignee-principal-type ServicePrincipal \
+  --role Reader --scope "$ACR_ID"
 az role assignment create --assignee-object-id "$APP_ID_OBJ" --assignee-principal-type ServicePrincipal \
   --role Contributor --scope "$(az containerapp show -n "$APP" -g "$RG" --query id -o tsv)"
 
