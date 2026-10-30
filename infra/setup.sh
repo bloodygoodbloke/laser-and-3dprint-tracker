@@ -3,13 +3,13 @@
 set -euo pipefail
 
 SUB=$(az account show --query id -o tsv)
-RG=rg-14a9                              # MakerFlow app resource group
-APP=container-app-14a9
-ENV=express-eastasia-83dc3so            # ACA environment (no VNet)
-LOC=eastasia                            # MUST match the ACA environment region
-ACR=makerflowacr-bwd0fkhdedg4bva5
+RG=ACA-WST                              # MakerFlow app resource group
+APP=workshoptrack
+ENV=managedEnvironment-ACAWST-8b85      # ACA environment (Consumption, no VNet)
+LOC=ukwest                              # MUST match the ACA environment region
+ACR=makerflowacr
 ACR_RG=ACA-WST
-STORAGE=makerflowdbstd$RANDOM           # new Standard account (see notes: acamakerflowdb is Premium/UK South)
+STORAGE=makerflowdbstd$RANDOM           # new Standard account (acamakerflowdb is Premium = costly)
 SHARE=makerflow-data
 GH_REPO=bloodygoodbloke/laser-and-3dprint-tracker
 

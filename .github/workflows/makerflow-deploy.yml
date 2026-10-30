@@ -14,10 +14,11 @@ permissions:
   contents: read
 
 env:
-  ACR_NAME: makerflowacr-bwd0fkhdedg4bva5
+  ACR_NAME: makerflowacr
+  ACR_SERVER: makerflowacr-bwd0fkhdedg4bva5.azurecr.io
   IMAGE_NAME: makerflow
-  RESOURCE_GROUP: rg-14a9
-  CONTAINER_APP: container-app-14a9
+  RESOURCE_GROUP: ACA-WST
+  CONTAINER_APP: workshoptrack
 
 jobs:
   deploy:
@@ -43,7 +44,7 @@ jobs:
           context: .
           file: backend/Dockerfile
           push: true
-          tags: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          tags: ${{ env.ACR_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -52,5 +53,5 @@ jobs:
         run: |
           az containerapp update \
             --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
-            --image "$ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }}" \
+            --image "$ACR_SERVER/$IMAGE_NAME:${{ github.sha }}" \
             --revision-suffix "g${GITHUB_SHA::7}"
