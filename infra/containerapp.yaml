@@ -3,7 +3,7 @@
 properties:
   template:
     containers:
-      - name: container-app-14a9
+      - name: workshoptrack
         image: ${IMAGE}
         resources:
           cpu: 0.25
