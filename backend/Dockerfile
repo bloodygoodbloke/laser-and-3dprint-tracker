@@ -14,5 +14,7 @@ RUN npm run build
 WORKDIR /app/backend
 ENV NODE_ENV=production
 ENV PORT=4000
+ENV DATABASE_URL=file:/data/makerflow.db
+ENV UPLOAD_DIR=/data/uploads
 EXPOSE 4000
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]

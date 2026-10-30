@@ -1,0 +1,56 @@
+name: Deploy MakerFlow to Azure Container Apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: makerflow-deploy
+  cancel-in-progress: false   # never interrupt a deploy that is mid-flight
+
+permissions:
+  id-token: write   # GitHub OIDC
+  contents: read
+
+env:
+  ACR_NAME: makerflowacr-bwd0fkhdedg4bva5
+  IMAGE_NAME: makerflow
+  RESOURCE_GROUP: rg-14a9
+  CONTAINER_APP: container-app-14a9
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        run: az acr login --name "$ACR_NAME"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Only the image changes; volumes, mounts, env vars and the /data share are untouched.
+      - name: Update Container App image
+        run: |
+          az containerapp update \
+            --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
+            --image "$ACR_NAME.azurecr.io/$IMAGE_NAME:${{ github.sha }}" \
+            --revision-suffix "g${GITHUB_SHA::7}"
