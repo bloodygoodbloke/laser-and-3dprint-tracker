@@ -1,0 +1,31 @@
+# Applied once by infra/setup.sh via `az containerapp update --yaml` (after envsubst).
+# CI only changes the image afterwards, so volumes/mounts are preserved.
+properties:
+  template:
+    containers:
+      - name: container-app-14a9
+        image: ${IMAGE}
+        resources:
+          cpu: 0.25
+          memory: 0.5Gi
+        env:
+          - name: NODE_ENV
+            value: production
+          - name: PORT
+            value: "4000"
+          - name: DATABASE_URL
+            value: file:/data/makerflow.db
+          - name: UPLOAD_DIR
+            value: /data/uploads
+        volumeMounts:
+          - volumeName: data
+            mountPath: /data
+    volumes:
+      - name: data
+        storageType: AzureFile
+        storageName: makerflow-data
+        # nobrl: disable SMB byte-range locks, required for SQLite on Azure Files
+        mountOptions: nobrl,mfsymlinks
+    scale:
+      minReplicas: 0   # scale-to-zero = no idle compute cost; set 1 to avoid cold starts
+      maxReplicas: 1   # SQLite must have a single writer

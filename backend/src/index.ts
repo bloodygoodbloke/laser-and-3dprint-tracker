@@ -31,7 +31,7 @@ app.use("/api/makerworld", makerworldRouter);
 app.use("/api/estimates", estimatesRouter);
 app.use("/api/billing-audit", billingAuditRouter);
 app.use("/api/admin", adminRouter);
-app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
+app.use("/uploads", express.static(process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(__dirname, "..", "uploads")));
 app.use(express.static(frontendDistPath));
 
 app.get("/api/health", (_req, res) => {
