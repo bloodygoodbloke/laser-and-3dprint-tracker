@@ -10,7 +10,7 @@ const APP_NAME = "MakerFlow";
 const APP_VERSION = "0.6.0";
 const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
 const SCHEDULE_HORIZON_DAYS = 14;
-const DEFAULT_ADMIN_BACKGROUND_COLOR = "#E5E5E7";
+const DEFAULT_ADMIN_BACKGROUND_COLOR = "#5DA8FF";
 const DEFAULT_ADMIN_TEXT_COLOR = "#1C1C1E";
 const DEFAULT_SITE_INPUT_COLOR = "#E5E5E7";
 const DEFAULT_SITE_ACCENT_COLOR = "#3A7DFF";
@@ -31,7 +31,7 @@ type ThemePreset = {
 const quickThemePresets: ThemePreset[] = [
   {
     name: "MakerFlow",
-    background: "#E5E5E7",
+    background: "#5DA8FF",
     text: "#1C1C1E",
     input: "#E5E5E7",
     accent: "#3A7DFF",
