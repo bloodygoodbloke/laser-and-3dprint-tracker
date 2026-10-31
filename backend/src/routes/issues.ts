@@ -56,7 +56,7 @@ router.get("/status", (_req, res) => {
 router.post("/", async (req, res) => {
   const { token, repository, configured } = getGitHubConfig();
   if (!configured) {
-    return res.status(503).json({ error: "GitHub issue creation is not configured. Set GITHUB_TOKEN (and optionally GITHUB_REPOSITORY) on the server." });
+    return res.status(503).json({ error: "GitHub issue creation is not configured correctly. Check the server's GITHUB_TOKEN and optional GITHUB_REPOSITORY settings." });
   }
 
   const title = clean(req.body?.title, MAX_TITLE_LENGTH);

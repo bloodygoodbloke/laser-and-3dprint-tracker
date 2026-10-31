@@ -364,6 +364,7 @@ function App() {
   const [createdIssue, setCreatedIssue] = useState<{ number: number; url: string } | null>(null);
   const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
   const [issueReportStatus, setIssueReportStatus] = useState<IssueReportStatus | null>(null);
+  const [issueReportStatusError, setIssueReportStatusError] = useState(false);
   const [dashboardJobMessage, setDashboardJobMessage] = useState("");
   const [isCreatingDashboardJob, setIsCreatingDashboardJob] = useState(false);
   const addJobFormRef = useRef<HTMLFormElement | null>(null);
@@ -480,7 +481,14 @@ function App() {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
     api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
-    api.getIssueReportStatus().then(setIssueReportStatus).catch(() => undefined);
+    api.getIssueReportStatus()
+      .then((status) => {
+        setIssueReportStatus(status);
+        setIssueReportStatusError(false);
+      })
+      .catch(() => {
+        setIssueReportStatusError(true);
+      });
   }, []);
 
   const applyBambuDashboardUpdate = (payload: BambuDashboardPayload, force = false) => {
@@ -2377,7 +2385,7 @@ function App() {
     e.preventDefault();
     const title = helpRequestForm.title.trim();
     const details = helpRequestForm.details.trim();
-    if (!title || !details || isSubmittingIssue) return;
+    if (!title || !details || isSubmittingIssue || issueReportStatus?.configured === false) return;
 
     setIsSubmittingIssue(true);
     setCreatedIssue(null);
@@ -3707,114 +3715,10 @@ function App() {
             </div>
 
             <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Bambu telemetry (Machines integration)</h3>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {linkedBambuMachineName
-                      ? `Linked machine profile: ${linkedBambuMachineName}`
-                      : "No machine profile with 'Bambu' in the name yet. Add or rename a machine profile to link telemetry here."}
-                  </p>
-                </div>
-                <button type="button" onClick={() => refreshBambuDashboard().catch(() => undefined)} className="rounded-xl border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Refresh</button>
-              </div>
-
-              <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <h4 className="text-sm font-semibold text-white">Telemetry simulation controls</h4>
-                  <div className="mt-3 space-y-3">
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-40 shrink-0">Device serial</span>
-                      <input value={bambuSerialInput} onChange={(e) => setBambuSerialInput(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                    </label>
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-40 shrink-0">Linked job</span>
-                      <select value={bambuJobIdInput} onChange={(e) => setBambuJobIdInput(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                        <option value="">No linked job</option>
-                        {jobs.map((job) => (
-                          <option key={`machines-bambu-job-${job.id}`} value={job.id}>{job.jobNumber || "No job number"} • {job.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => simulateBambuTick().catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Simulate status tick</button>
-                      <button type="button" onClick={() => sendBambuEvent("PRINT_STARTED").catch(() => undefined)} className="rounded-full border border-emerald-700 px-3 py-1 text-xs text-emerald-300">Send PRINT_STARTED</button>
-                      <button type="button" onClick={() => sendBambuEvent("PRINT_FINISHED").catch(() => undefined)} className="rounded-full border border-sky-700 px-3 py-1 text-xs text-sky-300">Send PRINT_FINISHED</button>
-                      <button type="button" onClick={() => sendBambuEvent("PRINT_FAILED").catch(() => undefined)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Send PRINT_FAILED</button>
-                    </div>
-                    {bambuMessage ? <p className="text-xs text-cyan-300">{bambuMessage}</p> : null}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <h4 className="text-sm font-semibold text-white">Live status snapshots</h4>
-                  <div className="mt-3 space-y-2 text-xs">
-                    {(bambuDashboard?.latestStatuses || []).slice(0, 8).map((status) => (
-                      <div key={`machines-status-${status.id}`} className="rounded-xl border border-slate-800 bg-slate-950 p-2">
-                        <p className="text-slate-200">{status.device?.name || status.deviceId} • {status.progressPct.toFixed(0)}%</p>
-                        <p className="text-slate-400">Nozzle {status.nozzleTempC.toFixed(1)}C • Bed {status.bedTempC.toFixed(1)}C • Chamber {status.chamberTempC.toFixed(1)}C</p>
-                        <p className="text-slate-500">{status.errorCode || "No active error"}</p>
-                      </div>
-                    ))}
-                    {!(bambuDashboard?.latestStatuses || []).length ? <p className="text-slate-500">No telemetry snapshots yet.</p> : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <h4 className="text-sm font-semibold text-white">AMS spool inventory</h4>
-                  <div className="mt-2 space-y-2 text-xs">
-                    {(bambuDashboard?.spools || []).slice(0, 10).map((spool) => (
-                      <div key={`machines-spool-${spool.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-2 py-1">
-                        <span className="text-slate-300">{spool.device?.name || spool.deviceId} {spool.slotName}</span>
-                        <span className="text-slate-200">{spool.remainingGrams.toFixed(0)} g</span>
-                      </div>
-                    ))}
-                    {!(bambuDashboard?.spools || []).length ? <p className="text-slate-500">No AMS spool data yet.</p> : null}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <h4 className="text-sm font-semibold text-white">Predictive maintenance</h4>
-                  <div className="mt-2 space-y-2 text-xs">
-                    {(bambuDashboard?.maintenance || []).slice(0, 10).map((item) => (
-                      <div key={`machines-maint-${item.id}`} className="rounded-xl border border-slate-800 bg-slate-950 px-2 py-1">
-                        <p className="text-slate-200">{item.device?.name || item.deviceId} • {item.component}</p>
-                        <p className="text-slate-400">{item.currentHours.toFixed(1)}h / {item.intervalHours.toFixed(0)}h • Due in {item.predictedDueHours.toFixed(1)}h</p>
-                        <p className={`${item.riskLevel === "Overdue" || item.riskLevel === "High" ? "text-rose-300" : item.riskLevel === "Watch" ? "text-amber-300" : "text-emerald-300"}`}>{item.riskLevel}</p>
-                      </div>
-                    ))}
-                    {!(bambuDashboard?.maintenance || []).length ? <p className="text-slate-500">No maintenance predictions yet.</p> : null}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <h4 className="text-sm font-semibold text-white">Open failure logs</h4>
-                  <div className="mt-2 space-y-2 text-xs">
-                    {(bambuDashboard?.openFailures || []).slice(0, 10).map((failure) => (
-                      <div key={`machines-failure-${failure.id}`} className="rounded-xl border border-rose-900/70 bg-rose-950/20 px-2 py-1">
-                        <p className="text-rose-200">{failure.device?.name || failure.deviceId} • {failure.errorCode || "ERROR"}</p>
-                        <p className="text-rose-300">{failure.message}</p>
-                        <p className="text-rose-400">{failure.createdAt ? new Date(failure.createdAt).toLocaleString() : ""}</p>
-                      </div>
-                    ))}
-                    {!(bambuDashboard?.openFailures || []).length ? <p className="text-slate-500">No active failures.</p> : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                <h4 className="text-sm font-semibold text-white">Event stream</h4>
-                <div className="mt-2 space-y-2 text-xs">
-                  {(bambuDashboard?.events || []).slice(0, 20).map((event) => (
-                    <div key={`machines-event-${event.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
-                      <span className="text-slate-200">{event.device?.name || event.deviceId} • {event.eventType}</span>
-                      <span className="text-slate-400">{event.createdAt ? new Date(event.createdAt).toLocaleString() : ""}</span>
-                    </div>
-                  ))}
-                  {!(bambuDashboard?.events || []).length ? <p className="text-slate-500">No Bambu events recorded yet.</p> : null}
-                </div>
+              <h3 className="text-lg font-semibold text-white">Bambu telemetry (Machines integration)</h3>
+              <div className="mt-3 rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-4">
+                <p className="font-medium text-cyan-200">Coming soon: a local telemetry connector to track the status of your Bambu printer.</p>
+                <p className="mt-2 text-sm text-slate-300">This feature is in alpha testing and will be available when the application is deployed locally.</p>
               </div>
             </section>
 
@@ -4543,7 +4447,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Bambu telemetry integration</h3>
-                <p className="mt-2">Use Machines tab for Bambu telemetry monitoring. The Bambu section is linked to your Bambu machine profile and includes live status (temps/progress/AMS), event stream updates, spool levels, predictive maintenance risk, and failure logs. Simulation buttons can be used to test start/finish/fail event handling and auto-updates without live hardware.</p>
+                <p className="mt-2">A local telemetry connector for tracking your Bambu printer status is coming soon. The feature is in alpha testing and will be available when the application is deployed locally.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">If the app is not responding</h3>
@@ -4555,14 +4459,29 @@ function App() {
               </div>
               <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Raise a bug or feature request</h3>
-                <p className="mt-2 text-slate-300">Submitting creates a GitHub issue automatically, labelled <code>bug</code> or <code>enhancement</code>, with the app version, build, environment and browser attached.</p>
-                {issueReportStatus && !issueReportStatus.configured ? (
-                  <p className="mt-1 text-xs text-amber-300">GitHub issue reporting is not configured on this server yet (GITHUB_TOKEN is missing), so submissions will be rejected.</p>
-                ) : null}
+                <p className="mt-2 text-sm text-slate-300">
+                  Create an issue in GitHub to report a problem or suggest an improvement. Choose a request type, set its priority, and add a short title and clear details. The app adds its version, build, environment, browser, and submission time automatically.
+                </p>
 
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Request type</span>
+                {issueReportStatusError ? (
+                  <p className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/20 p-3 text-sm text-amber-200">
+                    We couldn’t check the GitHub issue setup. You can still submit, and any problem will be shown here.
+                  </p>
+                ) : issueReportStatus?.configured ? (
+                  <p className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-3 text-sm text-emerald-200">
+                    Server configuration found for <code>{issueReportStatus.repository}</code>. GitHub will confirm the token can create issues when you submit.
+                  </p>
+                ) : issueReportStatus && !issueReportStatus.configured ? (
+                  <p className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/20 p-3 text-sm text-amber-200">
+                    GitHub issue creation isn’t configured on this server. Contact the app administrator to enable it.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-400">Checking GitHub issue setup…</p>
+                )}
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-1 block">Request type</span>
                     <select
                       value={helpRequestForm.requestType}
                       onChange={(e) => setHelpRequestForm((current) => ({ ...current, requestType: e.target.value as "Bug" | "Feature Request" }))}
@@ -4573,8 +4492,8 @@ function App() {
                     </select>
                   </label>
 
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Priority</span>
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-1 block">Priority</span>
                     <select
                       value={helpRequestForm.priority}
                       onChange={(e) => setHelpRequestForm((current) => ({ ...current, priority: e.target.value as "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations" }))}
@@ -4588,40 +4507,44 @@ function App() {
                     </select>
                   </label>
 
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Short title</span>
+                  <label className="block text-sm text-slate-300 sm:col-span-2">
+                    <span className="mb-1 block">Short title</span>
                     <input
                       value={helpRequestForm.title}
                       onChange={(e) => setHelpRequestForm((current) => ({ ...current, title: e.target.value }))}
                       className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
                       placeholder="Example: Invoice line-item audit history"
+                      maxLength={200}
                       required
                     />
                   </label>
 
-                  <label className="flex items-start gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0 pt-2">Details</span>
+                  <label className="block text-sm text-slate-300 sm:col-span-2">
+                    <span className="mb-1 block">Details</span>
                     <textarea
                       value={helpRequestForm.details}
                       onChange={(e) => setHelpRequestForm((current) => ({ ...current, details: e.target.value }))}
-                      className="min-h-[110px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                      placeholder="Describe the issue or outcome you want. Include affected tabs/workflows if possible."
+                      className="min-h-[130px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                      placeholder={helpRequestForm.requestType === "Bug"
+                        ? "What happened, what did you expect, and how can we reproduce it?"
+                        : "What problem should this solve, and what outcome would you like?"}
+                      maxLength={10000}
                       required
                     />
                   </label>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end gap-3">
-                  <button type="submit" disabled={isSubmittingIssue} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:opacity-50">
+                <div className="mt-4 flex justify-end">
+                  <button type="submit" disabled={isSubmittingIssue || issueReportStatus?.configured === false} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">
                     {isSubmittingIssue ? "Creating issue..." : "Create GitHub issue"}
                   </button>
                 </div>
 
-                {helpRequestMessage ? <p className="mt-3 text-sm text-rose-300">{helpRequestMessage}</p> : null}
+                {helpRequestMessage ? <p role="alert" className="mt-3 text-sm text-rose-300">{helpRequestMessage}</p> : null}
                 {createdIssue ? (
-                  <div className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-900/10 p-3 text-sm text-emerald-300">
-                    <p>Issue created: <span className="font-semibold">#{createdIssue.number}</span></p>
-                    <p className="mt-1 break-all"><a className="underline" href={createdIssue.url} target="_blank" rel="noopener noreferrer">{createdIssue.url}</a></p>
+                  <div className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-900/10 p-3 text-sm text-emerald-300" role="status">
+                    <p>GitHub issue created: <span className="font-semibold">#{createdIssue.number}</span></p>
+                    <p className="mt-1 break-all"><a className="underline" href={createdIssue.url} target="_blank" rel="noopener noreferrer">View issue on GitHub</a></p>
                   </div>
                 ) : null}
               </form>
