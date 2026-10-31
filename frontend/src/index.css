@@ -70,7 +70,7 @@ body {
   background-color: var(--app-accent-soft) !important;
 }
 
-.app-theme .hover\\:bg-cyan-700:hover {
+.app-theme .hover\:bg-cyan-700:hover {
   background-color: var(--app-accent-hover) !important;
 }
 
