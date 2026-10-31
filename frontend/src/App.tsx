@@ -6,15 +6,15 @@ import PrintTimeInput from "./PrintTimeInput";
 import { formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, IssueReportStatus, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
-const APP_NAME = "Fabrication Workshop Tracker";
+const APP_NAME = "MakerFlow";
 const APP_VERSION = "0.6.0";
 const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
 const SCHEDULE_HORIZON_DAYS = 14;
-const DEFAULT_ADMIN_BACKGROUND_COLOR = "#0f172a";
-const DEFAULT_ADMIN_TEXT_COLOR = "#e2e8f0";
-const DEFAULT_SITE_INPUT_COLOR = "#111827";
-const DEFAULT_SITE_ACCENT_COLOR = "#22d3ee";
-const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#001219";
+const DEFAULT_ADMIN_BACKGROUND_COLOR = "#FFFFFF";
+const DEFAULT_ADMIN_TEXT_COLOR = "#1C1C1E";
+const DEFAULT_SITE_INPUT_COLOR = "#E5E5E7";
+const DEFAULT_SITE_ACCENT_COLOR = "#3A7DFF";
+const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#1C1C1E";
 const BILLING_LOCAL_STORAGE_KEY = "billing-settings-local-backup-v1";
 const BAMBU_POLL_INTERVAL_ACTIVE_MS = 30000;
 const BAMBU_POLL_INTERVAL_IDLE_MS = 90000;
@@ -30,12 +30,20 @@ type ThemePreset = {
 
 const quickThemePresets: ThemePreset[] = [
   {
+    name: "MakerFlow",
+    background: "#FFFFFF",
+    text: "#1C1C1E",
+    input: "#E5E5E7",
+    accent: "#3A7DFF",
+    accentText: "#1C1C1E",
+  },
+  {
     name: "Dark",
-    background: "#0f172a",
-    text: "#e2e8f0",
-    input: "#111827",
-    accent: "#22d3ee",
-    accentText: "#001219",
+    background: "#1C1C1E",
+    text: "#E5E5E7",
+    input: "#1C1C1E",
+    accent: "#3A7DFF",
+    accentText: "#E5E5E7",
   },
   {
     name: "Light",
@@ -54,14 +62,6 @@ const quickThemePresets: ThemePreset[] = [
     accentText: "#000000",
   },
   {
-    name: "Ocean",
-    background: "#0b132b",
-    text: "#e0fbfc",
-    input: "#1c2541",
-    accent: "#5bc0be",
-    accentText: "#03242f",
-  },
-  {
     name: "Forest",
     background: "#0f241a",
     text: "#ecfdf3",
@@ -76,14 +76,6 @@ const quickThemePresets: ThemePreset[] = [
     input: "#1f2937",
     accent: "#f59e0b",
     accentText: "#111827",
-  },
-  {
-    name: "Workshop Blue",
-    background: "#0b1f3a",
-    text: "#dbeafe",
-    input: "#15345f",
-    accent: "#38bdf8",
-    accentText: "#06223d",
   },
   {
     name: "Paper Invoice",
@@ -1928,10 +1920,7 @@ function App() {
     () => customers.find((customer) => customer.name.trim().toLowerCase() === String(selectedJob?.customer || "").trim().toLowerCase()) || null,
     [customers, selectedJob?.customer],
   );
-  const businessDisplayName = billingSettings.businessName?.trim() || APP_NAME;
-  const appHeading = billingSettings.businessName?.trim()
-    ? `${billingSettings.businessName.trim()} • ${APP_NAME}`
-    : APP_NAME;
+  const businessDisplayName = billingSettings.businessName?.trim() || "";
 
   const resetCustomerForm = () => {
     setCustomerForm({ name: "", address: "", email: "", phone: "", notes: "" });
@@ -2015,6 +2004,7 @@ function App() {
       .totals .row { margin-bottom: 8px; }
       .totals .row:last-child { margin-bottom: 0; font-weight: 700; border-top: 1px solid #cbd5e1; padding-top: 8px; }
       .footer { margin-top: 16px; font-size: 12px; color: #475569; display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+      .makerflow-footer { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 8px; text-align: center; color: #64748b; font-size: 10px; }
     </style>
   </head>
   <body>
@@ -2023,10 +2013,11 @@ function App() {
         <p class="muted" style="letter-spacing:0.08em; text-transform:uppercase; font-size:12px;">Invoice</p>
         <h2 style="margin-top:6px;">${safe(job.name)}</h2>
         <p class="muted" style="margin-top:4px;">${safe(customerName)}</p>
-        <p class="muted" style="margin-top:12px;">From: <strong style="color:#0f172a;">${safe(businessDisplayName)}</strong></p>
+        ${businessDisplayName ? `<p class="muted" style="margin-top:12px;">From: <strong style="color:#0f172a;">${safe(businessDisplayName)}</strong></p>` : ""}
         ${billingSettings.businessAddress ? `<p class="muted">${safe(billingSettings.businessAddress)}</p>` : ""}
       </div>
       <div style="text-align:right;">
+        ${billingSettings.businessLogoUrl ? `<img src="${safe(billingSettings.businessLogoUrl)}" alt="${safe(businessDisplayName || "Business logo")}" style="max-width:72px;max-height:72px;object-fit:contain;margin-bottom:8px;" />` : ""}
         <p><strong>#${safe(job.jobNumber || "TBC")}</strong></p>
         <p class="muted">Issued ${safe(new Date().toLocaleDateString())}</p>
         <p class="muted">${safe(dueLabel)}</p>
@@ -2070,6 +2061,7 @@ function App() {
       ${billingSettings.businessPhone ? `<span>${safe(billingSettings.businessPhone)}</span>` : ""}
       ${billingSettings.businessWebsite ? `<span>${safe(billingSettings.businessWebsite)}</span>` : ""}
     </div>` : ""}
+    <div class="makerflow-footer">Made with MakerFlow</div>
   </body>
 </html>`;
 
@@ -2416,36 +2408,58 @@ function App() {
   return (
     <div className="app-theme min-h-screen bg-slate-950 text-slate-100" style={appThemeStyle}>
       <div className="mx-auto max-w-7xl p-6">
-        <header className="mb-8 flex items-center justify-between no-print">
-          <div>
-            <h1 className="text-3xl font-semibold">{appHeading}</h1>
-            <p className="mt-2 text-slate-400">Track jobs, materials, and production costs from one place.</p>
-          </div>
-          {billingSettings.businessLogoUrl ? (
+        <header className="mb-8 flex items-center justify-between gap-4 no-print">
+          <button
+            type="button"
+            onClick={() => setActiveTab("dashboard")}
+            aria-label="Go to dashboard"
+            title="Go to dashboard"
+            className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
             <img
-              src={billingSettings.businessLogoUrl}
-              alt="Business logo"
-              className="h-14 w-14 rounded-full border border-slate-800 bg-slate-900 object-cover"
+              src="/branding/makerflow-primary.svg"
+              alt="MakerFlow — Your workshop, organised."
+              className="h-14 w-[168px] rounded-lg bg-white object-contain"
             />
-          ) : null}
+          </button>
+          <div className="flex min-w-0 items-center justify-end gap-3">
+            {billingSettings.businessName?.trim() ? (
+              <p className="text-right text-lg font-semibold text-slate-200">{billingSettings.businessName.trim()}</p>
+            ) : null}
+            {billingSettings.businessLogoUrl ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab("billing")}
+                aria-label="Open billing settings"
+                title="Open billing settings"
+                className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <img
+                  src={billingSettings.businessLogoUrl}
+                  alt={billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} business logo` : "Business logo"}
+                  className="h-14 w-14 rounded-full border border-slate-800 bg-slate-900 object-cover"
+                />
+              </button>
+            ) : null}
+          </div>
         </header>
 
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
           <nav className="flex flex-wrap gap-3">
             {(["dashboard", "jobs", "reports", "materials", "machines", "customers", "suppliers", "billing", "admin", "help"] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
-                {tab}
+                {tab === "jobs" ? "Production Jobs" : tab === "machines" ? "Equipment" : tab}
               </button>
             ))}
           </nav>
-          <div className="rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-300 inline-flex">{jobs.length} jobs</div>
+          <div className="rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-300 inline-flex">{jobs.length} production jobs</div>
         </div>
 
         {activeTab === "dashboard" && (
           <div className="space-y-6">
             <div className="grid gap-6 lg:grid-cols-3">
               <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h2 className="text-xl font-semibold">Delivery and utilization dashboard</h2>
+                <h2 className="text-xl font-semibold">Workshop operations</h2>
                 <div className="mt-4 grid gap-4 md:grid-cols-4">
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                     <p className="text-xs uppercase tracking-[0.25em] text-slate-500">On-time delivery</p>
@@ -2460,7 +2474,7 @@ function App() {
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                     <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Queued runtime</p>
                     <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.scheduledHours.toFixed(1)} h</p>
-                    <p className="text-xs text-slate-400">Across {deliveryAndUtilization.machineCount} machine lanes</p>
+                    <p className="text-xs text-slate-400">Across {deliveryAndUtilization.machineCount} equipment queues</p>
                   </div>
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                     <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Weekly utilization</p>
@@ -2469,7 +2483,7 @@ function App() {
                   </div>
                 </div>
                 <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <h3 className="text-sm font-semibold text-white">Machine utilization (next 7-day queue model)</h3>
+                  <h3 className="text-sm font-semibold text-white">Equipment utilization (next 7-day queue model)</h3>
                   <div className="mt-2 space-y-2 text-xs">
                     {deliveryAndUtilization.utilizationByMachine.map((row) => (
                       <div key={`utilization-${row.machineType}`} className="flex items-center justify-between">
@@ -2477,14 +2491,14 @@ function App() {
                         <span className="text-slate-200">{row.hours.toFixed(1)} h ({row.utilizationPercent.toFixed(1)}%)</span>
                       </div>
                     ))}
-                    {!deliveryAndUtilization.utilizationByMachine.length ? <p className="text-slate-500">No queued machine utilization data yet.</p> : null}
+                    {!deliveryAndUtilization.utilizationByMachine.length ? <p className="text-slate-500">No queued equipment utilization data yet.</p> : null}
                   </div>
                 </div>
               </section>
 
               <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-xl font-semibold">Jobs</h2>
+                  <h2 className="text-xl font-semibold">Production Jobs</h2>
                   <button
                     type="button"
                     onClick={() => {
@@ -2498,26 +2512,26 @@ function App() {
                 </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Pending jobs</h3>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Pending production jobs</h3>
                     <p className="mt-2 text-3xl font-semibold">{pendingJobs.length}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Total jobs</h3>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Total production jobs</h3>
                     <p className="mt-2 text-3xl font-semibold">{jobs.length}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">New jobs waiting payment</h3>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Production jobs waiting for payment</h3>
                     <p className="mt-2 text-3xl font-semibold">{jobsWaitingPayment}</p>
                   </div>
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">New jobs waiting dispatch</h3>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Production jobs waiting for dispatch</h3>
                     <p className="mt-2 text-3xl font-semibold">{jobsWaitingDispatch}</p>
                   </div>
                 </div>
               </section>
 
               <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h2 className="text-xl font-semibold">Recent jobs</h2>
+                <h2 className="text-xl font-semibold">Recent production jobs</h2>
                 <div className="mt-4 space-y-3">
                   {recentJobs.map((job) => (
                     <div key={job.id} className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3">
@@ -2578,7 +2592,7 @@ function App() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold">Reporting page</h2>
-                <p className="mt-2 text-sm text-slate-400">Filter jobs by date range, status, machine, and customer, then export report-ready data.</p>
+                <p className="mt-2 text-sm text-slate-400">Filter production jobs by date range, status, equipment, and customer, then export report-ready data.</p>
               </div>
               <button type="button" onClick={exportReportCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export CSV</button>
             </div>
@@ -2720,11 +2734,11 @@ function App() {
                 <h2 className="text-xl font-semibold">Jobs</h2>
                 <p className="mt-2 text-sm text-slate-400">Click a job card to expand details, then choose Edit job or Create invoice.</p>
               </div>
-              <button type="button" onClick={openNewJobEditor} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add job</button>
+              <button type="button" onClick={openNewJobEditor} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add production job</button>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto]">
               <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Search jobs</span>
+                <span className="mb-2 block">Search production jobs</span>
                 <input
                   value={jobSearchTerm}
                   onChange={(e) => setJobSearchTerm(e.target.value)}
@@ -2741,7 +2755,7 @@ function App() {
                 </select>
               </label>
               <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Machine filter</span>
+                <span className="mb-2 block">Equipment filter</span>
                 <select value={jobMachineFilter} onChange={(e) => setJobMachineFilter(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
                   <option value="All">All</option>
                   {machineOptions.filter((machineName) => machineName !== "Other").map((machineName) => (
@@ -2780,7 +2794,7 @@ function App() {
             </div>
             <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Machine queue and schedule</h3>
+                <h3 className="text-sm font-semibold text-white">Production schedule</h3>
                 <span className="text-xs text-slate-400">{queuedJobs.length} active queue items</span>
               </div>
               <div className="space-y-2">
@@ -2843,8 +2857,8 @@ function App() {
                           <p><span className="text-slate-500">Job:</span> {job.name}</p>
                           <p><span className="text-slate-500">Customer:</span> {job.customer || "No customer"}</p>
                           <p><span className="text-slate-500">Model URL:</span> {job.sourceUrl ? <a className="text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer">{job.sourceUrl}</a> : "None"}</p>
-                          <p><span className="text-slate-500">Machine:</span> {job.machineType}</p>
-                          <p><span className="text-slate-500">Machine runtime:</span> {formatMinutesAsPrintTime(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0))}</p>
+                          <p><span className="text-slate-500">Equipment:</span> {job.machineType}</p>
+                          <p><span className="text-slate-500">Equipment runtime:</span> {formatMinutesAsPrintTime(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0))}</p>
                           <p><span className="text-slate-500">Setup time:</span> {job.setupTimeMinutes ?? 0} mins</p>
                           <p><span className="text-slate-500">Post-processing:</span> {job.postProcessingMinutes ?? 0} mins</p>
                           <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
@@ -3040,7 +3054,7 @@ function App() {
                                 <input value={selectedJobForm.sourceUrl} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, sourceUrl: e.target.value })} placeholder="https://makerworld.com/..." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
                               <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Machine type</span>
+                                <span className="mb-2 block">Equipment</span>
                                 <select value={selectedJobForm.machineType} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, machineType: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
                                   {machineOptions.map((option) => (
                                     <option key={option} value={option}>{option}</option>
@@ -3197,7 +3211,7 @@ function App() {
                                     <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">Invoice</p>
                                     <h5 className="mt-2 text-xl font-semibold text-white">{selectedJob.name}</h5>
                                     <p className="mt-1 text-sm text-slate-400">{selectedJob.customer || "Walk-in customer"}</p>
-                                    <p className="mt-3 text-sm text-slate-400">From: <span className="text-slate-200">{businessDisplayName}</span></p>
+                                    {businessDisplayName ? <p className="mt-3 text-sm text-slate-400">From: <span className="text-slate-200">{businessDisplayName}</span></p> : null}
                                     {billingSettings.businessAddress ? <p className="text-sm text-slate-400">{billingSettings.businessAddress}</p> : null}
                                   </div>
                                   <div className="text-sm text-slate-400">
@@ -3309,6 +3323,7 @@ function App() {
                                     </div>
                                   </div>
                                 ) : null}
+                                <p className="mt-5 border-t border-slate-800 pt-3 text-center text-xs text-slate-500">Made with MakerFlow</p>
                               </div>
                             ) : (
                               <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
@@ -3654,17 +3669,17 @@ function App() {
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold">Machines</h2>
-                <p className="mt-2 text-sm text-slate-400">Manage machine profiles used in job selection and runtime billing.</p>
+                <h2 className="text-xl font-semibold">Equipment</h2>
+                <p className="mt-2 text-sm text-slate-400">Manage the equipment used in production jobs and cost calculations.</p>
               </div>
-              <button type="button" onClick={openAddMachineForm} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add machine</button>
+              <button type="button" onClick={openAddMachineForm} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add equipment</button>
             </div>
 
             {showMachineEditor ? (
               <div className="mt-6 rounded-2xl border border-cyan-700/40 bg-slate-950 p-5">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-white">{editingMachineName ? "Edit machine" : "Add machine"}</h3>
+                    <h3 className="text-lg font-semibold text-white">{editingMachineName ? "Edit equipment" : "Add equipment"}</h3>
                     <p className="mt-1 text-sm text-slate-400">Set name and machine billing profile details.</p>
                   </div>
                   <button type="button" onClick={closeMachineForm} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Close</button>
@@ -3672,7 +3687,7 @@ function App() {
 
                 <form onSubmit={saveMachine} className="space-y-3">
                   <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Machine name</span>
+                    <span className="w-56 shrink-0">Equipment name</span>
                     <input value={machineForm.name} onChange={(e) => setMachineForm({ ...machineForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
                   </label>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
@@ -3690,7 +3705,7 @@ function App() {
 
                   <div className="flex justify-end gap-3">
                     <button type="button" onClick={closeMachineForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel</button>
-                    <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingMachineName ? "Save machine" : "Add machine"}</button>
+                    <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingMachineName ? "Save equipment" : "Add equipment"}</button>
                   </div>
                 </form>
               </div>
@@ -3715,7 +3730,7 @@ function App() {
             </div>
 
             <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-              <h3 className="text-lg font-semibold text-white">Bambu telemetry (Machines integration)</h3>
+              <h3 className="text-lg font-semibold text-white">Bambu telemetry (Equipment integration)</h3>
               <div className="mt-3 rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-4">
                 <p className="font-medium text-cyan-200">Coming soon: a local telemetry connector to track the status of your Bambu printer.</p>
                 <p className="mt-2 text-sm text-slate-300">This feature is in alpha testing and will be available when the application is deployed locally.</p>
@@ -4019,13 +4034,13 @@ function App() {
                       value={siteAccentTextColor}
                       onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentTextColor: e.target.value }))}
                       className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
-                      placeholder="#001219"
+                      placeholder="#E5E5E7"
                     />
                     </span>
                   </label>
                   <div className="rounded-xl border border-slate-700 p-3" style={{ backgroundColor: siteInputColor }}>
                     <p className="text-xs" style={adminMutedTextStyle}>Accent preview</p>
-                    <button type="button" className="mt-2 rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Example action button</button>
+                    <button type="button" className="mt-2 rounded-full px-4 py-2 text-sm" style={{ backgroundColor: siteAccentColor, color: siteAccentTextColor }}>Example action button</button>
                   </div>
                 </div>
                 <div className="mt-4 flex items-center justify-end gap-2">
@@ -4109,7 +4124,7 @@ function App() {
                   </div>
 
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Machines backup</h4>
+                    <h4 className="text-sm font-semibold text-white">Equipment backup</h4>
                     <p className="mt-1 text-xs text-slate-400">Export or restore machine profiles plus Bambu device state and telemetry.</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={exportMachinesBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
@@ -4170,6 +4185,7 @@ function App() {
 
               <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
                 <summary className="cursor-pointer list-none text-lg font-semibold text-white">Business personalization</summary>
+                <p className="mt-2 text-sm text-slate-400">Your business name and logo appear on customer invoices. MakerFlow stays separate as the software brand.</p>
                 <div className="mt-4 flex items-center justify-end">
                   <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">
                     {savingBilling ? "Saving..." : "Save business details"}
@@ -4178,7 +4194,7 @@ function App() {
                 <div className="mt-4 space-y-3">
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Business name</span>
-                    <input value={billingSettings.businessName || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessName: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="Fabrication Workshop Tracker" />
+                    <input value={billingSettings.businessName || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessName: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="Your business name" />
                   </label>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Business logo URL</span>
@@ -4416,12 +4432,12 @@ function App() {
                 <p className="mt-2">Open a quote in Jobs and use quick actions to move it through Quote Draft → Quote Sent → Quote Approved. Use Convert to job to set it to Pending and begin production. When a job is changed to Completed, the app refreshes costs and opens invoice mode automatically.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Machines and billing rules</h3>
-                <p className="mt-2">Manage machine profiles in Machines (add/edit/remove wattage, depreciation, replacement runtime). In Billing, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, rush fee %, waste factor %), and invoice finance settings (VAT, suggested deposit %, payment terms days). Setup fee and delivery charge are job-level fields in the job forms/cards. Billing and personalization sections are collapsible for easier navigation.</p>
+                <h3 className="font-semibold text-white">Equipment and billing rules</h3>
+                <p className="mt-2">Manage equipment profiles in Equipment (add/edit/remove wattage, depreciation, and replacement runtime). In Billing, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, rush fee %, waste factor %), and invoice finance settings (VAT, suggested deposit %, payment terms days). Setup fee and delivery charge are job-level fields in the job forms/cards. Billing and personalization sections are collapsible for easier navigation.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Site theme customization</h3>
-                <p className="mt-2">Open Admin and use Site theme colors to style the whole app. You can set Site background, Site text, Search and input, Accent button, and Accent button text colors. Use the quick preset row for one-click setup (Light, Dark, High Contrast, Ocean, Forest, Night Shift, Workshop Blue, Paper Invoice), then fine-tune any color fields and click Save site theme to keep your branding for future sessions.</p>
+                <p className="mt-2">Open Admin and use Site theme colors to style the whole app. You can set Site background, Site text, Search and input, Accent button, and Accent button text colors. Use the quick preset row for one-click setup (MakerFlow, Light, Dark, High Contrast, Forest, Night Shift, Paper Invoice), then fine-tune any color fields and click Save site theme to keep your branding for future sessions.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Business and customers</h3>
@@ -4433,7 +4449,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Reporting page</h3>
-                <p className="mt-2">Use Reports to filter by date range, status, machine, and customer. The page shows summary metrics (jobs, revenue, base cost, margin), includes margin reporting views by machine/material/customer, and lets you export the filtered report rows as CSV.</p>
+                <p className="mt-2">Use Reports to filter production jobs by date range, status, equipment, and customer. The page shows summary metrics (jobs, revenue, base cost, margin), includes margin reporting views by machine/material/customer, and lets you export the filtered report rows as CSV.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">MakerWorld integration</h3>

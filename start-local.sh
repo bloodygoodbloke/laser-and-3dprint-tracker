@@ -5,6 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 
+# Keep local Prisma commands working without requiring DATABASE_URL in the shell.
+export DATABASE_URL="${DATABASE_URL:-file:./dev.db}"
+
 if ! command -v npm >/dev/null 2>&1; then
   echo "npm is required but was not found in PATH."
   exit 1
