@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Added MakerWorld import v1 (proof of concept): the Add Job Import button now sets the job name and model URL purely from the MakerWorld URL slug, with no network requests; metadata, print profile, time and material hints are no longer applied by Import.
 - Next version target updated to `0.7.0`.
 - Added `restart-local.sh` to stop any existing frontend/backend processes on local ports and relaunch both services via `start-local.sh`.
 - Moved setup fee and delivery charge from billing-wide invoice add-ons into per-job controls, including persisted job-level amount fields.

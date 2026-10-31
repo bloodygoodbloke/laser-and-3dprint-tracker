@@ -1,5 +1,6 @@
 import { createElement, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
+import { parseMakerWorldUrl } from "./makerworldImport";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
@@ -1721,6 +1722,12 @@ function App() {
     setNewJobForm((current) => ({ ...current, sourceUrl: payload.url || makerWorldUrl }));
     setMakerWorldMessage("MakerWorld metadata imported.");
   };
+  const importMakerWorldV1 = () => {
+    const { jobName, modelUrl } = parseMakerWorldUrl(makerWorldUrl);
+    setNewJobForm((current) => ({ ...current, name: jobName, sourceUrl: modelUrl }));
+    setJobEditorMode("create");
+    setMakerWorldMessage(`Imported "${jobName}" from URL.`);
+  };
   const importMakerWorldAutofill = async () => {
     const payload = await api.autofillMakerWorldJob(makerWorldUrl);
     setMakerWorldMetadata(payload.metadata);
@@ -3361,7 +3368,7 @@ function App() {
                         </label>
                         <button
                           type="button"
-                          onClick={() => importMakerWorldAutofill().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "MakerWorld autofill failed"))}
+                          onClick={() => { try { importMakerWorldV1(); } catch (error) { setMakerWorldMessage(error instanceof Error ? error.message : "MakerWorld import failed"); } }}
                           className="rounded-xl border border-cyan-700 px-4 py-2 text-sm text-cyan-300"
                         >
                           Import
