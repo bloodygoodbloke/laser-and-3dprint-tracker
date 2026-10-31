@@ -1,4 +1,7 @@
 MakerFlow Brand Plan
+
+The MakerFlow Brand Kit below defines the current default product and marketing style. MakerFlow branding is supplemental to each workshop's identity: the user's business name and logo remain visible in the app, invoices retain the business branding, and MakerFlow is credited in the invoice footer.
+
 Core Objectives
 • Rebrand the app as MakerFlow with the tagline “Your workshop, organised”
 • Prepare the app for public release and monetisation
@@ -6,8 +9,8 @@ Core Objectives
 • Position MakerFlow as the go‑to workflow tool for makers, print farms, and laser shops
 ---
 Branding Tasks
-• Finalise logo concepts and colour palette
-• Create brand voice and messaging guidelines
+• Keep the selected MakerFlow logo and approved colour palette consistent across the product and marketing
+• Maintain the brand voice and messaging guidelines documented in the Brand Kit below
 • Design landing page layout and copy
 • Produce promotional assets (screenshots, demo video, feature highlights)
 • Create a simple brand kit (fonts, colours, usage rules)
