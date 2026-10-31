@@ -632,6 +632,8 @@ function App() {
     "--app-input-bg": siteInputColor,
     "--app-accent": siteAccentColor,
     "--app-accent-text": siteAccentTextColor,
+    "--app-accent-hover": siteAccentColor.toUpperCase() === DEFAULT_SITE_ACCENT_COLOR ? "#1D63E7" : siteAccentColor,
+    "--app-accent-highlight": siteAccentColor.toUpperCase() === DEFAULT_SITE_ACCENT_COLOR ? "#5DA8FF" : siteAccentColor,
     "--app-accent-soft": hexToRgba(siteAccentColor, 0.18),
   } as CSSProperties;
   const adminSectionStyle = {
