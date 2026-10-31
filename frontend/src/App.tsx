@@ -10,11 +10,11 @@ const APP_NAME = "MakerFlow";
 const APP_VERSION = "0.6.0";
 const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
 const SCHEDULE_HORIZON_DAYS = 14;
-const DEFAULT_ADMIN_BACKGROUND_COLOR = "#0f172a";
-const DEFAULT_ADMIN_TEXT_COLOR = "#e2e8f0";
-const DEFAULT_SITE_INPUT_COLOR = "#111827";
-const DEFAULT_SITE_ACCENT_COLOR = "#22d3ee";
-const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#001219";
+const DEFAULT_ADMIN_BACKGROUND_COLOR = "#1C1C1E";
+const DEFAULT_ADMIN_TEXT_COLOR = "#E5E5E7";
+const DEFAULT_SITE_INPUT_COLOR = "#1C1C1E";
+const DEFAULT_SITE_ACCENT_COLOR = "#3A7DFF";
+const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#E5E5E7";
 const BILLING_LOCAL_STORAGE_KEY = "billing-settings-local-backup-v1";
 const BAMBU_POLL_INTERVAL_ACTIVE_MS = 30000;
 const BAMBU_POLL_INTERVAL_IDLE_MS = 90000;
@@ -31,11 +31,11 @@ type ThemePreset = {
 const quickThemePresets: ThemePreset[] = [
   {
     name: "Dark",
-    background: "#0f172a",
-    text: "#e2e8f0",
-    input: "#111827",
-    accent: "#22d3ee",
-    accentText: "#001219",
+    background: "#1C1C1E",
+    text: "#E5E5E7",
+    input: "#1C1C1E",
+    accent: "#3A7DFF",
+    accentText: "#E5E5E7",
   },
   {
     name: "Light",
@@ -4026,13 +4026,13 @@ function App() {
                       value={siteAccentTextColor}
                       onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentTextColor: e.target.value }))}
                       className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
-                      placeholder="#001219"
+                      placeholder="#E5E5E7"
                     />
                     </span>
                   </label>
                   <div className="rounded-xl border border-slate-700 p-3" style={{ backgroundColor: siteInputColor }}>
                     <p className="text-xs" style={adminMutedTextStyle}>Accent preview</p>
-                    <button type="button" className="mt-2 rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Example action button</button>
+                    <button type="button" className="mt-2 rounded-full px-4 py-2 text-sm" style={{ backgroundColor: siteAccentColor, color: siteAccentTextColor }}>Example action button</button>
                   </div>
                 </div>
                 <div className="mt-4 flex items-center justify-end gap-2">
