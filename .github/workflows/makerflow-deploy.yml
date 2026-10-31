@@ -73,7 +73,7 @@ jobs:
           az containerapp update \
             --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
             --image "$ACR_SERVER/$IMAGE_NAME:${{ github.sha }}" \
-            --revision-suffix "g${GITHUB_SHA::7}" \
+            --revision-suffix "g${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}" \
             --set-env-vars \
               "APP_VERSION=$APP_VERSION" "BUILD_NUMBER=$BUILD_NUMBER" "GIT_COMMIT=$GIT_COMMIT" \
               "GIT_BRANCH=$GIT_BRANCH" "BUILD_DATE=$BUILD_DATE" "APP_ENVIRONMENT=Production"
