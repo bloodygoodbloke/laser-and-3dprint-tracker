@@ -6,7 +6,7 @@ Running these commands yourself does not use Copilot chat credits. They run on y
 
 ## Prerequisites
 
-- Node.js installed
+- Node.js 26.13.0 LTS (or a later Node 26 LTS patch) installed
 - npm installed
 - Backend running on port 4000
 - Frontend running on port 5173

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import prisma from "../prisma";
+import prisma from "../prisma.js";
 
 const router = Router();
 const DASHBOARD_CACHE_TTL_MS = 10000;

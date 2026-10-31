@@ -8,7 +8,7 @@ How MakerFlow identifies exactly which build is running, locally and in Azure Co
 
 ```json
 {
-  "version": "0.8.0",
+  "version": "0.7.0",
   "buildNumber": "20261031.1545",
   "gitCommit": "a1b2c3d",
   "gitBranch": "main",
@@ -32,13 +32,13 @@ The values come from environment variables, with development defaults:
 
 ## Where it appears
 
-- **Footer (every page):** compact `v0.8.0 (1545)` that links to Help > Deployment Information.
+- **Footer (every page):** compact `v0.7.0 (1545)` that links to Help > Deployment Information.
 - **Help > Deployment Information:** full details plus a "Copy for support" button.
 - **Hidden developer diagnostics:** on the Help page, click the "MakerFlow vX" heading 5 times to toggle it. It shows API connectivity and latency (`/api/health`), application uptime, the frontend bundle version (warns if it differs from the server), browser user agent and the raw version JSON.
 
 ## How version numbers are managed
 
-The semantic version is the `version` in `backend/package.json` and `frontend/package.json` (they must match, enforced by `npm run check:release`, which also requires a matching `## [x.y.z] -` changelog entry). Bump it with `npm version` in both packages. CI reads `backend/package.json` and passes it as `APP_VERSION`. The frontend bundle also embeds `frontend/package.json`'s version at build time.
+The semantic version is the `version` in `backend/package.json` and `frontend/package.json`; these values and the root versions in both lockfiles must match. `npm run check:release` checks that the package versions agree and that `docs/CHANGELOG.md` has a dated `## [x.y.z] - YYYY-MM-DD` release section. Update both packages and lockfiles together, then run the tracker and release checks. CI reads `backend/package.json` and passes it as `APP_VERSION`. The frontend bundle embeds `frontend/package.json`'s version at build time.
 
 ## How build numbers are generated
 

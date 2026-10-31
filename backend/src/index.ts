@@ -1,24 +1,26 @@
-import "./loadEnv";
+import "./loadEnv.js";
 import express from "express";
 import cors from "cors";
-import path from "path";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import jobsRouter from "./routes/jobs";
-import materialsRouter from "./routes/materials";
-import billingRouter from "./routes/billing";
-import adminRouter from "./routes/admin";
-import customersRouter from "./routes/customers";
-import suppliersRouter from "./routes/suppliers";
-import bambuRouter from "./routes/bambu";
-import makerworldRouter from "./routes/makerworld";
-import estimatesRouter from "./routes/estimates";
-import billingAuditRouter from "./routes/billing-audit";
-import issuesRouter from "./routes/issues";
-import { getVersionInfo } from "./version";
+import jobsRouter from "./routes/jobs.js";
+import materialsRouter from "./routes/materials.js";
+import billingRouter from "./routes/billing.js";
+import adminRouter from "./routes/admin.js";
+import customersRouter from "./routes/customers.js";
+import suppliersRouter from "./routes/suppliers.js";
+import bambuRouter from "./routes/bambu.js";
+import makerworldRouter from "./routes/makerworld.js";
+import estimatesRouter from "./routes/estimates.js";
+import billingAuditRouter from "./routes/billing-audit.js";
+import issuesRouter from "./routes/issues.js";
+import { getVersionInfo } from "./version.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
-const frontendDistPath = path.resolve(__dirname, "../../frontend/dist");
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+const frontendDistPath = path.resolve(currentDirectory, "../../frontend/dist");
 
 app.use(cors());
 app.use(express.json());
@@ -34,7 +36,7 @@ app.use("/api/estimates", estimatesRouter);
 app.use("/api/billing-audit", billingAuditRouter);
 app.use("/api/issues", issuesRouter);
 app.use("/api/admin", adminRouter);
-app.use("/uploads", express.static(process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(__dirname, "..", "uploads")));
+app.use("/uploads", express.static(process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(currentDirectory, "..", "uploads")));
 app.use(express.static(frontendDistPath));
 
 app.get("/api/version", (_req, res) => {

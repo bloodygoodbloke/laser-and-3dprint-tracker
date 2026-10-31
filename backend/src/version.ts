@@ -1,5 +1,6 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type AppEnvironment = "Development" | "Test" | "Production";
 
@@ -18,7 +19,7 @@ const UNKNOWN = "unknown";
 // The manual semantic version is the package.json version (bumped with `npm version`).
 const readPackageVersion = (): string => {
   try {
-    const parsed = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../package.json"), "utf8"));
+    const parsed = JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../package.json"), "utf8"));
     return String(parsed.version || "").trim() || UNKNOWN;
   } catch {
     return UNKNOWN;

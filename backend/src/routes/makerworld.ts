@@ -2,7 +2,7 @@ import { Router } from "express";
 import { URL } from "url";
 import { load } from "cheerio";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import { extractDurationMinutes } from "../printTime";
+import { extractDurationMinutes } from "../printTime.js";
 
 const router = Router();
 
