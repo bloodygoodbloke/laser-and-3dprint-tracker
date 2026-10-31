@@ -10,11 +10,11 @@ const APP_NAME = "MakerFlow";
 const APP_VERSION = "0.6.0";
 const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
 const SCHEDULE_HORIZON_DAYS = 14;
-const DEFAULT_ADMIN_BACKGROUND_COLOR = "#1C1C1E";
-const DEFAULT_ADMIN_TEXT_COLOR = "#E5E5E7";
-const DEFAULT_SITE_INPUT_COLOR = "#1C1C1E";
+const DEFAULT_ADMIN_BACKGROUND_COLOR = "#E5E5E7";
+const DEFAULT_ADMIN_TEXT_COLOR = "#1C1C1E";
+const DEFAULT_SITE_INPUT_COLOR = "#E5E5E7";
 const DEFAULT_SITE_ACCENT_COLOR = "#3A7DFF";
-const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#E5E5E7";
+const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#1C1C1E";
 const BILLING_LOCAL_STORAGE_KEY = "billing-settings-local-backup-v1";
 const BAMBU_POLL_INTERVAL_ACTIVE_MS = 30000;
 const BAMBU_POLL_INTERVAL_IDLE_MS = 90000;
@@ -29,6 +29,14 @@ type ThemePreset = {
 };
 
 const quickThemePresets: ThemePreset[] = [
+  {
+    name: "MakerFlow",
+    background: "#E5E5E7",
+    text: "#1C1C1E",
+    input: "#E5E5E7",
+    accent: "#3A7DFF",
+    accentText: "#1C1C1E",
+  },
   {
     name: "Dark",
     background: "#1C1C1E",
@@ -54,14 +62,6 @@ const quickThemePresets: ThemePreset[] = [
     accentText: "#000000",
   },
   {
-    name: "Ocean",
-    background: "#0b132b",
-    text: "#e0fbfc",
-    input: "#1c2541",
-    accent: "#5bc0be",
-    accentText: "#03242f",
-  },
-  {
     name: "Forest",
     background: "#0f241a",
     text: "#ecfdf3",
@@ -76,14 +76,6 @@ const quickThemePresets: ThemePreset[] = [
     input: "#1f2937",
     accent: "#f59e0b",
     accentText: "#111827",
-  },
-  {
-    name: "Workshop Blue",
-    background: "#0b1f3a",
-    text: "#dbeafe",
-    input: "#15345f",
-    accent: "#38bdf8",
-    accentText: "#06223d",
   },
   {
     name: "Paper Invoice",
@@ -4429,7 +4421,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Site theme customization</h3>
-                <p className="mt-2">Open Admin and use Site theme colors to style the whole app. You can set Site background, Site text, Search and input, Accent button, and Accent button text colors. Use the quick preset row for one-click setup (Light, Dark, High Contrast, Ocean, Forest, Night Shift, Workshop Blue, Paper Invoice), then fine-tune any color fields and click Save site theme to keep your branding for future sessions.</p>
+                <p className="mt-2">Open Admin and use Site theme colors to style the whole app. You can set Site background, Site text, Search and input, Accent button, and Accent button text colors. Use the quick preset row for one-click setup (MakerFlow, Light, Dark, High Contrast, Forest, Night Shift, Paper Invoice), then fine-tune any color fields and click Save site theme to keep your branding for future sessions.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Business and customers</h3>
