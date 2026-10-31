@@ -2,7 +2,8 @@ import { createElement, useEffect, useMemo, useRef, useState, type ChangeEvent, 
 import api from "./api";
 import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchHealth, fetchVersionInfo, formatBuildDate, formatDeploymentInfo, formatUptime, formatVersionBadge, frontendVersion, type HealthInfo, type VersionInfo } from "./version";
-import { PRINT_TIME_FORMAT_HINT, formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
+import PrintTimeInput from "./PrintTimeInput";
+import { formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
@@ -287,7 +288,7 @@ function App() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
-  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(blankBillingSettings());
@@ -296,7 +297,7 @@ function App() {
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", postProcessingMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
-  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [showMaterialEditor, setShowMaterialEditor] = useState(false);
@@ -555,7 +556,7 @@ function App() {
       customer: selectedJob.customer || "",
       sourceUrl: selectedJob.sourceUrl || "",
       machineType: selectedJob.machineType || machineOptions[0],
-      machineRunTimeMinutes: formatMinutesAsPrintTime(Number(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0)),
+      machineRunTimeMinutes: String(Number(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0)),
       setupTimeMinutes: String(selectedJob.setupTimeMinutes ?? 0),
       postProcessingMinutes: String(selectedJob.postProcessingMinutes ?? 0),
       labourTimeMinutes: String(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
@@ -848,7 +849,7 @@ function App() {
       const createdForUi = normalizeJobsForUi([created])[0];
       setJobs((current) => [createdForUi, ...current.filter((job) => job.id !== createdForUi.id)]);
 
-      setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+      setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
       setJobMaterialEntries([]);
 
       try {
@@ -941,7 +942,7 @@ function App() {
 
   const openNewJobEditor = () => {
     setJobEditorMode("create");
-    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "60", setupTimeMinutes: "30", postProcessingMinutes: "30", labourTimeMinutes: "60", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
     setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "100" }] : []);
     setMakerWorldUrl("");
     setMakerWorldMessage("");
@@ -1077,35 +1078,42 @@ function App() {
     }
     const rawCustomerName = String(newJobForm.customer || "").trim();
     const existingCustomer = customers.find((customer) => customer.name.trim().toLowerCase() === rawCustomerName.toLowerCase());
-    const created = await api.createJob({
-      name: newJobForm.name,
-      customer: newJobForm.customer || null,
-      sourceUrl: newJobForm.sourceUrl || makerWorldUrl || "",
-      machineType: newJobForm.machineType,
-      estTimeMinutes: printTimeMinutes,
-      machineRunTimeMinutes: printTimeMinutes,
-      setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
-      postProcessingMinutes: Number(newJobForm.postProcessingMinutes || 0),
-      labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
-      dueDate: newJobForm.dueDate || null,
-      queuePosition: Number(newJobForm.queuePosition || 0),
-      qaChecklist: toChecklistArray(newJobForm.qaChecklistText),
-      qaPassed: Boolean(newJobForm.qaPassed),
-      reworkCost: Number(newJobForm.reworkCost || 0),
-      reworkNotes: String(newJobForm.reworkNotes || ""),
-      failureReason: String(newJobForm.failureReason || ""),
-      failureWasteGrams: Number(newJobForm.failureWasteGrams || 0),
-      failureCost: Number(newJobForm.failureCost || 0),
-      isRush: newJobForm.isRush,
-      setupFee: Number(newJobForm.setupFee || 0),
-      deliveryCharge: Number(newJobForm.deliveryCharge || 0),
-      isSetupFee: Number(newJobForm.setupFee || 0) > 0,
-      isDelivery: Number(newJobForm.deliveryCharge || 0) > 0,
-      paymentStatus: newJobForm.paymentStatus,
-      depositPaidAmount: Number(newJobForm.depositPaidAmount || 0),
-      status: newJobForm.status,
-      materials: toApiJobMaterials(newJobMaterialEntries),
-    });
+    let created: Job;
+    try {
+      created = await api.createJob({
+        name: newJobForm.name,
+        customer: newJobForm.customer || null,
+        sourceUrl: newJobForm.sourceUrl || makerWorldUrl || "",
+        machineType: newJobForm.machineType,
+        estTimeMinutes: printTimeMinutes,
+        machineRunTimeMinutes: printTimeMinutes,
+        setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
+        postProcessingMinutes: Number(newJobForm.postProcessingMinutes || 0),
+        labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
+        dueDate: newJobForm.dueDate || null,
+        queuePosition: Number(newJobForm.queuePosition || 0),
+        qaChecklist: toChecklistArray(newJobForm.qaChecklistText),
+        qaPassed: Boolean(newJobForm.qaPassed),
+        reworkCost: Number(newJobForm.reworkCost || 0),
+        reworkNotes: String(newJobForm.reworkNotes || ""),
+        failureReason: String(newJobForm.failureReason || ""),
+        failureWasteGrams: Number(newJobForm.failureWasteGrams || 0),
+        failureCost: Number(newJobForm.failureCost || 0),
+        isRush: newJobForm.isRush,
+        setupFee: Number(newJobForm.setupFee || 0),
+        deliveryCharge: Number(newJobForm.deliveryCharge || 0),
+        isSetupFee: Number(newJobForm.setupFee || 0) > 0,
+        isDelivery: Number(newJobForm.deliveryCharge || 0) > 0,
+        paymentStatus: newJobForm.paymentStatus,
+        depositPaidAmount: Number(newJobForm.depositPaidAmount || 0),
+        status: newJobForm.status,
+        materials: toApiJobMaterials(newJobMaterialEntries),
+
+      });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Failed to create job");
+      return;
+    }
     await loadData();
     setSelectedJobId(created.id);
     if (created.status === "Completed") {
@@ -2184,7 +2192,12 @@ function App() {
     const importedJobs = rows.map((row) => {
       const [jobNumber, name, customer, machineType, machineRunTimeMinutesRaw, labourTimeMinutesRaw, statusRaw] = row.split(",");
       const status = statusRaw || labourTimeMinutesRaw || "Pending";
-      const machineRunTimeMinutes = Number(machineRunTimeMinutesRaw || 0);
+      let machineRunTimeMinutes = 0;
+      try {
+        machineRunTimeMinutes = parsePrintTimeToMinutes(machineRunTimeMinutesRaw || "");
+      } catch {
+        machineRunTimeMinutes = 0;
+      }
       const labourTimeMinutes = Number(statusRaw ? labourTimeMinutesRaw || 0 : machineRunTimeMinutesRaw || 0);
       return {
         id: crypto.randomUUID(),
@@ -3100,10 +3113,7 @@ function App() {
                             </div>
 
                             <div className="grid gap-4 md:grid-cols-2">
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Print time</span>
-                                <input value={selectedJobForm.machineRunTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, machineRunTimeMinutes: e.target.value })} placeholder="e.g. 4h 12m, 4.2h or 252" title={PRINT_TIME_FORMAT_HINT} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
+                              <PrintTimeInput value={selectedJobForm.machineRunTimeMinutes} onChange={(minutes) => setSelectedJobForm({ ...selectedJobForm, machineRunTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Setup time (mins)</span>
                                 <input value={selectedJobForm.setupTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, setupTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
@@ -3494,10 +3504,7 @@ function App() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Print time</span>
-                        <input value={newJobForm.machineRunTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, machineRunTimeMinutes: e.target.value })} placeholder="e.g. 4h 12m, 4.2h or 252" title={PRINT_TIME_FORMAT_HINT} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
+                      <PrintTimeInput value={newJobForm.machineRunTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, machineRunTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Setup time (mins)</span>
                         <input value={newJobForm.setupTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, setupTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />

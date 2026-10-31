@@ -23,7 +23,10 @@ const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to create job");
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || `Failed to create job (${res.status})`);
+    }
     return res.json();
   },
   async updateJob(id: string, payload: Partial<Job>) {

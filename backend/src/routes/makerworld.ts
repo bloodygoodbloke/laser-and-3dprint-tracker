@@ -2,6 +2,7 @@ import { Router } from "express";
 import { URL } from "url";
 import { load } from "cheerio";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { extractDurationMinutes } from "../printTime";
 
 const router = Router();
 
@@ -128,20 +129,7 @@ const extractMeta = (html: string, key: string) => {
   return "";
 };
 
-const parseMinutes = (text: string) => {
-  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)/i);
-  const minuteMatch = text.match(/(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes)/i);
-
-  const hours = hourMatch ? Number(hourMatch[1]) : 0;
-  const minutes = minuteMatch ? Number(minuteMatch[1]) : 0;
-
-  if (hours || minutes) return Math.round((hours * 60) + minutes);
-
-  const plainMinutes = text.match(/(\d{2,4})\s*(?:min|minutes)/i);
-  if (plainMinutes?.[1]) return Number(plainMinutes[1]);
-
-  return 0;
-};
+const parseMinutes = (text: string) => extractDurationMinutes(text);
 
 const parseMaterialGrams = (text: string) => {
   const gramsMatch = text.match(/(\d+(?:\.\d+)?)\s*(g|grams)/i);

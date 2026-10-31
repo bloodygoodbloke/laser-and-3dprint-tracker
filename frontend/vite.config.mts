@@ -18,6 +18,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // print time utilities are shared with the backend (backend/src/printTime.ts)
+    fs: { allow: [".."] },
     proxy: {
       "/api": "http://localhost:4000",
       "/uploads": "http://localhost:4000"

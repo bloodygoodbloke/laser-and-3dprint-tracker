@@ -26,6 +26,8 @@ From the repository root:
 
 - Frontend smoke check:
   - node scripts/smoke-frontend-check.js
+- Print time unit tests (conversion, validation, formatting, import parsing):
+  - node --test scripts/print-time.test.js
 - Version info check (build backend first: `cd backend && npm run build`):
   - node scripts/check-version-info.js
 - API smoke check (includes calculate-cost check on first available job):

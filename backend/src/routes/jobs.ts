@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prisma from "../prisma";
 import { upload } from "../upload";
+import { normalizeStoredMinutes } from "../printTime";
 
 const router = Router();
 
@@ -19,6 +20,20 @@ const toRecord = (value: unknown): Record<string, any> => {
   }
   return {};
 };
+
+const JOB_NUMBER_PATTERN = /^JOB-(\d+)$/;
+const formatJobNumber = (n: number) => `JOB-${String(n).padStart(4, "0")}`;
+
+// Next number is one above the highest existing JOB-####, so deleting jobs never causes a collision.
+const getNextJobSequence = async () => {
+  const existing = await prisma.job.findMany({ where: { jobNumber: { startsWith: "JOB-" } }, select: { jobNumber: true } });
+  return existing.reduce((max, row) => {
+    const match = JOB_NUMBER_PATTERN.exec(row.jobNumber);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0) + 1;
+};
+
+const isUniqueConstraintError = (error: unknown) => (error as { code?: string } | null)?.code === "P2002";
 
 const isSourceUrlCompatibilityError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error || "");
@@ -49,21 +64,29 @@ router.post("/", async (req, res) => {
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, setupTimeMinutes, postProcessingMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
   const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, failureReason, failureWasteGrams, failureCost, sourceUrl } = req.body;
 
-  const jobsCount = await prisma.job.count();
-  const generatedNumber = jobNumber || `JOB-${String(jobsCount + 1).padStart(4, "0")}`;
+  let normalizedEstTime: number;
+  let normalizedRunTime: number;
+  try {
+    normalizedEstTime = normalizeStoredMinutes(estTimeMinutes);
+    normalizedRunTime = normalizeStoredMinutes(machineRunTimeMinutes ?? estTimeMinutes);
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid print time" });
+  }
+
+  const suppliedJobNumber = String(jobNumber || "").trim();
 
   const normalizedSetup = Number(setupTimeMinutes ?? 0);
   const normalizedPost = Number(postProcessingMinutes ?? 0);
   const normalizedLabour = Number(labourTimeMinutes ?? (normalizedSetup + normalizedPost));
 
-  const baseData = {
+  const buildBaseData = (generatedNumber: string) => ({
     jobNumber: generatedNumber,
     name,
     customer,
     sourceUrl: String(sourceUrl || ""),
     machineType,
-    estTimeMinutes: Number(estTimeMinutes || 0),
-    machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
+    estTimeMinutes: normalizedEstTime,
+    machineRunTimeMinutes: normalizedRunTime,
     setupTimeMinutes: normalizedSetup,
     postProcessingMinutes: normalizedPost,
     labourTimeMinutes: normalizedLabour,
@@ -92,23 +115,48 @@ router.post("/", async (req, res) => {
         usageUnitCost: Number(entry.usageUnitCost || 0),
       })),
     },
+  });
+
+  const createWithData = async (data: ReturnType<typeof buildBaseData>) => {
+    try {
+      return await prisma.job.create({
+        data,
+        include: { materials: { include: { material: true } }, cost: true },
+      });
+    } catch (error) {
+      if (!isSourceUrlCompatibilityError(error)) {
+        throw error;
+      }
+      const fallbackNotes = [String(reworkNotes || ""), sourceUrl ? `Source URL: ${String(sourceUrl)}` : ""].filter(Boolean).join("\n");
+      return await prisma.job.create({
+        data: { ...data, reworkNotes: fallbackNotes } as any,
+        include: { materials: { include: { material: true } }, cost: true },
+      });
+    }
   };
 
   let job;
   try {
-    job = await prisma.job.create({
-      data: baseData,
-      include: { materials: { include: { material: true } }, cost: true },
-    });
-  } catch (error) {
-    if (!isSourceUrlCompatibilityError(error)) {
-      throw error;
+    if (suppliedJobNumber) {
+      job = await createWithData(buildBaseData(suppliedJobNumber));
+    } else {
+      let sequence = await getNextJobSequence();
+      for (let attempt = 0; !job; attempt += 1) {
+        try {
+          job = await createWithData(buildBaseData(formatJobNumber(sequence)));
+        } catch (error) {
+          // Another request took this number between lookup and insert; try the next one.
+          if (!isUniqueConstraintError(error) || attempt >= 4) throw error;
+          sequence += 1;
+        }
+      }
     }
-    const fallbackNotes = [String(reworkNotes || ""), sourceUrl ? `Source URL: ${String(sourceUrl)}` : ""].filter(Boolean).join("\n");
-    job = await prisma.job.create({
-      data: { ...baseData, reworkNotes: fallbackNotes } as any,
-      include: { materials: { include: { material: true } }, cost: true },
-    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return res.status(409).json({ error: `Job number ${suppliedJobNumber || ""} already exists.`.replace("  ", " ") });
+    }
+    console.error("Failed to create job", error);
+    return res.status(500).json({ error: "Failed to create job" });
   }
 
   res.status(201).json(job);
@@ -145,6 +193,15 @@ router.put("/:id", async (req, res) => {
   const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, setupTimeMinutes, postProcessingMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
   const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, failureReason, failureWasteGrams, failureCost, sourceUrl } = req.body;
 
+  let normalizedEstTime: number;
+  let normalizedRunTime: number;
+  try {
+    normalizedEstTime = normalizeStoredMinutes(estTimeMinutes);
+    normalizedRunTime = normalizeStoredMinutes(machineRunTimeMinutes ?? estTimeMinutes);
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid print time" });
+  }
+
   try {
     const previousJob = await prisma.job.findUnique({ where: { id } });
     if (!previousJob) {
@@ -163,8 +220,8 @@ router.put("/:id", async (req, res) => {
       customer,
       sourceUrl: String(sourceUrl || ""),
       machineType,
-      estTimeMinutes: Number(estTimeMinutes || 0),
-      machineRunTimeMinutes: Number(machineRunTimeMinutes ?? estTimeMinutes ?? 0),
+      estTimeMinutes: normalizedEstTime,
+      machineRunTimeMinutes: normalizedRunTime,
       setupTimeMinutes: normalizedSetup,
       postProcessingMinutes: normalizedPost,
       labourTimeMinutes: normalizedLabour,

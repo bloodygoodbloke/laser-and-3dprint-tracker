@@ -3,6 +3,9 @@ set -euo pipefail
 
 echo "Running full local checks"
 
+echo "0/5 Print time unit tests"
+node --test scripts/print-time.test.js
+
 echo "1/5 Frontend smoke"
 node scripts/smoke-frontend-check.js
 

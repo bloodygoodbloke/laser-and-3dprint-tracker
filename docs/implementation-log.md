@@ -88,6 +88,7 @@ Last updated: 2026-10-31
 | CHG-093 | Automation | P3 Low | Implemented | Local full-app restart script | 2026-08-04 | Added restart-local.sh to stop existing processes on backend/frontend ports and relaunch both services through the existing local startup script for faster recovery during development. |
 | CHG-094 | Integration | Integrations | Implemented | MakerWorld import v1 (URL slug only) | 2026-10-31 | Temporary proof of concept: the Add Job Import button derives the job name from the MakerWorld model URL slug (e.g. `3366805-pumpkin-thermoform` becomes `Pumpkin thermoform`) and stores the URL as the model URL. No network requests; print time, material, images, profile and metadata are ignored. Existing job creation logic unchanged. |
 | CHG-095 | Feature | P2 Medium | Implemented | Version tracking and deployment diagnostics | 2026-10-31 | Added `GET /api/version`, env-var driven VersionInfo, Help page Deployment Information with copy button, hidden developer diagnostics, footer version link, Docker build args, GitHub Actions build metadata and post-deploy version check, `check:version` script and `docs/versioning-and-deployment.md`. |
+| CHG-096 | Feature | P2 Medium | Implemented | Hours/Minutes print time entry | 2026-10-31 | Job forms use Hours (decimal) + Minutes (0-59) inputs with live helper text and validation; minutes stay the stored integer. Central utilities in `backend/src/printTime.ts` used by the UI, job API and MakerWorld/CSV import; unit tests in `scripts/print-time.test.js`. |
 
 ## New Entry Template
 
