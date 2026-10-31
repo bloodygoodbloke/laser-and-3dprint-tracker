@@ -1,6 +1,8 @@
 import { createElement, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
 import { parseMakerWorldUrl } from "./makerworldImport";
+import { fetchHealth, fetchVersionInfo, formatBuildDate, formatDeploymentInfo, formatUptime, formatVersionBadge, frontendVersion, type HealthInfo, type VersionInfo } from "./version";
+import { PRINT_TIME_FORMAT_HINT, formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
@@ -338,6 +340,12 @@ function App() {
   const [bambuMessage, setBambuMessage] = useState("");
   const [bambuSerialInput, setBambuSerialInput] = useState("BAMBU-SIM-001");
   const [bambuJobIdInput, setBambuJobIdInput] = useState("");
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+  const [versionError, setVersionError] = useState("");
+  const [versionCopyMessage, setVersionCopyMessage] = useState("");
+  const [diagnosticsVisible, setDiagnosticsVisible] = useState(false);
+  const [diagnosticsClicks, setDiagnosticsClicks] = useState(0);
+  const [apiHealth, setApiHealth] = useState<{ ok: boolean; detail: string; latencyMs: number; uptime: HealthInfo["uptime"] | null } | null>(null);
   const [makerWorldUrl, setMakerWorldUrl] = useState("");
   const [makerWorldMessage, setMakerWorldMessage] = useState("");
   const [makerWorldMetadata, setMakerWorldMetadata] = useState<MakerWorldMetadata | null>(null);
@@ -547,7 +555,7 @@ function App() {
       customer: selectedJob.customer || "",
       sourceUrl: selectedJob.sourceUrl || "",
       machineType: selectedJob.machineType || machineOptions[0],
-      machineRunTimeMinutes: String(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
+      machineRunTimeMinutes: formatMinutesAsPrintTime(Number(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0)),
       setupTimeMinutes: String(selectedJob.setupTimeMinutes ?? 0),
       postProcessingMinutes: String(selectedJob.postProcessingMinutes ?? 0),
       labourTimeMinutes: String(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
@@ -812,8 +820,8 @@ function App() {
         customer: jobForm.customer || null,
         sourceUrl: jobForm.sourceUrl || "",
         machineType: jobForm.machineType,
-        estTimeMinutes: Number(jobForm.machineRunTimeMinutes),
-        machineRunTimeMinutes: Number(jobForm.machineRunTimeMinutes || 0),
+        estTimeMinutes: parsePrintTimeToMinutes(jobForm.machineRunTimeMinutes),
+        machineRunTimeMinutes: parsePrintTimeToMinutes(jobForm.machineRunTimeMinutes),
         setupTimeMinutes: Number(jobForm.setupTimeMinutes || 0),
         postProcessingMinutes: Number(jobForm.postProcessingMinutes || 0),
         labourTimeMinutes: Number(jobForm.labourTimeMinutes || 0),
@@ -1060,6 +1068,13 @@ function App() {
 
   const createJobFromJobsTab = async (e: FormEvent) => {
     e.preventDefault();
+    let printTimeMinutes: number;
+    try {
+      printTimeMinutes = parsePrintTimeToMinutes(newJobForm.machineRunTimeMinutes);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Invalid print time");
+      return;
+    }
     const rawCustomerName = String(newJobForm.customer || "").trim();
     const existingCustomer = customers.find((customer) => customer.name.trim().toLowerCase() === rawCustomerName.toLowerCase());
     const created = await api.createJob({
@@ -1067,8 +1082,8 @@ function App() {
       customer: newJobForm.customer || null,
       sourceUrl: newJobForm.sourceUrl || makerWorldUrl || "",
       machineType: newJobForm.machineType,
-      estTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
-      machineRunTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
+      estTimeMinutes: printTimeMinutes,
+      machineRunTimeMinutes: printTimeMinutes,
       setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
       postProcessingMinutes: Number(newJobForm.postProcessingMinutes || 0),
       labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
@@ -1265,8 +1280,8 @@ function App() {
         customer: selectedJobForm.customer || null,
         sourceUrl: selectedJobForm.sourceUrl || "",
         machineType: selectedJobForm.machineType,
-        estTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
-        machineRunTimeMinutes: Number(selectedJobForm.machineRunTimeMinutes || 0),
+        estTimeMinutes: parsePrintTimeToMinutes(selectedJobForm.machineRunTimeMinutes),
+        machineRunTimeMinutes: parsePrintTimeToMinutes(selectedJobForm.machineRunTimeMinutes),
         setupTimeMinutes: Number(selectedJobForm.setupTimeMinutes || 0),
         postProcessingMinutes: Number(selectedJobForm.postProcessingMinutes || 0),
         labourTimeMinutes: Number(selectedJobForm.labourTimeMinutes || 0),
@@ -1722,6 +1737,37 @@ function App() {
     setNewJobForm((current) => ({ ...current, sourceUrl: payload.url || makerWorldUrl }));
     setMakerWorldMessage("MakerWorld metadata imported.");
   };
+  useEffect(() => {
+    fetchVersionInfo()
+      .then((info) => { setVersionInfo(info); setVersionError(""); })
+      .catch((error) => setVersionError(error instanceof Error ? error.message : "Failed to load version information"));
+  }, []);
+  useEffect(() => {
+    if (activeTab !== "help" || !diagnosticsVisible) return;
+    const startedAt = performance.now();
+    fetchHealth()
+      .then((health) => setApiHealth({ ok: health.status === "ok", detail: health.status, latencyMs: Math.round(performance.now() - startedAt), uptime: health.uptime }))
+      .catch((error) => setApiHealth({ ok: false, detail: error instanceof Error ? error.message : "Unreachable", latencyMs: Math.round(performance.now() - startedAt), uptime: null }));
+  }, [activeTab, diagnosticsVisible]);
+  const copyDeploymentInfo = async () => {
+    if (!versionInfo) return;
+    try {
+      await navigator.clipboard.writeText(formatDeploymentInfo(versionInfo));
+      setVersionCopyMessage("Copied to clipboard.");
+    } catch {
+      setVersionCopyMessage("Copy failed. Select the text and copy it manually.");
+    }
+  };
+  // Hidden developer panel: click the "MakerFlow vX" heading 5 times to toggle it.
+  const handleVersionHeadingClick = () => {
+    const next = diagnosticsClicks + 1;
+    if (next >= 5) {
+      setDiagnosticsVisible((visible) => !visible);
+      setDiagnosticsClicks(0);
+    } else {
+      setDiagnosticsClicks(next);
+    }
+  };
   const importMakerWorldV1 = () => {
     const { jobName, modelUrl } = parseMakerWorldUrl(makerWorldUrl);
     setNewJobForm((current) => ({ ...current, name: jobName, sourceUrl: modelUrl }));
@@ -1806,7 +1852,7 @@ function App() {
       name: newJobForm.name,
       sourceUrl: newJobForm.sourceUrl || makerWorldUrl || "",
       machineType: newJobForm.machineType,
-      machineRunTimeMinutes: Number(newJobForm.machineRunTimeMinutes || 0),
+      machineRunTimeMinutes: parsePrintTimeToMinutes(newJobForm.machineRunTimeMinutes),
       setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
       postProcessingMinutes: Number(newJobForm.postProcessingMinutes || 0),
       labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
@@ -2760,7 +2806,7 @@ function App() {
                   <div key={`estimate-template-${job.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
                     <div>
                       <p className="font-medium text-white">{job.name}</p>
-                      <p className="text-slate-400">{job.machineType} • Runtime {job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0} mins • Labour {job.labourTimeMinutes ?? job.estTimeMinutes ?? 0} mins</p>
+                      <p className="text-slate-400">{job.machineType} • Runtime {formatMinutesAsPrintTime(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0))} • Labour {job.labourTimeMinutes ?? job.estTimeMinutes ?? 0} mins</p>
                     </div>
                     <button
                       type="button"
@@ -2840,7 +2886,7 @@ function App() {
                           <p><span className="text-slate-500">Customer:</span> {job.customer || "No customer"}</p>
                           <p><span className="text-slate-500">Model URL:</span> {job.sourceUrl ? <a className="text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer">{job.sourceUrl}</a> : "None"}</p>
                           <p><span className="text-slate-500">Machine:</span> {job.machineType}</p>
-                          <p><span className="text-slate-500">Machine runtime:</span> {job.machineRunTimeMinutes ?? job.estTimeMinutes} mins</p>
+                          <p><span className="text-slate-500">Machine runtime:</span> {formatMinutesAsPrintTime(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0))}</p>
                           <p><span className="text-slate-500">Setup time:</span> {job.setupTimeMinutes ?? 0} mins</p>
                           <p><span className="text-slate-500">Post-processing:</span> {job.postProcessingMinutes ?? 0} mins</p>
                           <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
@@ -2912,7 +2958,7 @@ function App() {
                             <div className="space-y-1 text-sm">
                               {(() => {
                                 const runtimeBreakdown = calculateRuntimeBreakdown(job);
-                                const runtimeOnly = `${runtimeBreakdown.machineRunTimeMinutes} mins`;
+                                const runtimeOnly = formatMinutesAsPrintTime(runtimeBreakdown.machineRunTimeMinutes);
                                 const electricityMarkupMultiplier = 1 + (Number(billingSettings.electricityMarkupPercent || 0) / 100);
                                 const depreciationMarkupMultiplier = 1 + (Number(billingSettings.depreciationMarkupPercent || 0) / 100);
                                 const electricityWithMarkup = runtimeBreakdown.electricityCost * electricityMarkupMultiplier;
@@ -3055,8 +3101,8 @@ function App() {
 
                             <div className="grid gap-4 md:grid-cols-2">
                               <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Machine runtime (mins)</span>
-                                <input value={selectedJobForm.machineRunTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, machineRunTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                                <span className="mb-2 block">Print time</span>
+                                <input value={selectedJobForm.machineRunTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, machineRunTimeMinutes: e.target.value })} placeholder="e.g. 4h 12m, 4.2h or 252" title={PRINT_TIME_FORMAT_HINT} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                               </label>
                               <label className="block text-sm text-slate-300">
                                 <span className="mb-2 block">Setup time (mins)</span>
@@ -3219,7 +3265,7 @@ function App() {
                                   <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
                                     <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Job summary</p>
                                     <p className="mt-2 font-medium text-white">{selectedJob.status}</p>
-                                    <p className="text-sm text-slate-400">Runtime {selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes} mins • Setup {selectedJob.setupTimeMinutes ?? 0} mins • Post {selectedJob.postProcessingMinutes ?? 0} mins • Labour {selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins</p>
+                                    <p className="text-sm text-slate-400">Runtime {formatMinutesAsPrintTime(Number(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0))} • Setup {selectedJob.setupTimeMinutes ?? 0} mins • Post {selectedJob.postProcessingMinutes ?? 0} mins • Labour {selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins</p>
                                     <p className="text-sm text-slate-400">Payment {selectedJob.paymentStatus || "Unpaid"}</p>
                                   </div>
                                 </div>
@@ -3396,7 +3442,7 @@ function App() {
                           <div key={template.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs">
                             <div>
                               <p className="font-medium text-white">{template.name}</p>
-                              <p className="text-slate-400">{template.machineType} • Runtime {template.machineRunTimeMinutes}m • Labour {template.labourTimeMinutes}m</p>
+                              <p className="text-slate-400">{template.machineType} • Runtime {formatMinutesAsPrintTime(Number(template.machineRunTimeMinutes || 0))} • Labour {template.labourTimeMinutes}m</p>
                             </div>
                             <div className="flex gap-2">
                               <button type="button" onClick={() => applySavedEstimateTemplate(template).catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-cyan-300">Use</button>
@@ -3449,8 +3495,8 @@ function App() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Machine runtime (mins)</span>
-                        <input value={newJobForm.machineRunTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, machineRunTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                        <span className="mb-2 block">Print time</span>
+                        <input value={newJobForm.machineRunTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, machineRunTimeMinutes: e.target.value })} placeholder="e.g. 4h 12m, 4.2h or 252" title={PRINT_TIME_FORMAT_HINT} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       </label>
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Setup time (mins)</span>
@@ -4494,6 +4540,43 @@ function App() {
             <h2 className="text-xl font-semibold">Help guide</h2>
             <p className="mt-2 text-sm text-slate-400">Use this page as your operating manual for daily workflows, then submit bugs/features directly into the backlog review queue.</p>
             <div className="mt-6 space-y-4 text-sm text-slate-300">
+              <div id="about-makerflow" className="rounded-2xl border border-cyan-800/50 bg-slate-950 p-4">
+                <h3 className="select-none font-semibold text-white" onClick={handleVersionHeadingClick}>MakerFlow {versionInfo ? `v${versionInfo.version}` : ""}</h3>
+                <h4 className="mt-2 text-xs uppercase tracking-[0.25em] text-slate-400">Deployment Information</h4>
+                {versionInfo ? (
+                  <>
+                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs">
+                      <dt className="text-slate-500">Version</dt><dd>{versionInfo.version}</dd>
+                      <dt className="text-slate-500">Build Number</dt><dd>{versionInfo.buildNumber}</dd>
+                      <dt className="text-slate-500">Git Commit</dt><dd>{versionInfo.gitCommit}</dd>
+                      <dt className="text-slate-500">Branch</dt><dd>{versionInfo.gitBranch}</dd>
+                      <dt className="text-slate-500">Built</dt><dd>{formatBuildDate(versionInfo.buildDate)}</dd>
+                      <dt className="text-slate-500">Environment</dt><dd>{versionInfo.environment}</dd>
+                    </dl>
+                    <div className="mt-3 flex items-center gap-3">
+                      <button type="button" onClick={() => copyDeploymentInfo()} className="rounded-xl border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Copy for support</button>
+                      {versionCopyMessage ? <span className="text-xs text-cyan-300">{versionCopyMessage}</span> : null}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-400">{versionError || "Loading version information..."}</p>
+                )}
+                {diagnosticsVisible ? (
+                  <div className="mt-4 rounded-xl border border-amber-700/50 bg-slate-900 p-3">
+                    <h4 className="text-sm font-semibold text-amber-300">Developer diagnostics</h4>
+                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs">
+                      <dt className="text-slate-500">API connectivity</dt>
+                      <dd className={apiHealth ? (apiHealth.ok ? "text-emerald-400" : "text-red-400") : ""}>{apiHealth ? `${apiHealth.ok ? "OK" : "FAILED"} (${apiHealth.detail}, ${apiHealth.latencyMs} ms)` : "Checking..."}</dd>
+                      <dt className="text-slate-500">Application uptime</dt><dd>{apiHealth?.uptime != null ? formatUptime(apiHealth.uptime) : "n/a"}</dd>
+                      <dt className="text-slate-500">Frontend bundle</dt>
+                      <dd className={versionInfo && versionInfo.version !== frontendVersion ? "text-amber-400" : ""}>{frontendVersion}{versionInfo && versionInfo.version !== frontendVersion ? " (differs from server, refresh the page)" : ""}</dd>
+                      <dt className="text-slate-500">Browser</dt><dd className="break-all">{navigator.userAgent}</dd>
+                      <dt className="text-slate-500">Metadata</dt>
+                      <dd><pre className="whitespace-pre-wrap break-all">{versionInfo ? JSON.stringify(versionInfo, null, 2) : "Not loaded"}</pre></dd>
+                    </dl>
+                  </div>
+                ) : null}
+              </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Creating a job</h3>
                 <p className="mt-2">Use Jobs &gt; Add job (or the Create job button in the Dashboard Jobs card). Enter customer, machine type, machine runtime, labour time, status, payment status, optional deposit paid, and one or more materials. In Jobs &gt; Add Job you can also paste a MakerWorld URL and use Import metadata, Autofill job, or Import profile to prefill model details and costing hints. The model URL is saved on the job record so you can reopen the original MakerWorld model later. Use Quote Draft/Quote Sent/Quote Approved statuses when preparing quotes before production. Use Estimate Template status to save reusable estimate records in the Jobs estimate catalogue, then click Use template to prefill a new Add Job draft without customer details. Each new job receives an automatic job number. If the customer name is new, a popup appears so you can add customer details into CRM Lite right away.</p>
@@ -4665,6 +4748,19 @@ function App() {
               ) : null}
             </div>
           </footer>
+        ) : null}
+
+        {versionInfo ? (
+          <div className="mt-4 text-right text-xs text-slate-500">
+            <button
+              type="button"
+              onClick={() => { setActiveTab("help"); window.setTimeout(() => document.getElementById("about-makerflow")?.scrollIntoView({ behavior: "smooth" }), 0); }}
+              className="underline decoration-dotted hover:text-cyan-300"
+              title={`Build ${versionInfo.buildNumber} • ${versionInfo.gitCommit}`}
+            >
+              {formatVersionBadge(versionInfo)}
+            </button>
+          </div>
         ) : null}
 
         {showCustomerCaptureModal ? (

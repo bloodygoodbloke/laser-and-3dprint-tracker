@@ -151,3 +151,8 @@ If the UI appears unresponsive, verify both ports are listening (`4000` and `517
 - Evolving roadmap and execution status should be tracked via the tracker docs, not a separate input brief.
 
 See `docs/CHANGELOG.md` for version history and recent changes.
+
+## Versioning and deployment diagnostics
+- `GET /api/version` reports `version`, `buildNumber`, `gitCommit`, `gitBranch`, `buildDate` and `environment`; the footer (`v0.8.0 (1545)`) and Help > Deployment Information show the same data.
+- The semantic version is the `package.json` version; build metadata is injected by GitHub Actions through Docker build args and Container App env vars.
+- See [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md) for how versions and build numbers work, how to identify and verify what is running in Azure, and troubleshooting.

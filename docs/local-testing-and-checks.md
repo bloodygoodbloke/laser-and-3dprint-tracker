@@ -26,6 +26,8 @@ From the repository root:
 
 - Frontend smoke check:
   - node scripts/smoke-frontend-check.js
+- Version info check (build backend first: `cd backend && npm run build`):
+  - node scripts/check-version-info.js
 - API smoke check (includes calculate-cost check on first available job):
   - node scripts/smoke-api-check.js
 

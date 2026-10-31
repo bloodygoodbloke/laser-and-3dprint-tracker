@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Added application version tracking and deployment diagnostics: `GET /api/version` (version, buildNumber, gitCommit, gitBranch, buildDate, environment) driven by `APP_VERSION`/`BUILD_NUMBER`/`GIT_COMMIT`/`GIT_BRANCH`/`BUILD_DATE`/`APP_ENVIRONMENT` env vars, a Deployment Information section with copy-for-support on the Help page, a hidden developer diagnostics panel, and a compact `v0.8.0 (1545)` footer link. The deploy workflow now generates a UTC build number and passes build metadata to Docker build args and the Container App env vars, then checks the deployed commit. See `docs/versioning-and-deployment.md`.
+- Added human-readable print time: job forms accept `252`, `252m`, `4h`, `4.2h`, `1.5h` or `4h 12m` (validated, converted to minutes on save) and job views display e.g. `4h 12m`. Storage remains integer minutes; no schema or API changes.
 - Added MakerWorld import v1 (proof of concept): the Add Job Import button now sets the job name and model URL purely from the MakerWorld URL slug, with no network requests; metadata, print profile, time and material hints are no longer applied by Import.
 - Next version target updated to `0.7.0`.
 - Added `restart-local.sh` to stop any existing frontend/backend processes on local ports and relaunch both services via `start-local.sh`.

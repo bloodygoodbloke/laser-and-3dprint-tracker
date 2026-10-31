@@ -13,6 +13,7 @@ import bambuRouter from "./routes/bambu";
 import makerworldRouter from "./routes/makerworld";
 import estimatesRouter from "./routes/estimates";
 import billingAuditRouter from "./routes/billing-audit";
+import { getVersionInfo } from "./version";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -33,6 +34,11 @@ app.use("/api/billing-audit", billingAuditRouter);
 app.use("/api/admin", adminRouter);
 app.use("/uploads", express.static(process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(__dirname, "..", "uploads")));
 app.use(express.static(frontendDistPath));
+
+app.get("/api/version", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(getVersionInfo());
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", uptime: process.uptime() });

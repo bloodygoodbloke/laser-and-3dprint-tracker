@@ -87,6 +87,7 @@ Last updated: 2026-10-31
 | CHG-092 | Feature Request | P2 Medium | Implemented | Jobs dashboard workflow simplification | 2026-08-04 | Removed Quick Add and Low Stock dashboard cards, added a dedicated Jobs summary card with core metrics/actions, and added Add Job navigation that scrolls and focuses the add-job form plus a secondary Create button at form bottom. |
 | CHG-093 | Automation | P3 Low | Implemented | Local full-app restart script | 2026-08-04 | Added restart-local.sh to stop existing processes on backend/frontend ports and relaunch both services through the existing local startup script for faster recovery during development. |
 | CHG-094 | Integration | Integrations | Implemented | MakerWorld import v1 (URL slug only) | 2026-10-31 | Temporary proof of concept: the Add Job Import button derives the job name from the MakerWorld model URL slug (e.g. `3366805-pumpkin-thermoform` becomes `Pumpkin thermoform`) and stores the URL as the model URL. No network requests; print time, material, images, profile and metadata are ignored. Existing job creation logic unchanged. |
+| CHG-095 | Feature | P2 Medium | Implemented | Version tracking and deployment diagnostics | 2026-10-31 | Added `GET /api/version`, env-var driven VersionInfo, Help page Deployment Information with copy button, hidden developer diagnostics, footer version link, Docker build args, GitHub Actions build metadata and post-deploy version check, `check:version` script and `docs/versioning-and-deployment.md`. |
 
 ## New Entry Template
 
