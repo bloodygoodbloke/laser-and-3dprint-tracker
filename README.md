@@ -1,11 +1,15 @@
-Markdown: Open Preview to the Side (New Editor)# Fab-Work-Tracker
+# MakerFlow
 
-Fabrication Workshop Tracker is a lightweight system for managing jobs, materials, and usage in small-scale fabrication environments such as makerspaces, fabrication labs, and small production shops.
+**Workshop operations software for makers and small fabricators.**
 
-**Industry context**
-- Used by makerspaces, education labs, and small manufacturers to track machine time, material consumption, and job status.
-- Helps with cost allocation, accountability, and inventory control where multiple users share equipment (laser cutters, SLA/DLP/SLS printers, FDM printers).
-- Supports safety and compliance workflows by keeping a record of who ran what job and when — useful for liability tracking and maintenance schedules.
+**Your workshop, organised.** MakerFlow helps makers run their workshop like a business by bringing production jobs, materials, customers, suppliers, stock, and costs into one practical workflow.
+
+Built by a maker for people already selling made-to-order products: 3D printing businesses, laser engraving shops, and small fabrication workshops.
+
+## Who MakerFlow is for
+- 3D printing businesses that need quoting, stock tracking, material usage, and profitability visibility.
+- Laser engraving businesses managing material stock, repeat customers, supplier costs, and order tracking.
+- Small fabrication workshops that need practical job management, inventory, and quotations.
 
 **Key benefits**
 - Accurate materials accounting and low-volume inventory management.
