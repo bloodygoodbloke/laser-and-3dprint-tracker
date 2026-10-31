@@ -632,6 +632,8 @@ function App() {
     "--app-input-bg": siteInputColor,
     "--app-accent": siteAccentColor,
     "--app-accent-text": siteAccentTextColor,
+    "--app-accent-hover": siteAccentColor.toUpperCase() === DEFAULT_SITE_ACCENT_COLOR ? "#1D63E7" : siteAccentColor,
+    "--app-accent-highlight": siteAccentColor.toUpperCase() === DEFAULT_SITE_ACCENT_COLOR ? "#5DA8FF" : siteAccentColor,
     "--app-accent-soft": hexToRgba(siteAccentColor, 0.18),
   } as CSSProperties;
   const adminSectionStyle = {
@@ -4421,7 +4423,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Creating a job</h3>
-                <p className="mt-2">Use Jobs &gt; Add job (or the Create job button in the Dashboard Jobs card). Enter customer, machine type, machine runtime, labour time, status, payment status, optional deposit paid, and one or more materials. In Jobs &gt; Add Job you can also paste a MakerWorld URL and use Import metadata, Autofill job, or Import profile to prefill model details and costing hints. The model URL is saved on the job record so you can reopen the original MakerWorld model later. Use Quote Draft/Quote Sent/Quote Approved statuses when preparing quotes before production. Use Estimate Template status to save reusable estimate records in the Jobs estimate catalogue, then click Use template to prefill a new Add Job draft without customer details. Each new job receives an automatic job number. If the customer name is new, a popup appears so you can add customer details into CRM Lite right away.</p>
+                <p className="mt-2">Use Jobs &gt; Add job (or the Create job button in the Dashboard Production Jobs card). Enter customer and equipment, then record machine/print runtime with the Hours and Minutes fields (decimal hours are accepted); labour time is separate. Add status, payment status, optional deposit paid, and materials. To use MakerWorld, paste a model URL and click Import: the app derives the job name from the URL slug and saves the source URL. This import makes no network requests and does not import images, metadata, print profiles, runtime, or material hints. Use Quote Draft/Quote Sent/Quote Approved statuses when preparing quotes before production. Use Estimate Template status to save reusable estimates in the Jobs estimate catalogue, then choose Use template to prefill a new Add Job draft without customer details. Each new job receives an automatic job number. If the customer name is new, a popup lets you add customer details to CRM Lite.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Calculating costs</h3>
@@ -4437,15 +4439,15 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Site theme customization</h3>
-                <p className="mt-2">Open Admin and use Site theme colors to style the whole app. You can set Site background, Site text, Search and input, Accent button, and Accent button text colors. Use the quick preset row for one-click setup (MakerFlow, Light, Dark, High Contrast, Forest, Night Shift, Paper Invoice), then fine-tune any color fields and click Save site theme to keep your branding for future sessions.</p>
+                <p className="mt-2">The app starts with the MakerFlow light branding: white background, Charcoal `#1C1C1E` text, Soft Grey `#E5E5E7` inputs, Primary Blue `#3A7DFF`, Dark Blue `#1D63E7` for hover states, and Light Blue `#5DA8FF` for supporting highlights. Inter is the primary UI font. In Admin, use Site theme colors to customize the background, text, inputs, and accent buttons. The MakerFlow preset restores these defaults; Light, Dark, High Contrast, Forest, Night Shift, and Paper Invoice are also available. Click Save site theme to keep your choices.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Business and customers</h3>
-                <p className="mt-2">Set business personalization in Billing (name, logo, address, email, phone, website). Manage CRM Lite customer records in Customers and reuse those details in invoices.</p>
+                <p className="mt-2">Set your workshop name, logo, address, email, phone, and website in Billing. MakerFlow branding stays separate: the MakerFlow logo at the top-left returns to Dashboard, while your business name and logo stay at the top-right; clicking your business logo opens Billing. Manage customer records in Customers and reuse those details in invoices.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Invoices and backup</h3>
-                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoice totals include SubTotal, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. Delivery (when checked on a job) is included in the Production costs subtotal. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, customers JSON backup/restore, suppliers JSON backup/restore (with purchase history), machines JSON backup/restore (machine profiles + Bambu telemetry), billing JSON backup/restore, and full JSON backup download/restore. Full backup includes all customizable and operational data, including theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu machine data.</p>
+                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoices keep your workshop's business name, logo, and contact details, with a “Made with MakerFlow” footer. Invoice totals include SubTotal, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. Delivery (when checked on a job) is included in the Production costs subtotal. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, customers JSON backup/restore, suppliers JSON backup/restore (with purchase history), machines JSON backup/restore (machine profiles + Bambu telemetry), billing JSON backup/restore, and full JSON backup download/restore. Full backup includes all customizable and operational data, including theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu machine data.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Reporting page</h3>
@@ -4467,11 +4469,11 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">If the app is not responding</h3>
-                <p className="mt-2">Check that frontend `127.0.0.1:5173` and backend `localhost:4000` are both running, then verify backend health at `/api/health`. Restart both dev servers if either side is down.</p>
+                <p className="mt-2">For one-command local startup, run `bash start-local.sh` from the repository root; it supplies a default SQLite database URL (`file:./dev.db`) for Prisma. If running services manually, check that frontend `127.0.0.1:5173` and backend `localhost:4000` are both running, then verify backend health at `/api/health`. Restart both dev servers if either side is down.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Release notes and change history</h3>
-                <p className="mt-2">Review project updates and release notes in the changelog: <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/Fab-Work-Tracker/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">CHANGELOG.md</a>.</p>
+                <p className="mt-2">Review project updates and release notes in the changelog: <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener noreferrer">CHANGELOG.md</a>.</p>
               </div>
               <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Raise a bug or feature request</h3>

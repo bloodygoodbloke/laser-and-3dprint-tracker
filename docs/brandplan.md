@@ -1,4 +1,7 @@
 MakerFlow Brand Plan
+
+The MakerFlow Brand Kit below defines the current default product and marketing style. MakerFlow branding is supplemental to each workshop's identity: the user's business name and logo remain visible in the app, invoices retain the business branding, and MakerFlow is credited in the invoice footer.
+
 Core Objectives
 • Rebrand the app as MakerFlow with the tagline “Your workshop, organised”
 • Prepare the app for public release and monetisation
@@ -6,8 +9,8 @@ Core Objectives
 • Position MakerFlow as the go‑to workflow tool for makers, print farms, and laser shops
 ---
 Branding Tasks
-• Finalise logo concepts and colour palette
-• Create brand voice and messaging guidelines
+• Keep the selected MakerFlow logo and approved colour palette consistent across the product and marketing
+• Maintain the brand voice and messaging guidelines documented in the Brand Kit below
 • Design landing page layout and copy
 • Produce promotional assets (screenshots, demo video, feature highlights)
 • Create a simple brand kit (fonts, colours, usage rules)
@@ -67,25 +70,29 @@ Suggested Variants
 • Mono: Single‑colour outline for engraving
 ---
 2. Colour Palette
-Primary Colours
-• Electric Blue — #3A7DFF
-• Charcoal Black — #1C1C1E
-Accent Colours
-• Warm Orange — #FF8A3A
-• Soft Grey — #E5E5E7
+Default app background
+• White — #FFFFFF
+
+Brand blues
+• Primary Blue — #3A7DFF (primary actions and selected navigation)
+• Dark Blue — #1D63E7 (hover and pressed states)
+• Light Blue — #5DA8FF (highlights and supporting accents)
+
+Neutrals
+• Charcoal — #1C1C1E (primary text and structure)
+• Soft Grey — #E5E5E7 (inputs, borders, and neutral surfaces)
+
 Usage Guidelines
-• Blue for primary actions, highlights, and logo
-• Charcoal for text and UI structure
-• Orange for callouts or maker‑energy accents
-• Soft Grey for panels, cards, and neutral areas
+• Use the white background and charcoal text for the default light theme.
+• Use Primary Blue for main actions and highlights; use Dark Blue for hover states.
+• Keep Light Blue for supporting highlights so it does not compete with primary actions.
+• Use Soft Grey for inputs and neutral areas.
 ---
 3. Typography
 Primary Font
-Inter — clean, modern, highly readable
-Secondary Font
-Montserrat — ideal for headings and marketing
+Inter — clean, modern, highly readable.
 Fallbacks
-Arial, Helvetica, system UI fonts
+System UI, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif.
 ---
 4. Brand Voice & Messaging
 Tone
@@ -128,18 +135,17 @@ Laser beam, 3D printer nozzle, material sheet, gear, flow arrows
 ---
 7. UI Style Guide
 Buttons
-• Blue primary buttons
-• Rounded 6–8 px corners
-• White text
-• Hover: darker blue
+• Primary Blue for primary actions
+• Dark Blue for hover and pressed states
+• Use a readable label color with strong contrast
+• Keep existing rounded button shapes consistent
 Cards & Panels
-• Soft Grey background
+• White or Soft Grey surfaces
 • Charcoal text
-• Subtle shadow
+• Subtle borders and shadows
 Navigation
-• Left sidebar
-• Charcoal background
-• Blue highlights
+• Light background with charcoal labels
+• Primary Blue for selected states and key highlights
 ---
 8. Brand Applications
 Website

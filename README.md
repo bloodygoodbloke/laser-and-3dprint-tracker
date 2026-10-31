@@ -37,11 +37,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Monitor delivery and utilization KPIs including on-time rate, overdue open jobs, queued runtime, and per-machine utilization.
 - Use a dedicated Reports page with date-range, status, machine, and customer filters plus CSV export-ready report rows, summary metrics, and margin breakdown views.
 - Use the Help page as an in-app guide and raise bug/feature requests directly from the app. Each submission creates a GitHub issue (labelled `bug` or `enhancement`) with app version, build number, environment, browser and date/time attached, then shows the issue number and link. See `docs/github-issues.md`.
-- Monitor Bambu machine live status (nozzle/bed/chamber temperatures, progress, AMS summary) from the Bambu telemetry section in the Machines tab.
-- Process Bambu event-driven updates (`PRINT_STARTED`, `PRINT_FINISHED`, `PRINT_FAILED`) to auto-update linked job statuses.
-- Auto-log runtime/material telemetry usage, auto-deduct linked job material stock, and auto-adjust AMS spool levels from telemetry events.
-- Track open failure logs from Bambu error states and view an event stream for recent telemetry actions.
-- Generate predictive maintenance risk indicators from accumulated machine usage hours and recent error frequency.
+- Bambu telemetry is currently shown as an alpha/coming-soon feature in Machines; live status, event automation, spool deductions, failure logs, and predictive maintenance are not currently available in the app.
 - Import from a MakerWorld model URL (v1 proof of concept): the job name is derived from the URL slug (e.g. `3366805-pumpkin-thermoform` becomes `Pumpkin thermoform`) and the URL is saved as the job's model URL. No network requests are made; print time, material, images and profile data are not imported.
 - Manage machine profiles from a dedicated Machines tab with add/edit/remove workflows.
 - Calculate production costs for 3D and laser workflows using machine runtime electricity + depreciation plus separate labour-time charging.
@@ -50,21 +46,22 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Configure pricing guardrails including minimum charge, setup fee, rush fee %, and waste factor %.
 - Material customer pricing now applies global material markup plus configured per-material-type markup without an implicit default type markup.
 - Manage business personalization in a dedicated Admin section (name, logo, address, email, phone, website).
-- Customize site-wide background, text, search/input, and accent button colors, with quick presets (Light, Dark, High Contrast, Ocean, Forest, Night Shift, Workshop Blue, Paper Invoice).
+- Customize site-wide background, text, search/input, and accent button colors; the default is the white MakerFlow palette, with presets for MakerFlow, Light, Dark, High Contrast, Forest, Night Shift, and Paper Invoice.
 - Billing numeric fields now support clearing values without immediately forcing `0` while typing.
 - Preview and print a customer-facing invoice directly under the selected expanded job card, including simplified line items and totals (`SubTotal`, `Delivery`, `VAT`, `Grand total`) plus deposits (`Suggested deposit`, `Deposit paid`, `Balance due`) and business/customer contact details, with explicit `Print / Save PDF` and `Close invoice` actions.
 - Invoice finance completeness now includes payment terms (days), per-job payment status, and per-job deposit tracking.
 - Export/import jobs CSV and materials CSV, plus dedicated JSON backup/restore options for customers, suppliers (with purchase history), and machines (with machine profiles and Bambu telemetry).
 - Manage full backup/restore snapshots from Admin tools, covering all customizable and operational data: theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu machine data.
-- App header now prefixes the title with business name, shows business logo at top-right, and dashboard contains the jobs/materials status lozenge.
-- App footer and invoice footer both include configured business contact details (address, email, phone, website).
+- The app header keeps MakerFlow and workshop branding separate: the MakerFlow logo at top-left links to Dashboard, while the configured business name and logo remain at top-right; clicking the business logo opens Billing.
+- Invoices retain the workshop's own business identity and contact details, with a small “Made with MakerFlow” footer. The app footer also includes configured business contact details (address, email, phone, website).
 - Docker compose workflow now includes service health checks and frontend startup dependency on backend health for more reliable local runtime startup.
 
 **Theme Presets And Branding**
 - Go to Admin and use Site theme colors to style the entire app.
 - You can set five theme fields: background, text, search/input, accent button, and accent button text.
 - Start from a quick preset row, then fine-tune.
-- Presets available: Light, Dark, High Contrast, Ocean, Forest, Night Shift, Workshop Blue, Paper Invoice.
+- The default branding uses a white background, charcoal text, soft grey inputs, and the MakerFlow palette: primary blue `#3A7DFF`, dark blue `#1D63E7` for hover states, and light blue `#5DA8FF` for supporting highlights. Inter is the primary UI font.
+- Presets available: MakerFlow, Light, Dark, High Contrast, Forest, Night Shift, Paper Invoice.
 - Save the theme to persist branding preferences for future sessions.
 
 **Running locally**
@@ -73,6 +70,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Install `npm` (bundled with Node.js).
 - Optional: install `Docker Desktop` if you prefer Docker Compose instead of running Node directly.
 - No required `.env` file for local default setup.
+- The root `start-local.sh` script sets `DATABASE_URL=file:./dev.db` by default before running Prisma; a `DATABASE_URL` you set explicitly takes precedence.
 - First-time setup (required once after clone):
 - `cd backend && npm install`
 - `npx prisma generate`
