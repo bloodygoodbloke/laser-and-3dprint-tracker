@@ -2416,22 +2416,16 @@ function App() {
   return (
     <div className="app-theme min-h-screen bg-slate-950 text-slate-100" style={appThemeStyle}>
       <div className="mx-auto max-w-7xl p-6">
-        <header className="mb-8 flex items-center justify-between gap-4 no-print">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-700/50 bg-cyan-950/40">
-              <svg viewBox="0 0 40 40" role="img" aria-label="MakerFlow logo" className="h-9 w-9">
-                <path d="M8 29V12l8 10 8-10v17" fill="none" stroke="#67e8f9" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M24 24h4a4 4 0 1 0 0-8h-3" fill="none" stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" />
-                <circle cx="25" cy="16" r="1.5" fill="#a5f3fc" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-3xl font-semibold">{APP_NAME}</h1>
-              <p className="mt-1 text-sm text-slate-400">
-                {billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} workspace` : "Workshop operations software for makers and small fabricators."}
-              </p>
-              <p className="mt-2 text-slate-400">Your workshop, organised. Track production jobs, materials, customers, suppliers, and costs in one place.</p>
-            </div>
+        <header className="mb-8 flex items-start justify-between gap-4 no-print">
+          <div className="flex min-w-0 flex-col items-start gap-2">
+            <img
+              src="/branding/makerflow-primary.svg"
+              alt="MakerFlow — Your workshop, organised."
+              className="h-14 w-[168px] rounded-lg bg-white object-contain"
+            />
+            <p className="text-sm text-slate-400">
+              {billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} workspace` : "Workshop operations software for makers and small fabricators."}
+            </p>
           </div>
           {billingSettings.businessLogoUrl ? (
             <img
