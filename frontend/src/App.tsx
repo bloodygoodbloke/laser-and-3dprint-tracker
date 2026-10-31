@@ -2416,24 +2416,24 @@ function App() {
   return (
     <div className="app-theme min-h-screen bg-slate-950 text-slate-100" style={appThemeStyle}>
       <div className="mx-auto max-w-7xl p-6">
-        <header className="mb-8 flex items-start justify-between gap-4 no-print">
-          <div className="flex min-w-0 flex-col items-start gap-2">
-            <img
-              src="/branding/makerflow-primary.svg"
-              alt="MakerFlow — Your workshop, organised."
-              className="h-14 w-[168px] rounded-lg bg-white object-contain"
-            />
-            <p className="text-sm text-slate-400">
-              {billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} workspace` : "Workshop operations software for makers and small fabricators."}
-            </p>
+        <header className="mb-8 flex items-center justify-between gap-4 no-print">
+          <img
+            src="/branding/makerflow-primary.svg"
+            alt="MakerFlow — Your workshop, organised."
+            className="h-14 w-[168px] shrink-0 rounded-lg bg-white object-contain"
+          />
+          <div className="flex min-w-0 items-center justify-end gap-3">
+            {billingSettings.businessName?.trim() ? (
+              <p className="text-right text-sm font-medium text-slate-300">{billingSettings.businessName.trim()}</p>
+            ) : null}
+            {billingSettings.businessLogoUrl ? (
+              <img
+                src={billingSettings.businessLogoUrl}
+                alt={billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} business logo` : "Business logo"}
+                className="h-14 w-14 shrink-0 rounded-full border border-slate-800 bg-slate-900 object-cover"
+              />
+            ) : null}
           </div>
-          {billingSettings.businessLogoUrl ? (
-            <img
-              src={billingSettings.businessLogoUrl}
-              alt={billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} business logo` : "Business logo"}
-              className="h-14 w-14 shrink-0 rounded-full border border-slate-800 bg-slate-900 object-cover"
-            />
-          ) : null}
         </header>
 
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
