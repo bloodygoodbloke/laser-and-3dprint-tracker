@@ -2409,21 +2409,37 @@ function App() {
     <div className="app-theme min-h-screen bg-slate-950 text-slate-100" style={appThemeStyle}>
       <div className="mx-auto max-w-7xl p-6">
         <header className="mb-8 flex items-center justify-between gap-4 no-print">
-          <img
-            src="/branding/makerflow-primary.svg"
-            alt="MakerFlow — Your workshop, organised."
-            className="h-14 w-[168px] shrink-0 rounded-lg bg-white object-contain"
-          />
+          <button
+            type="button"
+            onClick={() => setActiveTab("dashboard")}
+            aria-label="Go to dashboard"
+            title="Go to dashboard"
+            className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <img
+              src="/branding/makerflow-primary.svg"
+              alt="MakerFlow — Your workshop, organised."
+              className="h-14 w-[168px] rounded-lg bg-white object-contain"
+            />
+          </button>
           <div className="flex min-w-0 items-center justify-end gap-3">
             {billingSettings.businessName?.trim() ? (
               <p className="text-right text-lg font-semibold text-slate-200">{billingSettings.businessName.trim()}</p>
             ) : null}
             {billingSettings.businessLogoUrl ? (
-              <img
-                src={billingSettings.businessLogoUrl}
-                alt={billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} business logo` : "Business logo"}
-                className="h-14 w-14 shrink-0 rounded-full border border-slate-800 bg-slate-900 object-cover"
-              />
+              <button
+                type="button"
+                onClick={() => setActiveTab("billing")}
+                aria-label="Open billing settings"
+                title="Open billing settings"
+                className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <img
+                  src={billingSettings.businessLogoUrl}
+                  alt={billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} business logo` : "Business logo"}
+                  className="h-14 w-14 rounded-full border border-slate-800 bg-slate-900 object-cover"
+                />
+              </button>
             ) : null}
           </div>
         </header>
