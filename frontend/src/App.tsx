@@ -4439,7 +4439,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Site theme customization</h3>
-                <p className="mt-2">Open Admin and use Site theme colors to style the whole app. You can set Site background, Site text, Search and input, Accent button, and Accent button text colors. Use the quick preset row for one-click setup (MakerFlow, Light, Dark, High Contrast, Forest, Night Shift, Paper Invoice), then fine-tune any color fields and click Save site theme to keep your branding for future sessions.</p>
+                <p className="mt-2">The app starts with the MakerFlow light branding: white background, Charcoal `#1C1C1E` text, Soft Grey `#E5E5E7` inputs, Primary Blue `#3A7DFF`, Dark Blue `#1D63E7` for hover states, and Light Blue `#5DA8FF` for supporting highlights. Inter is the primary UI font. In Admin, use Site theme colors to customize the background, text, inputs, and accent buttons. The MakerFlow preset restores these defaults; Light, Dark, High Contrast, Forest, Night Shift, and Paper Invoice are also available. Click Save site theme to keep your choices.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Business and customers</h3>
