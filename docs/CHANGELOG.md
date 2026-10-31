@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Consolidated Admin backup and restore into one checkbox-driven card with a single selected-section JSON file. Workshop jobs, materials, and equipment are kept together; selected backups replace only their included sections and preserve the rest of the current data. Existing full and individual JSON and legacy jobs/materials CSV restore files remain supported, with a confirmation before data is replaced.
 - Rebranded the app as MakerFlow with the primary SVG logo and browser favicon, updated product language to Production Jobs and Equipment, and kept workshop branding supplemental: the business name/logo remain visible in the header, invoices retain the workshop's identity, and MakerFlow appears as a footer credit.
 - Made the default app styling the white MakerFlow scheme: Primary Blue `#3A7DFF`, Dark Blue `#1D63E7` for hover states, Light Blue `#5DA8FF` for highlights, Charcoal `#1C1C1E` text, Soft Grey `#E5E5E7` inputs, and Inter as the primary UI font. The MakerFlow preset reflects these defaults; removed the Ocean and Workshop Blue presets.
 - Updated the Machines and Help pages to present Bambu telemetry as an upcoming alpha/local connector rather than an active feature in the deployed app.
