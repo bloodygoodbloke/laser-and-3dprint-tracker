@@ -2424,7 +2424,7 @@ function App() {
           />
           <div className="flex min-w-0 items-center justify-end gap-3">
             {billingSettings.businessName?.trim() ? (
-              <p className="text-right text-sm font-medium text-slate-300">{billingSettings.businessName.trim()}</p>
+              <p className="text-right text-lg font-semibold text-slate-200">{billingSettings.businessName.trim()}</p>
             ) : null}
             {billingSettings.businessLogoUrl ? (
               <img
