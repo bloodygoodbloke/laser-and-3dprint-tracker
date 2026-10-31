@@ -46,7 +46,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Configure pricing guardrails including minimum charge, setup fee, rush fee %, and waste factor %.
 - Material customer pricing now applies global material markup plus configured per-material-type markup without an implicit default type markup.
 - Manage business personalization in a dedicated Admin section (name, logo, address, email, phone, website).
-- Customize site-wide background, text, search/input, and accent button colors, with quick presets (Light, Dark, High Contrast, Ocean, Forest, Night Shift, Workshop Blue, Paper Invoice).
+- Customize site-wide background, text, search/input, and accent button colors; the default is the white MakerFlow palette, with presets for MakerFlow, Light, Dark, High Contrast, Forest, Night Shift, and Paper Invoice.
 - Billing numeric fields now support clearing values without immediately forcing `0` while typing.
 - Preview and print a customer-facing invoice directly under the selected expanded job card, including simplified line items and totals (`SubTotal`, `Delivery`, `VAT`, `Grand total`) plus deposits (`Suggested deposit`, `Deposit paid`, `Balance due`) and business/customer contact details, with explicit `Print / Save PDF` and `Close invoice` actions.
 - Invoice finance completeness now includes payment terms (days), per-job payment status, and per-job deposit tracking.
