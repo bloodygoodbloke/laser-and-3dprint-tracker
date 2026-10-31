@@ -1,4 +1,4 @@
-import { BacklogIntakeRequest, BacklogIntakeResponse, BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, HelpIntakeRequestRecord, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, IssueReportRequest, IssueReportResponse, IssueReportStatus, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
@@ -385,38 +385,20 @@ const api = {
     if (!res.ok) throw new Error("Failed to load billing audit logs");
     return res.json();
   },
-  async submitBacklogIntake(payload: BacklogIntakeRequest): Promise<BacklogIntakeResponse> {
-    const res = await fetch("/api/admin/backlog-intake", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Failed to submit backlog request");
+  async getIssueReportStatus(): Promise<IssueReportStatus> {
+    const res = await fetch("/api/issues/status");
+    if (!res.ok) throw new Error("Failed to check GitHub issue reporting status");
     return res.json();
   },
-  async logHelpIntakeRequest(payload: BacklogIntakeRequest): Promise<HelpIntakeRequestRecord> {
-    const res = await fetch("/api/admin/help-intake/log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Failed to log help intake request");
-    return res.json();
-  },
-  async exportHelpIntakeRequests(): Promise<{ exportedAt: string; requests: HelpIntakeRequestRecord[] }> {
-    const res = await fetch("/api/admin/help-intake/export");
-    if (!res.ok) throw new Error("Failed to export help intake requests");
-    return res.json();
-  },
-  async importHelpIntakeRequests(payload: { requests: HelpIntakeRequestRecord[] }): Promise<{ importedCount: number }> {
-    const res = await fetch("/api/admin/help-intake/import", {
+  async createIssue(payload: IssueReportRequest): Promise<IssueReportResponse> {
+    const res = await fetch("/api/issues", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const errorPayload = await res.json().catch(() => null);
-      throw new Error(String(errorPayload?.error || "Failed to import help intake requests"));
+      throw new Error(String(errorPayload?.error || "Failed to create GitHub issue"));
     }
     return res.json();
   },

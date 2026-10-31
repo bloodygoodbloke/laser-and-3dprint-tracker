@@ -32,7 +32,7 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Track margin reporting by machine, material type, and customer from the Reports page.
 - Monitor delivery and utilization KPIs including on-time rate, overdue open jobs, queued runtime, and per-machine utilization.
 - Use a dedicated Reports page with date-range, status, machine, and customer filters plus CSV export-ready report rows, summary metrics, and margin breakdown views.
-- Use the Help page as an in-app guide and raise bug/feature requests directly from the app. Submissions are queued in a separate help-intake workflow so users can download one combined JSON file and handle manual backlog import.
+- Use the Help page as an in-app guide and raise bug/feature requests directly from the app. Each submission creates a GitHub issue (labelled `bug` or `enhancement`) with app version, build number, environment, browser and date/time attached, then shows the issue number and link. See `docs/github-issues.md`.
 - Monitor Bambu machine live status (nozzle/bed/chamber temperatures, progress, AMS summary) from the Bambu telemetry section in the Machines tab.
 - Process Bambu event-driven updates (`PRINT_STARTED`, `PRINT_FINISHED`, `PRINT_FAILED`) to auto-update linked job statuses.
 - Auto-log runtime/material telemetry usage, auto-deduct linked job material stock, and auto-adjust AMS spool levels from telemetry events.
@@ -52,7 +52,6 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Invoice finance completeness now includes payment terms (days), per-job payment status, and per-job deposit tracking.
 - Export/import jobs CSV and materials CSV, plus dedicated JSON backup/restore options for customers, suppliers (with purchase history), and machines (with machine profiles and Bambu telemetry).
 - Manage full backup/restore snapshots from Admin tools, covering all customizable and operational data: theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu machine data.
-- Import emailed help-intake JSON files from Admin (`Help requests inbox`) to insert requests into `docs/backlog.md` with `Human Review` and `On Hold` status.
 - App header now prefixes the title with business name, shows business logo at top-right, and dashboard contains the jobs/materials status lozenge.
 - App footer and invoice footer both include configured business contact details (address, email, phone, website).
 - Docker compose workflow now includes service health checks and frontend startup dependency on backend health for more reliable local runtime startup.
@@ -78,7 +77,7 @@ Fabrication Workshop Tracker is a lightweight system for managing jobs, material
 - Optional local env setup:
 - Preferred setup: copy `backend/.env.local.example` to `backend/.env.local` and fill values as needed.
 - `backend/.env.local` is loaded automatically by backend startup and is git-ignored.
-- Help requests inbox now imports backlog files directly, so no OAuth setup is required for local development.
+- To enable Help-page issue reporting locally, set `GITHUB_TOKEN` (and optionally `GITHUB_REPOSITORY`) in `backend/.env.local`; see `docs/github-issues.md`.
 - Start locally (two options):
 - Option 1: one command from repo root: `bash start-local.sh`
 - Stop the local frontend and backend from another terminal: `bash stop-local.sh`
@@ -121,11 +120,11 @@ If the UI appears unresponsive, verify both ports are listening (`4000` and `517
 
 **Implementation tracking**
 - Tracker workflow and update automation rules are in `docs/agent.md`.
-- Planned and in-progress work is tracked in `docs/backlog.md`.
+- Open bugs and feature requests are tracked in GitHub Issues (see `docs/github-issues.md`).
 - Implemented features and completed bug fixes are tracked in `docs/implementation-log.md`.
 - Release notes are tracked in `docs/CHANGELOG.md`.
 
-**Backlog workflow commands**
+**Tracker workflow commands**
 - Validate tracker consistency: `node scripts/check-tracker-consistency.js`
 - Validate release-note hygiene when versions change: `node scripts/check-release-notes.js`
 - Validate quality-audit cadence: `node scripts/check-quality-cadence.js`

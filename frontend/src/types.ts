@@ -269,34 +269,22 @@ export interface MakerWorldPrintProfile {
   estimatedMaterialGrams: number;
 }
 
-export interface BacklogIntakeRequest {
+export interface IssueReportRequest {
   requestType: "Bug" | "Feature Request";
   priority: "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations";
   title: string;
   details: string;
+  browser: string;
 }
 
-export interface HelpIntakeRequestRecord {
-  id: string;
-  submittedAt: string;
-  source: "help-form";
-  requestType: "Bug" | "Feature Request";
-  priority: "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations";
-  title: string;
-  details: string;
+export interface IssueReportResponse {
+  number: number;
+  url: string;
 }
 
-export interface BacklogIntakeResponse {
-  id: string;
-  type: "Bug" | "Feature Request";
-  priority: string;
-  status: "Planned" | "On Hold";
-  reviewStatus: "Human Review" | "Reviewed" | "Auto Reviewed";
-  reviewReason: string;
-  reviewRecommendation: "Auto Candidate" | "Human Review Required";
-  triageReason: string;
-  title: string;
-  details: string;
+export interface IssueReportStatus {
+  configured: boolean;
+  repository: string | null;
 }
 
 export interface BillingAuditFieldChange {

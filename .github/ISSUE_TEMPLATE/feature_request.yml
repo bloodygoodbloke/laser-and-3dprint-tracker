@@ -1,0 +1,30 @@
+name: Feature Request
+description: Suggest an improvement or new capability for MakerFlow
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you like to see?
+      description: Describe the outcome you want and the problem it solves. Mention the tab or workflow involved.
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P1 High
+        - P2 Medium
+        - P3 Low
+        - Integrations
+      default: 2
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App Version
+      description: Shown in the footer and on Help > Deployment Information.
+      placeholder: "0.8.0"

@@ -4,7 +4,7 @@ import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchHealth, fetchVersionInfo, formatBuildDate, formatDeploymentInfo, formatUptime, formatVersionBadge, frontendVersion, type HealthInfo, type VersionInfo } from "./version";
 import PrintTimeInput from "./PrintTimeInput";
 import { formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
-import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, HelpIntakeRequestRecord, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, IssueReportStatus, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "Fabrication Workshop Tracker";
 const APP_VERSION = "0.6.0";
@@ -313,7 +313,6 @@ function App() {
   const [supplierBackupMessage, setSupplierBackupMessage] = useState("");
   const [machineBackupMessage, setMachineBackupMessage] = useState("");
   const [billingBackupMessage, setBillingBackupMessage] = useState("");
-  const [helpIntakeBackupMessage, setHelpIntakeBackupMessage] = useState("");
   const [billingSaveMessage, setBillingSaveMessage] = useState("");
   const [customerForm, setCustomerForm] = useState({ name: "", address: "", email: "", phone: "", notes: "" });
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
@@ -362,8 +361,9 @@ function App() {
     details: "",
   });
   const [helpRequestMessage, setHelpRequestMessage] = useState("");
-  const [queuedHelpRequests, setQueuedHelpRequests] = useState<HelpIntakeRequestRecord[]>([]);
-  const [directToBacklog, setDirectToBacklog] = useState(false);
+  const [createdIssue, setCreatedIssue] = useState<{ number: number; url: string } | null>(null);
+  const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
+  const [issueReportStatus, setIssueReportStatus] = useState<IssueReportStatus | null>(null);
   const [dashboardJobMessage, setDashboardJobMessage] = useState("");
   const [isCreatingDashboardJob, setIsCreatingDashboardJob] = useState(false);
   const addJobFormRef = useRef<HTMLFormElement | null>(null);
@@ -480,6 +480,7 @@ function App() {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
     api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
+    api.getIssueReportStatus().then(setIssueReportStatus).catch(() => undefined);
   }, []);
 
   const applyBambuDashboardUpdate = (payload: BambuDashboardPayload, force = false) => {
@@ -2366,62 +2367,24 @@ function App() {
     setBillingBackupMessage("Billing backup restored successfully.");
   };
 
-  const exportHelpIntakeInbox = async () => {
-    const payload = await api.exportHelpIntakeRequests();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `help-intake-inbox-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setHelpIntakeBackupMessage("Help intake inbox exported.");
-  };
-
-  const importHelpIntakeToBacklog = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    const requests = Array.isArray(payload?.requests) ? payload.requests : [];
-    try {
-      const result = await api.importHelpIntakeRequests({ requests });
-      setHelpIntakeBackupMessage(`Imported ${result.importedCount} request(s) into backlog as Human Review.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to import help intake requests";
-      setHelpIntakeBackupMessage(message);
-    }
-  };
-
   const submitHelpRequest = async (e: FormEvent) => {
     e.preventDefault();
     const title = helpRequestForm.title.trim();
     const details = helpRequestForm.details.trim();
-    if (!title || !details) return;
+    if (!title || !details || isSubmittingIssue) return;
 
+    setIsSubmittingIssue(true);
+    setCreatedIssue(null);
+    setHelpRequestMessage("");
     try {
-      if (directToBacklog) {
-        const created = await api.submitBacklogIntake({
-          requestType: helpRequestForm.requestType,
-          priority: helpRequestForm.priority,
-          title,
-          details,
-        });
-        setHelpRequestMessage(`Added ${created.id} directly to backlog (${created.status}, ${created.reviewStatus}).`);
-      } else {
-        const created = await api.logHelpIntakeRequest({
-          requestType: helpRequestForm.requestType,
-          priority: helpRequestForm.priority,
-          title,
-          details,
-        });
-        setQueuedHelpRequests((current) => {
-          const next = [...current, created];
-          setHelpRequestMessage(`Request ${created.id} queued (${next.length} total). Add more requests, then download one email file.`);
-          return next;
-        });
-      }
-
+      const created = await api.createIssue({
+        requestType: helpRequestForm.requestType,
+        priority: helpRequestForm.priority,
+        title,
+        details,
+        browser: navigator.userAgent,
+      });
+      setCreatedIssue(created);
       setHelpRequestForm({
         requestType: "Feature Request",
         priority: "P3 Low",
@@ -2429,43 +2392,11 @@ function App() {
         details: "",
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to log request";
+      const message = error instanceof Error ? error.message : "Failed to create GitHub issue";
       setHelpRequestMessage(message);
+    } finally {
+      setIsSubmittingIssue(false);
     }
-  };
-
-  const downloadQueuedHelpRequests = async () => {
-    let requestsToDownload = queuedHelpRequests;
-
-    if (!requestsToDownload.length) {
-      try {
-        const payload = await api.exportHelpIntakeRequests();
-        requestsToDownload = Array.isArray(payload.requests) ? payload.requests : [];
-      } catch {
-        requestsToDownload = [];
-      }
-    }
-
-    if (!requestsToDownload.length) {
-      setHelpRequestMessage("No queued requests yet. Add at least one request before downloading.");
-      return;
-    }
-
-    const downloadable = {
-      exportedAt: new Date().toISOString(),
-      requests: requestsToDownload,
-    };
-    const blob = new Blob([JSON.stringify(downloadable, null, 2)], { type: "application/json;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `help-requests-batch-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-    setHelpRequestMessage(`Downloaded ${requestsToDownload.length} queued request(s). Email this file, then import it from Admin.`);
-    setQueuedHelpRequests([]);
   };
 
   return (
@@ -4300,18 +4231,6 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Help requests inbox</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export help-request files for email, then manually import a downloaded file into backlog from here.</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={exportHelpIntakeInbox} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
-                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Import to backlog</span>
-                        <input type="file" accept=".json" className="hidden" onChange={importHelpIntakeToBacklog} />
-                      </label>
-                    </div>
-                  </div>
-
                   <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2">
                     <h4 className="text-sm font-semibold text-white">Full backup</h4>
                     <p className="mt-1 text-xs text-slate-400">Download or restore the complete app dataset, including all customizable settings and operational records.</p>
@@ -4331,7 +4250,6 @@ function App() {
                 {supplierBackupMessage ? <p className="text-sm text-cyan-300">{supplierBackupMessage}</p> : null}
                 {machineBackupMessage ? <p className="text-sm text-cyan-300">{machineBackupMessage}</p> : null}
                 {billingBackupMessage ? <p className="text-sm text-cyan-300">{billingBackupMessage}</p> : null}
-                {helpIntakeBackupMessage ? <p className="text-sm text-cyan-300">{helpIntakeBackupMessage}</p> : null}
                 {fullBackupMessage ? <p className="text-sm text-cyan-300">{fullBackupMessage}</p> : null}
               </div>
             </section>
@@ -4545,7 +4463,7 @@ function App() {
         {activeTab === "help" && (
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
             <h2 className="text-xl font-semibold">Help guide</h2>
-            <p className="mt-2 text-sm text-slate-400">Use this page as your operating manual for daily workflows, then submit bugs/features directly into the backlog review queue.</p>
+            <p className="mt-2 text-sm text-slate-400">Use this page as your operating manual for daily workflows, then raise bugs/features straight to GitHub Issues.</p>
             <div className="mt-6 space-y-4 text-sm text-slate-300">
               <div id="about-makerflow" className="rounded-2xl border border-cyan-800/50 bg-slate-950 p-4">
                 <h3 className="select-none font-semibold text-white" onClick={handleVersionHeadingClick}>MakerFlow {versionInfo ? `v${versionInfo.version}` : ""}</h3>
@@ -4640,31 +4558,12 @@ function App() {
               </div>
               <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Raise a bug or feature request</h3>
-                <p className="mt-2 text-slate-300">Submit here to either queue requests into an email-ready file or add them directly to backlog.</p>
-                <p className="mt-1 text-xs text-slate-400">When Direct to backlog is OFF, use Download email file and manually import from Admin.</p>
+                <p className="mt-2 text-slate-300">Submitting creates a GitHub issue automatically, labelled <code>bug</code> or <code>enhancement</code>, with the app version, build, environment and browser attached.</p>
+                {issueReportStatus && !issueReportStatus.configured ? (
+                  <p className="mt-1 text-xs text-amber-300">GitHub issue reporting is not configured on this server yet (GITHUB_TOKEN is missing), so submissions will be rejected.</p>
+                ) : null}
 
                 <div className="mt-4 space-y-3">
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Submission mode</span>
-                    <div className="w-full">
-                      <button
-                        type="button"
-                        onClick={() => setDirectToBacklog((current) => !current)}
-                        className={`rounded-full border px-4 py-2 text-sm ${directToBacklog ? "border-cyan-600 bg-cyan-900/20 text-cyan-300" : "border-slate-700 text-slate-200"}`}
-                        aria-pressed={directToBacklog}
-                      >
-                        {directToBacklog ? "Direct to backlog: ON" : "Direct to backlog: OFF"}
-                      </button>
-                      <p className="mt-2 text-xs">
-                        <span className={`inline-flex items-center rounded-full border px-2 py-1 ${directToBacklog ? "border-cyan-700/70 bg-cyan-900/20 text-cyan-300" : "border-slate-700 bg-slate-900 text-slate-300"}`}>
-                          {directToBacklog
-                            ? "Status: New submissions are added directly to backlog."
-                            : "Status: New submissions are queued for download/email import."}
-                        </span>
-                      </p>
-                    </div>
-                  </label>
-
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Request type</span>
                     <select
@@ -4715,27 +4614,19 @@ function App() {
                   </label>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <p className="text-xs text-slate-400">Queued requests: {queuedHelpRequests.length}</p>
-                  <div className="flex items-center gap-2">
-                    <button type="submit" className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{directToBacklog ? "Add to backlog" : "Queue request"}</button>
-                    <button type="button" onClick={downloadQueuedHelpRequests} className="rounded-full border border-slate-600 px-4 py-2 text-sm text-slate-200">
-                      Download email file
-                    </button>
+                <div className="mt-4 flex items-center justify-end gap-3">
+                  <button type="submit" disabled={isSubmittingIssue} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:opacity-50">
+                    {isSubmittingIssue ? "Creating issue..." : "Create GitHub issue"}
+                  </button>
+                </div>
+
+                {helpRequestMessage ? <p className="mt-3 text-sm text-rose-300">{helpRequestMessage}</p> : null}
+                {createdIssue ? (
+                  <div className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-900/10 p-3 text-sm text-emerald-300">
+                    <p>Issue created: <span className="font-semibold">#{createdIssue.number}</span></p>
+                    <p className="mt-1 break-all"><a className="underline" href={createdIssue.url} target="_blank" rel="noopener noreferrer">{createdIssue.url}</a></p>
                   </div>
-                </div>
-
-                {helpRequestMessage ? <p className="mt-3 text-sm text-cyan-300">{helpRequestMessage}</p> : null}
-
-                <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-300">
-                  <p className="font-semibold text-white">How review handoff works</p>
-                  <ol className="mt-2 list-decimal space-y-1 pl-4">
-                    <li>Each submission is logged in a separate help-intake record with a unique request ID and added to this local queue.</li>
-                    <li>Users can submit multiple requests, then download one combined JSON file for email handoff.</li>
-                    <li>Emailed files are imported manually from Admin using Help requests inbox.</li>
-                    <li>Imported items are inserted into docs/backlog.md with Human Review and On Hold status for manual review.</li>
-                  </ol>
-                </div>
+                ) : null}
               </form>
             </div>
             <div className="mt-6 text-left text-xs text-slate-500">Version {APP_VERSION}</div>
