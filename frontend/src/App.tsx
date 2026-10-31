@@ -2426,7 +2426,7 @@ function App() {
               </svg>
             </div>
             <div className="min-w-0">
-              <h1 className="text-3xl font-semibold">MakerFlow</h1>
+              <h1 className="text-3xl font-semibold">{APP_NAME}</h1>
               <p className="mt-1 text-sm text-slate-400">
                 {billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} workspace` : "Workshop operations software for makers and small fabricators."}
               </p>
