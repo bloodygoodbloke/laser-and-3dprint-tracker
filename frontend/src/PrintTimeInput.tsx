@@ -14,11 +14,12 @@ const split = (value: string) => {
 interface PrintTimeInputProps {
   /** Total minutes as a string (the form state format). */
   value: string;
+  label?: string;
   onChange: (totalMinutes: string) => void;
   inputClassName: string;
 }
 
-export default function PrintTimeInput({ value, onChange, inputClassName }: PrintTimeInputProps) {
+export default function PrintTimeInput({ value, label = "Print time", onChange, inputClassName }: PrintTimeInputProps) {
   const [fields, setFields] = useState(() => split(value));
   const lastEmitted = useRef(value);
 
@@ -42,7 +43,7 @@ export default function PrintTimeInput({ value, onChange, inputClassName }: Prin
 
   return (
     <div className="block text-sm text-slate-300">
-      <span className="mb-2 block">Print time</span>
+      <span className="mb-2 block">{label}</span>
       <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs text-slate-400">
           Hours
@@ -50,7 +51,7 @@ export default function PrintTimeInput({ value, onChange, inputClassName }: Prin
             value={fields.hours}
             inputMode="decimal"
             placeholder="0"
-            aria-label="Print time hours"
+            aria-label={`${label} hours`}
             onChange={(e) => update({ ...fields, hours: e.target.value })}
             className={inputClassName}
           />
@@ -61,7 +62,7 @@ export default function PrintTimeInput({ value, onChange, inputClassName }: Prin
             value={fields.minutes}
             inputMode="numeric"
             placeholder="0"
-            aria-label="Print time minutes"
+            aria-label={`${label} minutes`}
             onChange={(e) => update({ ...fields, minutes: e.target.value })}
             className={inputClassName}
           />
