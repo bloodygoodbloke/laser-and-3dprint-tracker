@@ -1928,10 +1928,7 @@ function App() {
     () => customers.find((customer) => customer.name.trim().toLowerCase() === String(selectedJob?.customer || "").trim().toLowerCase()) || null,
     [customers, selectedJob?.customer],
   );
-  const businessDisplayName = billingSettings.businessName?.trim() || APP_NAME;
-  const appHeading = billingSettings.businessName?.trim()
-    ? `${billingSettings.businessName.trim()} • ${APP_NAME}`
-    : APP_NAME;
+  const businessDisplayName = billingSettings.businessName?.trim() || "";
 
   const resetCustomerForm = () => {
     setCustomerForm({ name: "", address: "", email: "", phone: "", notes: "" });
@@ -2015,6 +2012,7 @@ function App() {
       .totals .row { margin-bottom: 8px; }
       .totals .row:last-child { margin-bottom: 0; font-weight: 700; border-top: 1px solid #cbd5e1; padding-top: 8px; }
       .footer { margin-top: 16px; font-size: 12px; color: #475569; display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+      .makerflow-footer { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 8px; text-align: center; color: #64748b; font-size: 10px; }
     </style>
   </head>
   <body>
@@ -2023,10 +2021,11 @@ function App() {
         <p class="muted" style="letter-spacing:0.08em; text-transform:uppercase; font-size:12px;">Invoice</p>
         <h2 style="margin-top:6px;">${safe(job.name)}</h2>
         <p class="muted" style="margin-top:4px;">${safe(customerName)}</p>
-        <p class="muted" style="margin-top:12px;">From: <strong style="color:#0f172a;">${safe(businessDisplayName)}</strong></p>
+        ${businessDisplayName ? `<p class="muted" style="margin-top:12px;">From: <strong style="color:#0f172a;">${safe(businessDisplayName)}</strong></p>` : ""}
         ${billingSettings.businessAddress ? `<p class="muted">${safe(billingSettings.businessAddress)}</p>` : ""}
       </div>
       <div style="text-align:right;">
+        ${billingSettings.businessLogoUrl ? `<img src="${safe(billingSettings.businessLogoUrl)}" alt="${safe(businessDisplayName || "Business logo")}" style="max-width:72px;max-height:72px;object-fit:contain;margin-bottom:8px;" />` : ""}
         <p><strong>#${safe(job.jobNumber || "TBC")}</strong></p>
         <p class="muted">Issued ${safe(new Date().toLocaleDateString())}</p>
         <p class="muted">${safe(dueLabel)}</p>
@@ -2070,6 +2069,7 @@ function App() {
       ${billingSettings.businessPhone ? `<span>${safe(billingSettings.businessPhone)}</span>` : ""}
       ${billingSettings.businessWebsite ? `<span>${safe(billingSettings.businessWebsite)}</span>` : ""}
     </div>` : ""}
+    <div class="makerflow-footer">Made with MakerFlow</div>
   </body>
 </html>`;
 
@@ -2416,16 +2416,28 @@ function App() {
   return (
     <div className="app-theme min-h-screen bg-slate-950 text-slate-100" style={appThemeStyle}>
       <div className="mx-auto max-w-7xl p-6">
-        <header className="mb-8 flex items-center justify-between no-print">
-          <div>
-            <h1 className="text-3xl font-semibold">{appHeading}</h1>
-            <p className="mt-2 text-slate-400">Your workshop, organised. Track production jobs, materials, customers, suppliers, and costs in one place.</p>
+        <header className="mb-8 flex items-center justify-between gap-4 no-print">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-700/50 bg-cyan-950/40">
+              <svg viewBox="0 0 40 40" role="img" aria-label="MakerFlow logo" className="h-9 w-9">
+                <path d="M8 29V12l8 10 8-10v17" fill="none" stroke="#67e8f9" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M24 24h4a4 4 0 1 0 0-8h-3" fill="none" stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" />
+                <circle cx="25" cy="16" r="1.5" fill="#a5f3fc" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-3xl font-semibold">MakerFlow</h1>
+              <p className="mt-1 text-sm text-slate-400">
+                {billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} workspace` : "Workshop operations software for makers and small fabricators."}
+              </p>
+              <p className="mt-2 text-slate-400">Your workshop, organised. Track production jobs, materials, customers, suppliers, and costs in one place.</p>
+            </div>
           </div>
           {billingSettings.businessLogoUrl ? (
             <img
               src={billingSettings.businessLogoUrl}
-              alt="Business logo"
-              className="h-14 w-14 rounded-full border border-slate-800 bg-slate-900 object-cover"
+              alt={billingSettings.businessName?.trim() ? `${billingSettings.businessName.trim()} business logo` : "Business logo"}
+              className="h-14 w-14 shrink-0 rounded-full border border-slate-800 bg-slate-900 object-cover"
             />
           ) : null}
         </header>
@@ -2433,8 +2445,8 @@ function App() {
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
           <nav className="flex flex-wrap gap-3">
             {(["dashboard", "jobs", "reports", "materials", "machines", "customers", "suppliers", "billing", "admin", "help"] as const).map((tab) => (
-              <button key={tab === "jobs" ? "Production Jobs" : tab === "machines" ? "Equipment" : tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
-                {tab}
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
+                {tab === "jobs" ? "Production Jobs" : tab === "machines" ? "Equipment" : tab}
               </button>
             ))}
           </nav>
@@ -3197,7 +3209,7 @@ function App() {
                                     <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">Invoice</p>
                                     <h5 className="mt-2 text-xl font-semibold text-white">{selectedJob.name}</h5>
                                     <p className="mt-1 text-sm text-slate-400">{selectedJob.customer || "Walk-in customer"}</p>
-                                    <p className="mt-3 text-sm text-slate-400">From: <span className="text-slate-200">{businessDisplayName}</span></p>
+                                    {businessDisplayName ? <p className="mt-3 text-sm text-slate-400">From: <span className="text-slate-200">{businessDisplayName}</span></p> : null}
                                     {billingSettings.businessAddress ? <p className="text-sm text-slate-400">{billingSettings.businessAddress}</p> : null}
                                   </div>
                                   <div className="text-sm text-slate-400">
@@ -3309,6 +3321,7 @@ function App() {
                                     </div>
                                   </div>
                                 ) : null}
+                                <p className="mt-5 border-t border-slate-800 pt-3 text-center text-xs text-slate-500">Made with MakerFlow</p>
                               </div>
                             ) : (
                               <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
@@ -4170,6 +4183,7 @@ function App() {
 
               <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
                 <summary className="cursor-pointer list-none text-lg font-semibold text-white">Business personalization</summary>
+                <p className="mt-2 text-sm text-slate-400">Your business name and logo appear on customer invoices. MakerFlow stays separate as the software brand.</p>
                 <div className="mt-4 flex items-center justify-end">
                   <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">
                     {savingBilling ? "Saving..." : "Save business details"}
@@ -4178,7 +4192,7 @@ function App() {
                 <div className="mt-4 space-y-3">
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Business name</span>
-                    <input value={billingSettings.businessName || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessName: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="Fabrication Workshop Tracker" />
+                    <input value={billingSettings.businessName || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessName: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="Your business name" />
                   </label>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Business logo URL</span>
