@@ -364,6 +364,7 @@ function App() {
   const [createdIssue, setCreatedIssue] = useState<{ number: number; url: string } | null>(null);
   const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
   const [issueReportStatus, setIssueReportStatus] = useState<IssueReportStatus | null>(null);
+  const [issueReportStatusError, setIssueReportStatusError] = useState(false);
   const [dashboardJobMessage, setDashboardJobMessage] = useState("");
   const [isCreatingDashboardJob, setIsCreatingDashboardJob] = useState(false);
   const addJobFormRef = useRef<HTMLFormElement | null>(null);
@@ -480,7 +481,14 @@ function App() {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
     api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
-    api.getIssueReportStatus().then(setIssueReportStatus).catch(() => undefined);
+    api.getIssueReportStatus()
+      .then((status) => {
+        setIssueReportStatus(status);
+        setIssueReportStatusError(false);
+      })
+      .catch(() => {
+        setIssueReportStatusError(true);
+      });
   }, []);
 
   const applyBambuDashboardUpdate = (payload: BambuDashboardPayload, force = false) => {
@@ -2377,7 +2385,7 @@ function App() {
     e.preventDefault();
     const title = helpRequestForm.title.trim();
     const details = helpRequestForm.details.trim();
-    if (!title || !details || isSubmittingIssue) return;
+    if (!title || !details || isSubmittingIssue || issueReportStatus?.configured === false) return;
 
     setIsSubmittingIssue(true);
     setCreatedIssue(null);
@@ -4451,14 +4459,29 @@ function App() {
               </div>
               <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Raise a bug or feature request</h3>
-                <p className="mt-2 text-slate-300">Submitting creates a GitHub issue automatically, labelled <code>bug</code> or <code>enhancement</code>, with the app version, build, environment and browser attached.</p>
-                {issueReportStatus && !issueReportStatus.configured ? (
-                  <p className="mt-1 text-xs text-amber-300">GitHub issue reporting is not configured on this server yet (GITHUB_TOKEN is missing), so submissions will be rejected.</p>
-                ) : null}
+                <p className="mt-2 text-sm text-slate-300">
+                  Create an issue in GitHub to report a problem or suggest an improvement. Choose a request type, set its priority, and add a short title and clear details. The app adds its version, build, environment, browser, and submission time automatically.
+                </p>
 
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Request type</span>
+                {issueReportStatusError ? (
+                  <p className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/20 p-3 text-sm text-amber-200">
+                    We couldn’t check the GitHub issue setup. You can still submit, and any problem will be shown here.
+                  </p>
+                ) : issueReportStatus?.configured ? (
+                  <p className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-3 text-sm text-emerald-200">
+                    Server configuration found for <code>{issueReportStatus.repository}</code>. GitHub will confirm the token can create issues when you submit.
+                  </p>
+                ) : issueReportStatus && !issueReportStatus.configured ? (
+                  <p className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/20 p-3 text-sm text-amber-200">
+                    GitHub issue creation isn’t configured on this server. Contact the app administrator to enable it.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-400">Checking GitHub issue setup…</p>
+                )}
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-1 block">Request type</span>
                     <select
                       value={helpRequestForm.requestType}
                       onChange={(e) => setHelpRequestForm((current) => ({ ...current, requestType: e.target.value as "Bug" | "Feature Request" }))}
@@ -4469,8 +4492,8 @@ function App() {
                     </select>
                   </label>
 
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Priority</span>
+                  <label className="block text-sm text-slate-300">
+                    <span className="mb-1 block">Priority</span>
                     <select
                       value={helpRequestForm.priority}
                       onChange={(e) => setHelpRequestForm((current) => ({ ...current, priority: e.target.value as "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations" }))}
@@ -4484,40 +4507,44 @@ function App() {
                     </select>
                   </label>
 
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Short title</span>
+                  <label className="block text-sm text-slate-300 sm:col-span-2">
+                    <span className="mb-1 block">Short title</span>
                     <input
                       value={helpRequestForm.title}
                       onChange={(e) => setHelpRequestForm((current) => ({ ...current, title: e.target.value }))}
                       className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
                       placeholder="Example: Invoice line-item audit history"
+                      maxLength={200}
                       required
                     />
                   </label>
 
-                  <label className="flex items-start gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0 pt-2">Details</span>
+                  <label className="block text-sm text-slate-300 sm:col-span-2">
+                    <span className="mb-1 block">Details</span>
                     <textarea
                       value={helpRequestForm.details}
                       onChange={(e) => setHelpRequestForm((current) => ({ ...current, details: e.target.value }))}
-                      className="min-h-[110px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                      placeholder="Describe the issue or outcome you want. Include affected tabs/workflows if possible."
+                      className="min-h-[130px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                      placeholder={helpRequestForm.requestType === "Bug"
+                        ? "What happened, what did you expect, and how can we reproduce it?"
+                        : "What problem should this solve, and what outcome would you like?"}
+                      maxLength={10000}
                       required
                     />
                   </label>
                 </div>
 
-                <div className="mt-4 flex items-center justify-end gap-3">
-                  <button type="submit" disabled={isSubmittingIssue} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:opacity-50">
+                <div className="mt-4 flex justify-end">
+                  <button type="submit" disabled={isSubmittingIssue || issueReportStatus?.configured === false} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">
                     {isSubmittingIssue ? "Creating issue..." : "Create GitHub issue"}
                   </button>
                 </div>
 
-                {helpRequestMessage ? <p className="mt-3 text-sm text-rose-300">{helpRequestMessage}</p> : null}
+                {helpRequestMessage ? <p role="alert" className="mt-3 text-sm text-rose-300">{helpRequestMessage}</p> : null}
                 {createdIssue ? (
-                  <div className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-900/10 p-3 text-sm text-emerald-300">
-                    <p>Issue created: <span className="font-semibold">#{createdIssue.number}</span></p>
-                    <p className="mt-1 break-all"><a className="underline" href={createdIssue.url} target="_blank" rel="noopener noreferrer">{createdIssue.url}</a></p>
+                  <div className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-900/10 p-3 text-sm text-emerald-300" role="status">
+                    <p>GitHub issue created: <span className="font-semibold">#{createdIssue.number}</span></p>
+                    <p className="mt-1 break-all"><a className="underline" href={createdIssue.url} target="_blank" rel="noopener noreferrer">View issue on GitHub</a></p>
                   </div>
                 ) : null}
               </form>
