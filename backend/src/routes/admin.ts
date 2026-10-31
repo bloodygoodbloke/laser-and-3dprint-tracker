@@ -72,6 +72,12 @@ const getFullBackupPayload = async (includeBillingSettings = true) => {
     prisma.bambuFailureLog.findMany(),
   ]);
 
+  const normalizedBillingSettings = billingSettings.map((setting) => ({
+    ...setting,
+    machineElectricitySettings: parseJsonRecord(setting.machineElectricitySettings),
+    materialTypeMarkups: parseJsonRecord(setting.materialTypeMarkups),
+  }));
+
   return {
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
@@ -98,7 +104,7 @@ const getFullBackupPayload = async (includeBillingSettings = true) => {
     ],
     jobs,
     materials,
-    billingSettings,
+    billingSettings: normalizedBillingSettings,
     jobCosts,
     customers,
     suppliers,
@@ -628,8 +634,8 @@ router.post("/backup/full", async (req, res) => {
           id: undefined,
           createdAt: undefined,
           updatedAt: undefined,
-          machineElectricitySettings: JSON.stringify(billingSettingPayload.machineElectricitySettings || {}),
-          materialTypeMarkups: JSON.stringify(billingSettingPayload.materialTypeMarkups || {}),
+          machineElectricitySettings: JSON.stringify(parseJsonRecord(billingSettingPayload.machineElectricitySettings)),
+          materialTypeMarkups: JSON.stringify(parseJsonRecord(billingSettingPayload.materialTypeMarkups)),
         },
       });
     }

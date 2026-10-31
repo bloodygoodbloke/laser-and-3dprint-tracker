@@ -299,12 +299,7 @@ function App() {
   const [machineMessage, setMachineMessage] = useState("");
   const [savingBilling, setSavingBilling] = useState(false);
   const [backupMessage, setBackupMessage] = useState("");
-  const [materialBackupMessage, setMaterialBackupMessage] = useState("");
-  const [fullBackupMessage, setFullBackupMessage] = useState("");
-  const [customerBackupMessage, setCustomerBackupMessage] = useState("");
-  const [supplierBackupMessage, setSupplierBackupMessage] = useState("");
-  const [machineBackupMessage, setMachineBackupMessage] = useState("");
-  const [billingBackupMessage, setBillingBackupMessage] = useState("");
+  const [selectedBackupSections, setSelectedBackupSections] = useState(["workshop", "customers", "suppliers", "billing"]);
   const [billingSaveMessage, setBillingSaveMessage] = useState("");
   const [customerForm, setCustomerForm] = useState({ name: "", address: "", email: "", phone: "", notes: "" });
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
@@ -2169,210 +2164,174 @@ function App() {
     setSupplierMessage("Purchase history entry added.");
   };
 
-  const exportBackupCsv = async () => {
-    const csv = await api.exportJobsCsv(jobs);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "jobs-backup.csv";
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setBackupMessage("Jobs export ready.");
+  const backupSections = {
+    workshop: ["jobs", "materials", "jobCosts", "estimateTemplates", "bambuDevices", "bambuStatuses", "bambuEvents", "bambuSpools", "bambuUsageLogs", "bambuMaintenance", "bambuFailureLogs"],
+    customers: ["customers"],
+    suppliers: ["suppliers", "purchases"],
+    billing: ["billingSettings", "billingAuditLogs"],
+  } as const;
+
+  const toggleBackupSection = (section: string) => {
+    setSelectedBackupSections((current) => current.includes(section)
+      ? current.filter((item) => item !== section)
+      : [...current, section]);
   };
 
-  const exportMaterialsCsv = async () => {
-    const csv = await api.exportMaterialsCsv(materials);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "materials-backup.csv";
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setMaterialBackupMessage("Materials export ready.");
-  };
-
-  const importBackupCsv = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const rows = text.trim().split(/\r?\n/).slice(1);
-    const importedJobs = rows.map((row) => {
-      const [jobNumber, name, customer, machineType, machineRunTimeMinutesRaw, labourTimeMinutesRaw, statusRaw] = row.split(",");
-      const status = statusRaw || labourTimeMinutesRaw || "Pending";
-      let machineRunTimeMinutes = 0;
-      try {
-        machineRunTimeMinutes = parsePrintTimeToMinutes(machineRunTimeMinutesRaw || "");
-      } catch {
-        machineRunTimeMinutes = 0;
-      }
-      const labourTimeMinutes = Number(statusRaw ? labourTimeMinutesRaw || 0 : machineRunTimeMinutesRaw || 0);
-      return {
-        id: crypto.randomUUID(),
-        jobNumber,
-        name,
-        customer,
-        machineType,
-        estTimeMinutes: machineRunTimeMinutes,
-        machineRunTimeMinutes,
-        labourTimeMinutes,
-        status,
-      } as Job;
-    });
-
-    await api.importBackup({ jobs: importedJobs, materials });
-    await loadData();
-    setBackupMessage("Jobs backup imported successfully.");
-  };
-
-  const importMaterialsCsv = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const text = await file.text();
-    const rows = text.trim().split(/\r?\n/).slice(1);
-    const importedMaterials = rows
-      .map((row) => {
-        const [name, type, unit, costPerUnitRaw, stockLevelRaw, reorderThresholdRaw, color] = row.split(",");
-        return {
-          name: String(name || "").trim(),
-          type: String(type || "Other").trim() || "Other",
-          unit: String(unit || "g").trim() || "g",
-          costPerUnit: Number(costPerUnitRaw || 0),
-          stockLevel: Number(stockLevelRaw || 0),
-          reorderThreshold: Number(reorderThresholdRaw || 0),
-          color: String(color || "").trim(),
-        };
-      })
-      .filter((material) => material.name);
-
-    if (!importedMaterials.length) {
-      setMaterialBackupMessage("No valid material rows found in CSV.");
+  const downloadSelectedBackup = async () => {
+    if (!selectedBackupSections.length) {
+      setBackupMessage("Select at least one section to back up.");
       return;
     }
-
-    await api.importMaterialsCsv({ materials: importedMaterials });
-    await loadData();
-    setMaterialBackupMessage(`Materials CSV imported (${importedMaterials.length} rows processed).`);
-  };
-
-  const exportFullBackup = async () => {
-    const backup = await api.exportFullBackup();
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "full-backup.json";
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setFullBackupMessage("Full backup exported.");
-  };
-
-  const exportCustomersBackup = async () => {
-    const backup = await api.exportCustomersBackup();
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "customers-backup.json";
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setCustomerBackupMessage("Customers backup exported.");
-  };
-
-  const exportSuppliersBackup = async () => {
-    const backup = await api.exportSuppliersBackup();
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "suppliers-backup.json";
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setSupplierBackupMessage("Suppliers backup exported.");
-  };
-
-  const exportMachinesBackup = async () => {
-    const backup = await api.exportMachinesBackup();
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "machines-backup.json";
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setMachineBackupMessage("Machines backup exported.");
-  };
-
-  const exportBillingBackup = async () => {
-    const backup = await api.exportBillingBackup();
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "billing-backup.json";
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setBillingBackupMessage("Billing backup exported.");
-  };
-
-  const importFullBackup = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
     try {
-      const text = await file.text();
-      const payload = JSON.parse(text);
-      const result = await api.importFullBackup(payload);
-      await loadData();
-      await loadBillingSettings();
-      const warning = typeof result?.warning === "string" && result.warning.trim() ? ` ${result.warning}` : "";
-      setFullBackupMessage(`Full backup restored successfully.${warning}`);
+      const fullBackup = await api.exportFullBackup();
+      const keys = selectedBackupSections.flatMap((section) => backupSections[section as keyof typeof backupSections] || []);
+      const data = Object.fromEntries(keys.map((key) => [key, fullBackup[key] ?? []])) as Record<string, unknown>;
+      const fullSettings = Array.isArray(fullBackup.billingSettings) ? fullBackup.billingSettings[0] : fullBackup.billingSettings;
+      if (selectedBackupSections.includes("workshop")) {
+        data.machineElectricitySettings = fullSettings?.machineElectricitySettings ?? {};
+      }
+      if (selectedBackupSections.includes("billing") && Array.isArray(data.billingSettings)) {
+        data.billingSettings = data.billingSettings.map((settings: Record<string, unknown>) => {
+          const { machineElectricitySettings: _machineSettings, ...billingOnly } = settings;
+          return billingOnly;
+        });
+      }
+      const backup = {
+        backupFormat: "makerflow-selected-backup",
+        formatVersion: 1,
+        schemaVersion: fullBackup.schemaVersion,
+        exportedAt: fullBackup.exportedAt,
+        includedSections: selectedBackupSections,
+        data,
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "makerflow-backup.json";
+      link.click();
+      window.URL.revokeObjectURL(url);
+      setBackupMessage(`Backup downloaded with ${selectedBackupSections.length} section${selectedBackupSections.length === 1 ? "" : "s"}.`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to restore full backup";
-      setFullBackupMessage(message);
+      setBackupMessage(error instanceof Error ? error.message : "Failed to download backup.");
     }
   };
 
-  const importCustomersBackup = async (event: ChangeEvent<HTMLInputElement>) => {
+  const restoreSelectedBackup = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (!file) return;
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    await api.importCustomersBackup(payload);
-    await loadData();
-    setCustomerBackupMessage("Customers backup restored successfully.");
-  };
+    try {
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        const csvText = await file.text();
+        const [header, ...rows] = csvText.trim().split(/\r?\n/);
+        if (/jobNumber/i.test(header || "")) {
+          if (!window.confirm("Restore jobs from this CSV? Existing jobs will be replaced.")) return;
+          const importedJobs = rows.filter(Boolean).map((row) => {
+            const [jobNumber, name, customer, machineType, runtimeRaw, labourRaw, statusRaw] = row.split(",");
+            let machineRunTimeMinutes = 0;
+            try { machineRunTimeMinutes = parsePrintTimeToMinutes(runtimeRaw || ""); } catch { machineRunTimeMinutes = 0; }
+            const status = statusRaw || labourRaw || "Pending";
+            return { id: crypto.randomUUID(), jobNumber, name, customer, machineType, estTimeMinutes: machineRunTimeMinutes, machineRunTimeMinutes, labourTimeMinutes: Number(statusRaw ? labourRaw || 0 : runtimeRaw || 0), status } as Job;
+          });
+          await api.importBackup({ jobs: importedJobs, materials });
+          await loadData();
+          setBackupMessage(`Jobs CSV restored (${importedJobs.length} rows).`);
+        } else if (/^name[,;]/i.test(header || "")) {
+          if (!window.confirm("Restore materials from this CSV? Existing materials will be replaced.")) return;
+          const importedMaterials = rows.filter(Boolean).map((row) => {
+            const [name, type, unit, costPerUnitRaw, stockLevelRaw, reorderThresholdRaw, color] = row.split(",");
+            return { name: String(name || "").trim(), type: String(type || "Other").trim() || "Other", unit: String(unit || "g").trim() || "g", costPerUnit: Number(costPerUnitRaw || 0), stockLevel: Number(stockLevelRaw || 0), reorderThreshold: Number(reorderThresholdRaw || 0), color: String(color || "").trim() };
+          }).filter((material) => material.name);
+          if (!importedMaterials.length) throw new Error("No valid material rows were found in this CSV.");
+          await api.importMaterialsCsv({ materials: importedMaterials });
+          await loadData();
+          setBackupMessage(`Materials CSV restored (${importedMaterials.length} rows).`);
+        } else {
+          throw new Error("This CSV file is not a supported MakerFlow backup.");
+        }
+        return;
+      }
+      const payload = JSON.parse(await file.text());
+      if (payload?.backupFormat === "makerflow-selected-backup") {
+        const includedSections = Array.isArray(payload.includedSections) ? payload.includedSections.filter((section: unknown): section is keyof typeof backupSections => typeof section === "string" && Object.prototype.hasOwnProperty.call(backupSections, section)) : [];
+        if (!includedSections.length || !payload.data || typeof payload.data !== "object") {
+          throw new Error("This MakerFlow backup does not contain any restorable sections.");
+        }
+        for (const section of includedSections as Array<keyof typeof backupSections>) {
+          for (const key of backupSections[section] as readonly string[]) {
+            if (!Array.isArray(payload.data[key])) throw new Error(`This backup is missing its ${section} data.`);
+          }
+          if (section === "workshop" && (!payload.data.machineElectricitySettings || typeof payload.data.machineElectricitySettings !== "object" || Array.isArray(payload.data.machineElectricitySettings))) {
+            throw new Error("This backup is missing its equipment settings.");
+          }
+        }
+        const sectionNames: Record<string, string> = { workshop: "Workshop jobs, materials and equipment", customers: "Customers", suppliers: "Suppliers and purchases", billing: "Billing and theme settings" };
+        const confirmed = window.confirm(`Restore ${includedSections.map((section: string) => sectionNames[section]).join(", ")}? Existing data in those sections will be replaced. Other sections will be kept.`);
+        if (!confirmed) return;
+        const currentBackup = await api.exportFullBackup();
+        const mergedBackup = { ...currentBackup };
+        const selectedSections = includedSections as Array<keyof typeof backupSections>;
+        for (const section of selectedSections) {
+          const keys = backupSections[section] as readonly string[];
+          for (const key of keys) {
+            (mergedBackup as Record<string, unknown>)[key] = payload.data[key] ?? [];
+          }
+        }
+        const currentSettings = Array.isArray(currentBackup.billingSettings) ? currentBackup.billingSettings : [];
+        const selectedBillingSettings = selectedSections.includes("billing") && Array.isArray(payload.data.billingSettings)
+          ? payload.data.billingSettings
+          : currentSettings;
+        const machineSettings = selectedSections.includes("workshop")
+          ? payload.data.machineElectricitySettings ?? {}
+          : currentSettings[0]?.machineElectricitySettings ?? {};
+        mergedBackup.billingSettings = selectedBillingSettings.map((settings: Record<string, unknown>) => ({
+          ...settings,
+          machineElectricitySettings: machineSettings,
+        }));
+        await api.importFullBackup(mergedBackup);
+        await loadData();
+        await loadBillingSettings();
+        await refreshBambuDashboard();
+        setBackupMessage(`Backup restored: ${includedSections.map((section: string) => sectionNames[section]).join(", ")}. Other sections were kept.`);
+        return;
+      }
 
-  const importSuppliersBackup = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    await api.importSuppliersBackup(payload);
-    await loadData();
-    setSupplierBackupMessage("Suppliers backup restored successfully.");
-  };
-
-  const importMachinesBackup = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    await api.importMachinesBackup(payload);
-    await loadBillingSettings();
-    await refreshBambuDashboard();
-    setMachineBackupMessage("Machines backup restored successfully.");
-  };
-
-  const importBillingBackup = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    await api.importBillingBackup(payload);
-    await loadBillingSettings();
-    setBillingBackupMessage("Billing backup restored successfully.");
+      // Keep restore support for backups created by the previous individual JSON export buttons.
+      if (Array.isArray(payload?.jobs) || Array.isArray(payload?.materials)) {
+        if (!window.confirm("Restore this full backup? This replaces all current app data.")) return;
+        await api.importFullBackup(payload);
+        await loadData();
+        await loadBillingSettings();
+        await refreshBambuDashboard();
+        setBackupMessage("Full backup restored successfully.");
+      } else if (Array.isArray(payload?.customers)) {
+        if (!window.confirm("Restore customers? This replaces the current customer list.")) return;
+        await api.importCustomersBackup(payload);
+        await loadData();
+        setBackupMessage("Customers backup restored successfully.");
+      } else if (Array.isArray(payload?.suppliers)) {
+        if (!window.confirm("Restore suppliers? This replaces suppliers and purchase history.")) return;
+        await api.importSuppliersBackup(payload);
+        await loadData();
+        setBackupMessage("Suppliers backup restored successfully.");
+      } else if (Array.isArray(payload?.bambuDevices) || payload?.machineElectricitySettings) {
+        if (!window.confirm("Restore equipment settings and telemetry? This replaces the current equipment data.")) return;
+        await api.importMachinesBackup(payload);
+        await loadBillingSettings();
+        await refreshBambuDashboard();
+        setBackupMessage("Equipment backup restored successfully.");
+      } else if (payload?.billingSettings) {
+        if (!window.confirm("Restore billing settings? This replaces the current billing and theme settings.")) return;
+        await api.importBillingBackup(payload);
+        await loadBillingSettings();
+        setBackupMessage("Billing backup restored successfully.");
+      } else {
+        throw new Error("This file is not a supported MakerFlow backup.");
+      }
+    } catch (error) {
+      setBackupMessage(error instanceof Error ? error.message : "Failed to restore backup.");
+    }
   };
 
   const submitHelpRequest = async (e: FormEvent) => {
@@ -4072,103 +4031,40 @@ function App() {
 
               <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4" style={adminCardStyle}>
                 <div>
-                  <h3 className="text-sm font-semibold" style={{ color: adminTextColor }}>Export and backup</h3>
-                  <p className="mt-1 text-xs" style={adminMutedTextStyle}>Use targeted backups for one area at a time, or use Full backup to capture everything: theme colors, machine settings, billing, jobs, materials, customers, suppliers, and Bambu machine telemetry.</p>
+                  <h3 className="text-sm font-semibold" style={{ color: adminTextColor }}>Backup and restore</h3>
+                  <p className="mt-1 text-xs" style={adminMutedTextStyle}>Choose the sections to include in one backup file. Workshop jobs, materials and equipment stay together so their links can be restored safely.</p>
                 </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Jobs backup</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export or restore job records only.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportBackupCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export</button>
-                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Restore</span>
-                        <input type="file" accept=".csv" className="hidden" onChange={importBackupCsv} />
+                <fieldset className="mt-4">
+                  <legend className="mb-2 text-sm font-medium" style={{ color: adminTextColor }}>Include in backup</legend>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {[
+                      ["workshop", "Workshop jobs, materials and equipment"],
+                      ["customers", "Customers"],
+                      ["suppliers", "Suppliers and purchase history"],
+                      ["billing", "Billing and theme settings"],
+                    ].map(([key, label]) => (
+                      <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-200">
+                        <input type="checkbox" checked={selectedBackupSections.includes(key)} onChange={() => toggleBackupSection(key)} className="h-4 w-4 accent-blue-500" />
+                        <span>{label}</span>
                       </label>
-                    </div>
+                    ))}
                   </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setSelectedBackupSections(["workshop", "customers", "suppliers", "billing"])} className="rounded-full border border-slate-600 px-3 py-1.5 text-xs">Select all</button>
+                    <button type="button" onClick={() => setSelectedBackupSections([])} className="rounded-full border border-slate-600 px-3 py-1.5 text-xs">Clear selection</button>
+                  </div>
+                </fieldset>
 
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Materials backup</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export or restore material catalog data.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportMaterialsCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export</button>
-                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Restore</span>
-                        <input type="file" accept=".csv" className="hidden" onChange={importMaterialsCsv} />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Customers backup</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export or restore customer directory and notes in JSON.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportCustomersBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
-                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Restore</span>
-                        <input type="file" accept=".json" className="hidden" onChange={importCustomersBackup} />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Suppliers backup</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export or restore suppliers and purchase history in JSON.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportSuppliersBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
-                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Restore</span>
-                        <input type="file" accept=".json" className="hidden" onChange={importSuppliersBackup} />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Equipment backup</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export or restore machine profiles plus Bambu device state and telemetry.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportMachinesBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
-                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Restore</span>
-                        <input type="file" accept=".json" className="hidden" onChange={importMachinesBackup} />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <h4 className="text-sm font-semibold text-white">Billing backup</h4>
-                    <p className="mt-1 text-xs text-slate-400">Export or restore billing settings and theme colors in JSON.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportBillingBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
-                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Restore</span>
-                        <input type="file" accept=".json" className="hidden" onChange={importBillingBackup} />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2">
-                    <h4 className="text-sm font-semibold text-white">Full backup</h4>
-                    <p className="mt-1 text-xs text-slate-400">Download or restore the complete app dataset, including all customizable settings and operational records.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={exportFullBackup} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Download</button>
-                      <label className="cursor-pointer rounded-xl border border-cyan-700 px-4 py-2 text-sm font-medium text-cyan-300">
-                        <span>Restore</span>
-                        <input type="file" accept=".json" className="hidden" onChange={importFullBackup} />
-                      </label>
-                    </div>
-                  </div>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={downloadSelectedBackup} disabled={!selectedBackupSections.length} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">Download selected backup</button>
+                  <label className="cursor-pointer rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">
+                    <span>Restore from backup file</span>
+                    <input type="file" accept=".json,.csv,application/json,text/csv" className="hidden" onChange={restoreSelectedBackup} />
+                  </label>
                 </div>
-
-                {backupMessage ? <p className="mt-4 text-sm text-cyan-300">{backupMessage}</p> : null}
-                {materialBackupMessage ? <p className="text-sm text-cyan-300">{materialBackupMessage}</p> : null}
-                {customerBackupMessage ? <p className="text-sm text-cyan-300">{customerBackupMessage}</p> : null}
-                {supplierBackupMessage ? <p className="text-sm text-cyan-300">{supplierBackupMessage}</p> : null}
-                {machineBackupMessage ? <p className="text-sm text-cyan-300">{machineBackupMessage}</p> : null}
-                {billingBackupMessage ? <p className="text-sm text-cyan-300">{billingBackupMessage}</p> : null}
-                {fullBackupMessage ? <p className="text-sm text-cyan-300">{fullBackupMessage}</p> : null}
+                <p className="mt-3 text-xs" style={adminMutedTextStyle}>A MakerFlow selected backup replaces only the sections saved in that file. Older full and individual JSON backups, plus jobs and materials CSV backups, are also supported. Full backup restores replace all current app data.</p>
+                {backupMessage ? <p role="status" className="mt-4 text-sm text-cyan-300">{backupMessage}</p> : null}
               </div>
             </section>
           </div>
@@ -4447,7 +4343,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Invoices and backup</h3>
-                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoices keep your workshop's business name, logo, and contact details, with a “Made with MakerFlow” footer. Invoice totals include SubTotal, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. Delivery (when checked on a job) is included in the Production costs subtotal. In Admin tools, pair each export/import action by data type: jobs CSV export/import, materials CSV export/import, customers JSON backup/restore, suppliers JSON backup/restore (with purchase history), machines JSON backup/restore (machine profiles + Bambu telemetry), billing JSON backup/restore, and full JSON backup download/restore. Full backup includes all customizable and operational data, including theme colors, billing settings, machine settings, jobs, materials, customers, suppliers, purchases, and Bambu machine data.</p>
+                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoices keep your workshop's business name, logo, and contact details, with a “Made with MakerFlow” footer. Invoice totals include SubTotal, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. Delivery (when checked on a job) is included in the Production costs subtotal. In Admin tools, use the single Backup and restore card to select Workshop, Customers, Suppliers, and Billing sections for one JSON backup. Workshop jobs, materials, and equipment are grouped to preserve their relationships. Restoring a selected backup replaces only its included sections; older full and individual JSON backups plus jobs/materials CSV backups remain supported. A full backup restore replaces all current app data.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Reporting page</h3>
