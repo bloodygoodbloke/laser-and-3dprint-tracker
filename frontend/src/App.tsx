@@ -1071,10 +1071,16 @@ function App() {
   const createJobFromJobsTab = async (e: FormEvent) => {
     e.preventDefault();
     let printTimeMinutes: number;
+    let setupTimeMinutes: number;
+    let postProcessingMinutes: number;
+    let labourTimeMinutes: number;
     try {
       printTimeMinutes = parsePrintTimeToMinutes(newJobForm.machineRunTimeMinutes);
+      setupTimeMinutes = parsePrintTimeToMinutes(newJobForm.setupTimeMinutes);
+      postProcessingMinutes = parsePrintTimeToMinutes(newJobForm.postProcessingMinutes);
+      labourTimeMinutes = parsePrintTimeToMinutes(newJobForm.labourTimeMinutes);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Invalid print time");
+      window.alert(error instanceof Error ? error.message : "Invalid time");
       return;
     }
     const rawCustomerName = String(newJobForm.customer || "").trim();
@@ -1088,9 +1094,9 @@ function App() {
         machineType: newJobForm.machineType,
         estTimeMinutes: printTimeMinutes,
         machineRunTimeMinutes: printTimeMinutes,
-        setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
-        postProcessingMinutes: Number(newJobForm.postProcessingMinutes || 0),
-        labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
+        setupTimeMinutes,
+        postProcessingMinutes,
+        labourTimeMinutes,
         dueDate: newJobForm.dueDate || null,
         queuePosition: Number(newJobForm.queuePosition || 0),
         qaChecklist: toChecklistArray(newJobForm.qaChecklistText),
@@ -3436,18 +3442,9 @@ function App() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <PrintTimeInput value={newJobForm.machineRunTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, machineRunTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Setup time (mins)</span>
-                        <input value={newJobForm.setupTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, setupTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Post-processing (mins)</span>
-                        <input value={newJobForm.postProcessingMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, postProcessingMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Labour time (mins)</span>
-                        <input value={newJobForm.labourTimeMinutes} onChange={(e) => setNewJobForm({ ...newJobForm, labourTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
+                      <PrintTimeInput label="Setup time" value={newJobForm.setupTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, setupTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <PrintTimeInput label="Post-processing" value={newJobForm.postProcessingMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, postProcessingMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <PrintTimeInput label="Labour time" value={newJobForm.labourTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, labourTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                       <label className="block text-sm text-slate-300">
                         <span className="mb-2 block">Deposit paid (£)</span>
                         <input type="number" step="0.01" value={newJobForm.depositPaidAmount} onChange={(e) => setNewJobForm({ ...newJobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
