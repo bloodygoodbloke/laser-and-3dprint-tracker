@@ -7,7 +7,7 @@ import { formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, IssueReportStatus, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "MakerFlow";
-const APP_VERSION = "0.6.0";
+const APP_VERSION = frontendVersion;
 const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
 const SCHEDULE_HORIZON_DAYS = 14;
 const DEFAULT_ADMIN_BACKGROUND_COLOR = "#FFFFFF";
@@ -4469,7 +4469,7 @@ function App() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">If the app is not responding</h3>
-                <p className="mt-2">For one-command local startup, run `bash start-local.sh` from the repository root; it supplies a default SQLite database URL (`file:./dev.db`) for Prisma. If running services manually, check that frontend `127.0.0.1:5173` and backend `localhost:4000` are both running, then verify backend health at `/api/health`. Restart both dev servers if either side is down.</p>
+                <p className="mt-2">Use Node.js 26.13 LTS and npm for local development. The app uses Prisma 7 with SQLite. For one-command local startup, run `bash start-local.sh` from the repository root; it supplies a default SQLite database URL (`file:./dev.db`) for Prisma. If running services manually, check that frontend `127.0.0.1:5173` and backend `localhost:4000` are both running, then verify backend health at `/api/health`. Restart both dev servers if either side is down.</p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Release notes and change history</h3>

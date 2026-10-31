@@ -66,16 +66,15 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 
 **Running locally**
 - Prerequisites:
-- Install `Node.js` (recommended: v24 LTS or newer).
-- Install `npm` (bundled with Node.js).
-- Optional: install `Docker Desktop` if you prefer Docker Compose instead of running Node directly.
+- Install Node.js 26.13.0 LTS (or a later Node 26 LTS patch) and npm. The repository includes `.nvmrc` for version managers such as nvm.
+- - Optional: install `Docker Desktop` if you prefer Docker Compose instead of running Node directly.
 - No required `.env` file for local default setup.
-- The root `start-local.sh` script sets `DATABASE_URL=file:./dev.db` by default before running Prisma; a `DATABASE_URL` you set explicitly takes precedence.
+- The root `start-local.sh` script sets `DATABASE_URL=file:./prisma/dev.db` by default before running Prisma; a `DATABASE_URL` you set explicitly takes precedence.
 - First-time setup (required once after clone):
-- `cd backend && npm install`
+- `cd backend && npm ci`
 - `npx prisma generate`
 - `npx prisma migrate deploy`
-- `cd ../frontend && npm install`
+- `cd ../frontend && npm ci`
 - Optional local env setup:
 - Preferred setup: copy `backend/.env.local.example` to `backend/.env.local` and fill values as needed.
 - `backend/.env.local` is loaded automatically by backend startup and is git-ignored.
@@ -112,12 +111,13 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 If the UI appears unresponsive, verify both ports are listening (`4000` and `5173`) and restart both dev servers.
 
 **Tech stack**
-- Backend: Node.js + TypeScript, Prisma ORM, SQLite (for local/dev) — see `backend/`.
-- Frontend: Vite + React + TypeScript — see `frontend/`.
+- Runtime: Node.js 26.13 LTS (`.nvmrc` pins the baseline; package engines require Node 26).
+- Backend: TypeScript 7, Express 5, Prisma ORM 7 with the better-sqlite3 adapter, and SQLite for local/dev — see `backend/`.
+- Frontend: React 19, Vite 8, TypeScript 7, and Tailwind CSS 4 — see `frontend/`.
 - Dev workflow: Docker Compose for local setup (see `docker-compose.yml`).
 
 **Release and documentation hygiene**
-- Version bumps in the backend and frontend package manifests should be paired with a matching changelog entry in `docs/CHANGELOG.md`.
+- Version bumps in both backend and frontend manifests and lockfiles should be paired with a dated release section in `docs/CHANGELOG.md`.
 - A repository check now enforces this when version changes are introduced, so release notes are less likely to be missed.
 
 **Implementation tracking**
@@ -154,6 +154,6 @@ If the UI appears unresponsive, verify both ports are listening (`4000` and `517
 See `docs/CHANGELOG.md` for version history and recent changes.
 
 ## Versioning and deployment diagnostics
-- `GET /api/version` reports `version`, `buildNumber`, `gitCommit`, `gitBranch`, `buildDate` and `environment`; the footer (`v0.8.0 (1545)`) and Help > Deployment Information show the same data.
+- `GET /api/version` reports `version`, `buildNumber`, `gitCommit`, `gitBranch`, `buildDate` and `environment`; the footer (`v<version> (<build>)`) and Help > Deployment Information show the same data.
 - The semantic version is the `package.json` version; build metadata is injected by GitHub Actions through Docker build args and Container App env vars.
 - See [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md) for how versions and build numbers work, how to identify and verify what is running in Azure, and troubleshooting.

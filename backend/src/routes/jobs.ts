@@ -1,7 +1,7 @@
 import { Router } from "express";
-import prisma from "../prisma";
-import { upload } from "../upload";
-import { normalizeStoredMinutes } from "../printTime";
+import prisma from "../prisma.js";
+import { upload } from "../upload.js";
+import { normalizeStoredMinutes } from "../printTime.js";
 
 const router = Router();
 
@@ -163,7 +163,7 @@ router.post("/", async (req, res) => {
 });
 
 router.post('/:id/upload', upload.single('file'), async (req, res) => {
-  const { id } = req.params;
+  const id = String(req.params.id || "");
 
   try {
     const filePath = req.file ? `/uploads/${req.file.filename}` : null;

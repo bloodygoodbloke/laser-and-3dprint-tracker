@@ -9,3 +9,6 @@ backend/dev.db
 backend/.env
 backend/.env.local
 backend/prisma/dev.db
+
+# Prisma 7 generated TypeScript client
+/backend/src/generated/prisma/

@@ -32,7 +32,7 @@ async function main() {
 
   // Environment variables
   const info = getVersionInfo({
-    APP_VERSION: "0.8.0",
+    APP_VERSION: "0.7.0",
     BUILD_NUMBER: "20261031.1545",
     GIT_COMMIT: "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
     GIT_BRANCH: "main",
@@ -40,7 +40,7 @@ async function main() {
     APP_ENVIRONMENT: "production",
   });
   assert.deepEqual(info, {
-    version: "0.8.0",
+    version: "0.7.0",
     buildNumber: "20261031.1545",
     gitCommit: "a1b2c3d",
     gitBranch: "main",
@@ -51,18 +51,18 @@ async function main() {
   assert.equal(getVersionInfo({ APP_ENVIRONMENT: "nonsense" }).environment, "Development");
 
   // Frontend formatting
-  assert.equal(front.formatVersionBadge(info), "v0.8.0 (1545)");
+  assert.equal(front.formatVersionBadge(info), "v0.7.0 (1545)");
   assert.equal(front.formatShortBuild("local"), "local");
   assert.equal(front.formatBuildDate(info.buildDate), "31-Oct-2026 15:45 UTC");
   assert.equal(front.formatBuildDate("unknown"), "unknown");
   assert.equal(
     front.formatDeploymentInfo(info),
     [
-      "MakerFlow v0.8.0",
+      "MakerFlow v0.7.0",
       "",
       "Deployment Information",
       "----------------------",
-      "Version: 0.8.0",
+      "Version: 0.7.0",
       "Build Number: 20261031.1545",
       "Git Commit: a1b2c3d",
       "Branch: main",

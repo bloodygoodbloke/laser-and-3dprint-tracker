@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getVersionInfo } from "../version";
+import { getVersionInfo } from "../version.js";
 
 const router = Router();
 

@@ -27,4 +27,4 @@ body:
     attributes:
       label: App Version
       description: Shown in the footer and on Help > Deployment Information.
-      placeholder: "0.8.0"
+      placeholder: "0.7.0"

@@ -38,7 +38,7 @@ export function formatShortBuild(buildNumber: string): string {
   return value.includes(".") ? value.slice(value.lastIndexOf(".") + 1) : value || "unknown";
 }
 
-/** "v0.8.0 (1545)" */
+/** "v0.7.0 (1545)" */
 export function formatVersionBadge(info: VersionInfo): string {
   return `v${info.version} (${formatShortBuild(info.buildNumber)})`;
 }
