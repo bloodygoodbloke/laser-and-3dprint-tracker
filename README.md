@@ -60,7 +60,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Go to Admin and use Site theme colors to style the entire app.
 - You can set five theme fields: background, text, search/input, accent button, and accent button text.
 - Start from a quick preset row, then fine-tune.
-- The default is a white, light theme using MakerFlow colors: primary blue `#3A7DFF`, dark blue `#1D63E7`, light blue `#5DA8FF`, charcoal `#1C1C1E`, and soft grey `#E5E5E7`.
+- The default branding uses a white background, charcoal text, soft grey inputs, and the MakerFlow palette: primary blue `#3A7DFF`, dark blue `#1D63E7` for hover states, and light blue `#5DA8FF` for supporting highlights. Inter is the primary UI font.
 - Presets available: MakerFlow, Light, Dark, High Contrast, Forest, Night Shift, Paper Invoice.
 - Save the theme to persist branding preferences for future sessions.
 
