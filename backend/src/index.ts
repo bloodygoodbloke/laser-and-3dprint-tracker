@@ -15,6 +15,7 @@ import makerworldRouter from "./routes/makerworld.js";
 import estimatesRouter from "./routes/estimates.js";
 import billingAuditRouter from "./routes/billing-audit.js";
 import issuesRouter from "./routes/issues.js";
+import modelMetadataRouter from "./routes/model-metadata.js";
 import { getVersionInfo } from "./version.js";
 
 const app = express();
@@ -35,6 +36,7 @@ app.use("/api/makerworld", makerworldRouter);
 app.use("/api/estimates", estimatesRouter);
 app.use("/api/billing-audit", billingAuditRouter);
 app.use("/api/issues", issuesRouter);
+app.use("/api/models", modelMetadataRouter);
 app.use("/api/admin", adminRouter);
 app.use("/uploads", express.static(process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(currentDirectory, "..", "uploads")));
 app.use(express.static(frontendDistPath));

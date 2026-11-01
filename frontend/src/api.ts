@@ -29,6 +29,26 @@ const api = {
     }
     return res.json();
   },
+  async lookupModelTitle(url: string): Promise<{ title: string; url: string; source: string }> {
+    const res = await fetch("/api/models/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: normalizeMakerWorldUrl(url) }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.error || `Could not read model page (${res.status})`);
+    return body;
+  },
+  async getModelPreviewImage(url: string): Promise<{ imageUrl: string | null }> {
+    const res = await fetch("/api/models/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: normalizeMakerWorldUrl(url) }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.error || `Could not read model image (${res.status})`);
+    return body;
+  },
   async updateJob(id: string, payload: Partial<Job>) {
     const res = await fetch(`/api/jobs/${id}`, {
       method: "PUT",
