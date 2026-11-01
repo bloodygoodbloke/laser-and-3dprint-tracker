@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Simplified new job entry to a quote-first basics form with optional model/template, pricing, and production details. New quotes default to `Quote Draft`, material usage no longer starts at an arbitrary 100 g, and costs are calculated on submission. Added a platform-neutral Model URL with best-effort model-title lookup and a source-hosted image embed in Job File Preview for 3Drop, Printables (Prusa), MakerWorld, Thingiverse, and Cults3D. The image is fetched directly from its source in the browser and is not stored in MakerFlow. Full job editing remains available; use Refresh costs after editing.
 
 ## [0.7.0] - 2026-10-31
 - Upgraded application dependencies across the stack: Prisma 7 with its SQLite adapter and ESM client, Express 5, Multer 2, React 19, Vite 8, TypeScript 7 and Tailwind CSS 4. Declared the frontend package as ESM while keeping its PostCSS config explicitly CommonJS, updated lockfile-based installs and local setup guidance, and checked Prisma migrations against a temporary copy of the local database.

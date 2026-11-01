@@ -19,6 +19,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 
 **Current functionality**
 - Manage jobs with customer details, machine type, machine runtime, and separate labour time.
+- Start a quote with the basics (job, customer, equipment, estimated print time, and materials); costs are calculated when saved, with production tracking details available when you edit the job.
 - Support quote lifecycle and conversion with statuses (`Quote Draft`, `Quote Sent`, `Quote Approved`) and one-click conversion to active jobs.
 - New customer names entered during job creation can be captured immediately in a CRM Lite details popup.
 - Create jobs directly from the Jobs tab, edit existing jobs directly under the selected expanded job card, and delete jobs from expandable job card actions.
@@ -38,7 +39,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Use a dedicated Reports page with date-range, status, machine, and customer filters plus CSV export-ready report rows, summary metrics, and margin breakdown views.
 - Use the Help page as an in-app guide and raise bug/feature requests directly from the app. Each submission creates a GitHub issue (labelled `bug` or `enhancement`) with app version, build number, environment, browser and date/time attached, then shows the issue number and link. See `docs/github-issues.md`.
 - Bambu telemetry is currently shown as an alpha/coming-soon feature in Machines; live status, event automation, spool deductions, failure logs, and predictive maintenance are not currently available in the app.
-- Import from a MakerWorld model URL (v1 proof of concept): the job name is derived from the URL slug (e.g. `3366805-pumpkin-thermoform` becomes `Pumpkin thermoform`) and the URL is saved as the job's model URL. No network requests are made; print time, material, images and profile data are not imported.
+- Add a generic Model URL to a quote from 3Drop, Printables (Prusa), MakerWorld, Thingiverse, or Cults3D. The backend tries to read the model title and fills the job name; the source link is saved with the job. Job File Preview can also embed the source page's image directly, without downloading or storing the picture in MakerFlow. Title and image lookup depend on each site allowing page access, so enter the name manually if lookup is blocked or the link is a search/category page.
 - Manage machine profiles from a dedicated Machines tab with add/edit/remove workflows.
 - Calculate production costs for 3D and laser workflows using machine runtime electricity + depreciation plus separate labour-time charging.
 - Configure billing rules for percentage markups, electricity, labour rate, workshop hourly rate, per-machine wattage/depreciation assumptions, and invoice add-ons (delivery + VAT).
