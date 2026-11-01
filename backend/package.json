@@ -13,8 +13,9 @@
     "start": "node dist/index.js",
     "prisma": "prisma",
     "check:api-smoke": "node ../scripts/smoke-api-check.js",
-    "check:local": "npm run test:print-time && npm run check:version && npm run check:api-smoke && npm run check:tracker && npm run check:quality-cadence && npm run check:release",
+    "check:local": "npm run test:print-time && npm run test:auth && npm run check:version && npm run check:api-smoke && npm run check:tracker && npm run check:quality-cadence && npm run check:release",
     "test:print-time": "node --test ../scripts/print-time.test.js",
+    "test:auth": "node --import tsx --test ../scripts/auth.test.js",
     "check:version": "node ../scripts/check-version-info.js",
     "check:release": "node ../scripts/check-release-notes.js",
     "check:tracker": "node ../scripts/check-tracker-consistency.js",
@@ -28,6 +29,7 @@
     "cors": "^2.8.5",
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
+    "jose": "^6.2.14",
     "multer": "^2.5.0",
     "playwright": "^1.64.1"
   },

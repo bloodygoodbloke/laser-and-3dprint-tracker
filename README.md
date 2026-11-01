@@ -126,6 +126,7 @@ If the UI appears unresponsive, verify both ports are listening (`4000` and `517
 - Open bugs and feature requests are tracked in GitHub Issues (see `docs/github-issues.md`).
 - Implemented features and completed bug fixes are tracked in `docs/implementation-log.md`.
 - Release notes are tracked in `docs/CHANGELOG.md`.
+- Sign-in, super admin and user access setup is in `docs/authentication.md`.
 
 **Tracker workflow commands**
 - Validate tracker consistency: `node scripts/check-tracker-consistency.js`
@@ -134,7 +135,7 @@ If the UI appears unresponsive, verify both ports are listening (`4000` and `517
 - Start backend and frontend together from repo root: `bash start-local.sh`
 
 **Local testing and smoke checks**
-- See `docs/local-testing-and-checks.md` for terminal-first checks you can run directly without using Copilot chat credits.
+- See `docs/local-testing-and-checks.md` for terminal-first checks you can run directly on your machine.
 
 **Project scope baseline**
 - Original scope/goals from the initial planning brief are now maintained here (merged from `docs/input.md`).

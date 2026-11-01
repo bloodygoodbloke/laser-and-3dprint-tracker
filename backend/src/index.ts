@@ -17,15 +17,35 @@ import billingAuditRouter from "./routes/billing-audit.js";
 import issuesRouter from "./routes/issues.js";
 import modelMetadataRouter from "./routes/model-metadata.js";
 import { getVersionInfo } from "./version.js";
+import { authGate } from "./auth.js";
+import accessRouter from "./routes/access.js";
+import prisma from "./prisma.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const frontendDistPath = path.resolve(currentDirectory, "../../frontend/dist");
 
-app.use(cors());
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean)
+  : process.env.NODE_ENV === "production" ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"];
+const requireAuth = authGate(["/health", "/version", "/branding"]);
+
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
+// Everything under /api (except health/version), uploads and the test page require sign-in.
+app.use("/api", requireAuth);
+app.use("/uploads", requireAuth);
+app.use("/makerworld-test", requireAuth);
+
+// Public: only the business name and logo, so the sign-in page can show them before login.
+app.get("/api/branding", async (_req, res) => {
+  const setting = await prisma.billingSetting.findFirst();
+  res.json({ businessName: setting?.businessName ?? "", businessLogoUrl: setting?.businessLogoUrl ?? "" });
+});
+
+app.use("/api", accessRouter);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/materials", materialsRouter);
 app.use("/api/billing-settings", billingRouter);
@@ -90,7 +110,7 @@ app.get("/makerworld-test", async (req, res) => {
   }
 });
 
-app.get("*", (req, res, next) => {
+app.get("/{*splat}", (req, res, next) => {
   if (req.path === "/api" || req.path.startsWith("/api/") || req.path.startsWith("/uploads/")) {
     return next();
   }

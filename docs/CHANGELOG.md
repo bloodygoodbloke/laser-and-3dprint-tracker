@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Sign-in now works end to end with a separate MakerFlow account; the deploy build passes the sign-in settings to the frontend, the backend logs why a token is rejected, and the auth docs cover production setup.
+- Added sign-in foundations: the API, uploads and tools page now require a verified Microsoft Entra External ID sign-in; access is by invitation or approval; a super admin (set by server configuration) manages invites, approvals and removals from Admin > User access; new sign-in page with MakerFlow and business branding, Log out button, and a randomly generated workspace ID shown in Billing. See `docs/authentication.md`.
+- Job file previews and downloads now fetch uploads with the sign-in token so they keep working once authentication is on.
+- Equipment now has a purchase date, a Years/Months/Days/Hours replacement runtime, a manual runtime-outside-tracker entry and an estimated replacement date based on usage; the depreciation field is labelled Purchase cost.
+- Fixed the backend failing to start on Express 5 (catch-all route syntax) and the frontend smoke check expecting the pre-rebrand title.
+- Consolidated AI/tracker guidance into `docs/agent.md` and archived the brand plan.
 - Added an optional website URL to supplier records, shown as a safe external link and preserved in supplier and full backups.
 - Simplified new job entry to a quote-first basics form with optional model/template, pricing, and production details. New quotes default to `Quote Draft`, material usage no longer starts at an arbitrary 100 g, and costs are calculated on submission. Added a platform-neutral Model URL with best-effort model-title lookup and a source-hosted image embed in Job File Preview for 3Drop, Printables (Prusa), MakerWorld, Thingiverse, and Cults3D. The image is fetched directly from its source in the browser and is not stored in MakerFlow. Full job editing remains available; use Refresh costs after editing.
 

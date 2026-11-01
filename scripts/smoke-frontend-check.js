@@ -6,7 +6,7 @@
  */
 
 const FRONTEND_BASE = process.env.FRONTEND_BASE || "http://127.0.0.1:5173";
-const EXPECTED_TITLE = "Fabrication Workshop Tracker";
+const EXPECTED_TITLE = process.env.EXPECTED_TITLE || "MakerFlow";
 
 async function main() {
   console.log(`Running frontend smoke check against ${FRONTEND_BASE}`);

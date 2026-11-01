@@ -41,12 +41,6 @@ The deploy workflow only sets the version variables, so this setting survives de
 
 `.github/ISSUE_TEMPLATE/bug_report.yml` and `feature_request.yml` provide the same fields (including version, build, environment and browser) when issues are raised directly on GitHub. Blank issues are disabled.
 
-## Tracking work
-
-- Open work: GitHub Issues (filter by the `bug` / `enhancement` labels).
-- Completed work: `docs/implementation-log.md` (stable `CHG-XXX` IDs) and `docs/CHANGELOG.md`.
-- `node scripts/check-tracker-consistency.js` now validates only the implementation log.
-
 ## Troubleshooting
 
 | Message | Likely cause |

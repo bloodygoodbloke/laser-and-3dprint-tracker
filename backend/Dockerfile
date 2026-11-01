@@ -10,6 +10,9 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+ARG VITE_ENTRA_CLIENT_ID=
+ARG VITE_ENTRA_AUTHORITY=
+ENV VITE_ENTRA_CLIENT_ID=$VITE_ENTRA_CLIENT_ID VITE_ENTRA_AUTHORITY=$VITE_ENTRA_AUTHORITY
 RUN npm run build
 WORKDIR /app/backend
 ARG APP_VERSION=

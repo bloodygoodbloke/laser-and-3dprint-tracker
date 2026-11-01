@@ -63,6 +63,8 @@ jobs:
             GIT_BRANCH=${{ env.GIT_BRANCH }}
             BUILD_DATE=${{ env.BUILD_DATE }}
             APP_ENVIRONMENT=Production
+            VITE_ENTRA_CLIENT_ID=${{ vars.ENTRA_CLIENT_ID }}
+            VITE_ENTRA_AUTHORITY=${{ vars.ENTRA_AUTHORITY }}
           tags: ${{ env.ACR_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -1,8 +1,6 @@
-# Local Testing And Checks (No Copilot Credits)
+# Local Testing And Checks
 
-This guide explains how to run project checks directly in your own terminal.
-
-Running these commands yourself does not use Copilot chat credits. They run on your machine with Node, npm, curl, and your local project files.
+This guide explains how to run project checks directly in your own terminal, using Node, npm, curl and your local project files.
 
 ## Prerequisites
 

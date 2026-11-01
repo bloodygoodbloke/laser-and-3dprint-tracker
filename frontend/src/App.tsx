@@ -1,7 +1,12 @@
-import { createElement, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
 import { fetchHealth, fetchVersionInfo, formatBuildDate, formatDeploymentInfo, formatUptime, formatVersionBadge, frontendVersion, type HealthInfo, type VersionInfo } from "./version";
 import PrintTimeInput from "./PrintTimeInput";
+import { calculateMachineLifecycle } from "./machineLifecycle";
+import JobFilePreview from "./JobFilePreview";
+import UserAccessCard from "./UserAccessCard";
+import { useAuth } from "./AuthContext";
+import RuntimeDurationInput, { formatHoursAsDuration } from "./RuntimeDurationInput";
 import { formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, IssueReportStatus, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
@@ -226,8 +231,10 @@ const normalizeBillingSettingsForUi = (settings: Partial<BillingSettings>): Bill
         {
           name: machineName,
           wattage: Number(machineSetting?.wattage ?? 0),
+          purchaseDate: machineSetting?.purchaseDate || "",
           depreciationCost: Number(machineSetting?.depreciationCost ?? 0),
           replacementRunHours: Number(machineSetting?.replacementRunHours ?? 0),
+          manualRunHours: Number(machineSetting?.manualRunHours ?? 0),
         },
       ]),
     ),
@@ -285,6 +292,7 @@ const buildBambuDashboardFingerprint = (payload: BambuDashboardPayload | null) =
 };
 
 function App() {
+  const { user: currentUser, logout } = useAuth();
   const KG_TO_G = 1000;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -305,7 +313,7 @@ function App() {
   const [showMaterialEditor, setShowMaterialEditor] = useState(false);
   const [editingMachineName, setEditingMachineName] = useState<string | null>(null);
   const [showMachineEditor, setShowMachineEditor] = useState(false);
-  const [machineForm, setMachineForm] = useState({ name: "", wattage: "0", depreciationCost: "0", replacementRunHours: "0" });
+  const [machineForm, setMachineForm] = useState({ name: "", wattage: "0", purchaseDate: "", depreciationCost: "0", replacementRunHours: "0", manualRunHours: "0" });
   const [machineMessage, setMachineMessage] = useState("");
   const [savingBilling, setSavingBilling] = useState(false);
   const [backupMessage, setBackupMessage] = useState("");
@@ -1022,13 +1030,13 @@ function App() {
   const openAddMachineForm = () => {
     setActiveTab("machines");
     setEditingMachineName(null);
-    setMachineForm({ name: "", wattage: "0", depreciationCost: "0", replacementRunHours: "0" });
+    setMachineForm({ name: "", wattage: "0", purchaseDate: "", depreciationCost: "0", replacementRunHours: "0", manualRunHours: "0" });
     setShowMachineEditor(true);
   };
 
   const closeMachineForm = () => {
     setEditingMachineName(null);
-    setMachineForm({ name: "", wattage: "0", depreciationCost: "0", replacementRunHours: "0" });
+    setMachineForm({ name: "", wattage: "0", purchaseDate: "", depreciationCost: "0", replacementRunHours: "0", manualRunHours: "0" });
     setShowMachineEditor(false);
   };
 
@@ -1040,8 +1048,10 @@ function App() {
     setMachineForm({
       name: machineName,
       wattage: String(existing.wattage ?? 0),
+      purchaseDate: existing.purchaseDate ?? "",
       depreciationCost: String(existing.depreciationCost ?? 0),
       replacementRunHours: String(existing.replacementRunHours ?? 0),
+      manualRunHours: String(existing.manualRunHours ?? 0),
     });
     setShowMachineEditor(true);
   };
@@ -1060,11 +1070,18 @@ function App() {
       delete nextSettings.machineElectricitySettings[editingMachineName];
     }
 
+    if (!Number.isFinite(Number(machineForm.replacementRunHours || 0)) || !Number.isFinite(Number(machineForm.manualRunHours || 0))) {
+      setMachineMessage("Runtime values must be non-negative numbers.");
+      return;
+    }
+
     nextSettings.machineElectricitySettings[normalizedName] = {
       name: normalizedName,
       wattage: Number(machineForm.wattage || 0),
+      purchaseDate: machineForm.purchaseDate || "",
       depreciationCost: Number(machineForm.depreciationCost || 0),
       replacementRunHours: Number(machineForm.replacementRunHours || 0),
+      manualRunHours: Number(machineForm.manualRunHours || 0),
     };
 
     setBillingSettings(nextSettings);
@@ -2448,6 +2465,11 @@ function App() {
                 />
               </button>
             ) : null}
+            {logout ? (
+              <button type="button" onClick={logout} title={currentUser.email} className="shrink-0 rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">
+                Log out
+              </button>
+            ) : null}
           </div>
         </header>
 
@@ -2927,29 +2949,7 @@ function App() {
                             </div>
                           ) : null}
                           {job.filePath ? (
-                            <div className="mt-3 space-y-3">
-                              <div className="flex flex-wrap gap-3 text-xs">
-                                <a className="text-cyan-300 underline" href={job.filePath} target="_blank" rel="noreferrer">Open file</a>
-                                <a className="text-cyan-300 underline" href={job.filePath} download>Download file</a>
-                              </div>
-                              {getPreviewType(job.filePath) === "svg" ? (
-                                <div className="overflow-hidden rounded-xl border border-slate-800 bg-white p-2">
-                                  <img src={job.filePath} alt={`${job.name} preview`} className="max-h-72 w-full object-contain" />
-                                </div>
-                              ) : null}
-                              {getPreviewType(job.filePath) === "stl" ? (
-                                <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
-                                  {createElement("model-viewer", {
-                                    src: job.filePath,
-                                    style: { width: "100%", height: "320px", backgroundColor: "#0f172a" },
-                                    "camera-controls": "",
-                                    "auto-rotate": "",
-                                    "shadow-intensity": "1",
-                                    exposure: "1",
-                                  })}
-                                </div>
-                              ) : null}
-                            </div>
+                            <JobFilePreview filePath={job.filePath} jobName={job.name} previewType={getPreviewType(job.filePath)} />
                           ) : (
                             <p className="mt-3 text-sm text-slate-400">Upload an SVG or STL file to preview it here.</p>
                           )}
@@ -3729,13 +3729,15 @@ function App() {
                     <input type="number" step="0.1" value={machineForm.wattage} onChange={(e) => setMachineForm({ ...machineForm, wattage: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                   </label>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Depreciation cost</span>
-                    <input type="number" step="0.01" value={machineForm.depreciationCost} onChange={(e) => setMachineForm({ ...machineForm, depreciationCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    <span className="w-56 shrink-0">Purchase date</span>
+                    <input type="date" value={machineForm.purchaseDate} onChange={(e) => setMachineForm({ ...machineForm, purchaseDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                   </label>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Replacement runtime (h)</span>
-                    <input type="number" step="0.1" value={machineForm.replacementRunHours} onChange={(e) => setMachineForm({ ...machineForm, replacementRunHours: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    <span className="w-56 shrink-0">Purchase cost</span>
+                    <input type="number" step="0.01" value={machineForm.depreciationCost} onChange={(e) => setMachineForm({ ...machineForm, depreciationCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                   </label>
+                  <RuntimeDurationInput value={machineForm.replacementRunHours} onChange={(hours) => setMachineForm({ ...machineForm, replacementRunHours: hours })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                  <RuntimeDurationInput label="Runtime outside tracker (added to jobs logged here)" value={machineForm.manualRunHours} onChange={(hours) => setMachineForm({ ...machineForm, manualRunHours: hours })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
 
                   <div className="flex justify-end gap-3">
                     <button type="button" onClick={closeMachineForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel</button>
@@ -3751,7 +3753,16 @@ function App() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-medium text-white">{machineName}</p>
-                      <p className="text-sm text-slate-400">{machineSetting.wattage ?? 0}W • Depreciation {formatCurrency(machineSetting.depreciationCost ?? 0)} • Runtime {machineSetting.replacementRunHours ?? 0}h</p>
+                      <p className="text-sm text-slate-400">{machineSetting.wattage ?? 0}W • Purchase cost {formatCurrency(machineSetting.depreciationCost ?? 0)} • Replacement runtime {formatHoursAsDuration(Number(machineSetting.replacementRunHours ?? 0))}</p>
+                      {(() => {
+                        const lifecycle = calculateMachineLifecycle(machineName, machineSetting.purchaseDate, Number(machineSetting.replacementRunHours ?? 0), jobs, Number(machineSetting.manualRunHours ?? 0));
+                        return (
+                          <p className="text-sm text-slate-500">
+                            Purchased {machineSetting.purchaseDate || "not set"} • Run so far {formatHoursAsDuration(lifecycle.usedHours)} • Remaining {formatHoursAsDuration(lifecycle.remainingHours)} • Est. replacement{" "}
+                            {lifecycle.replacementDate ? lifecycle.replacementDate.toLocaleDateString() : machineSetting.purchaseDate ? "n/a (no runtime logged yet)" : "set a purchase date"}
+                          </p>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       {machineName === linkedBambuMachineName ? <span className="rounded-full bg-cyan-600/20 px-3 py-1 text-xs text-cyan-300">Bambu linked</span> : null}
@@ -3961,6 +3972,7 @@ function App() {
 
         {activeTab === "admin" && (
           <div className="space-y-6" style={{ color: adminTextColor }}>
+            {currentUser.isSuperAdmin ? <UserAccessCard /> : null}
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6" style={adminSectionStyle}>
               <h2 className="text-xl font-semibold">Admin backup & data tools</h2>
               <p className="mt-2 text-sm text-slate-400" style={adminMutedTextStyle}>Export jobs, materials, and the full app data snapshot, then restore them later if needed.</p>
@@ -4164,6 +4176,7 @@ function App() {
                   <p className="mt-2 text-sm text-slate-400">Configure business identity and billing rules in one dedicated area.</p>
                 </div>
               </div>
+              <p className="mt-3 text-xs text-slate-400">Workspace ID: <span className="select-all font-mono text-slate-200">{currentUser.workspaceId}</span> (quote this ID when contacting support)</p>
               {billingSaveMessage ? <p className="mt-3 text-sm text-cyan-300">{billingSaveMessage}</p> : null}
 
               <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
@@ -4453,6 +4466,9 @@ function App() {
               </div>
               <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
                 <h3 className="font-semibold text-white">Raise a bug or feature request</h3>
+                <p className="mt-2 text-sm text-slate-300">
+                  Open requests are tracked in <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>.
+                </p>
                 <p className="mt-2 text-sm text-slate-300">
                   Create an issue in GitHub to report a problem or suggest an improvement. Choose a request type, set its priority, and add a short title and clear details. The app adds its version, build, environment, browser, and submission time automatically.
                 </p>

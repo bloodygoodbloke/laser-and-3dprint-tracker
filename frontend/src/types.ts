@@ -23,8 +23,10 @@ export interface JobMaterial {
 export interface MachineElectricitySetting {
   name: string;
   wattage: number;
+  purchaseDate?: string;
   depreciationCost?: number;
   replacementRunHours?: number;
+  manualRunHours?: number;
 }
 
 export interface MaterialTypeMarkupSetting {
