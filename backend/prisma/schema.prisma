@@ -117,6 +117,7 @@ model Material {
 model Supplier {
   id            String           @id @default(cuid())
   name          String
+  websiteUrl    String           @default("")
   contactEmail  String           @default("")
   contactPhone  String           @default("")
   notes         String           @default("")

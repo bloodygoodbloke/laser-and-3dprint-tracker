@@ -9,11 +9,12 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, contactEmail, contactPhone, notes } = req.body || {};
+  const { name, websiteUrl, contactEmail, contactPhone, notes } = req.body || {};
 
   const supplier = await prisma.supplier.create({
     data: {
       name: String(name || "").trim(),
+      websiteUrl: String(websiteUrl || "").trim(),
       contactEmail: String(contactEmail || "").trim(),
       contactPhone: String(contactPhone || "").trim(),
       notes: String(notes || "").trim(),
@@ -26,13 +27,14 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, contactEmail, contactPhone, notes } = req.body || {};
+  const { name, websiteUrl, contactEmail, contactPhone, notes } = req.body || {};
 
   try {
     const supplier = await prisma.supplier.update({
       where: { id },
       data: {
         name: String(name || "").trim(),
+        websiteUrl: String(websiteUrl || "").trim(),
         contactEmail: String(contactEmail || "").trim(),
         contactPhone: String(contactPhone || "").trim(),
         notes: String(notes || "").trim(),

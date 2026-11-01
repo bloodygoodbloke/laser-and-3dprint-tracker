@@ -33,7 +33,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Track materials with colour, grouped material-type views, and quick copy/edit workflows.
 - Material creation/editing is managed in the Materials tab (Admin no longer contains a duplicate add-material form).
 - Manage CRM Lite customer records (name, address, email, phone, notes) with recent order history lookup.
-- Manage supplier records and material purchase history (material, quantity, cost, date, notes) from a dedicated Suppliers tab.
+- Manage supplier records, website URLs, and material purchase history (material, quantity, cost, date, notes) from a dedicated Suppliers tab.
 - Track margin reporting by machine, material type, and customer from the Reports page.
 - Monitor delivery and utilization KPIs including on-time rate, overdue open jobs, queued runtime, and per-machine utilization.
 - Use a dedicated Reports page with date-range, status, machine, and customer filters plus CSV export-ready report rows, summary metrics, and margin breakdown views.

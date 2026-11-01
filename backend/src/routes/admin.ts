@@ -275,6 +275,7 @@ router.post("/backup/suppliers", async (req, res) => {
       const createdSupplier = await tx.supplier.create({
         data: {
           name: String(supplier.name || "").trim(),
+          websiteUrl: String(supplier.websiteUrl || "").trim(),
           contactEmail: String(supplier.contactEmail || "").trim(),
           contactPhone: String(supplier.contactPhone || "").trim(),
           notes: String(supplier.notes || "").trim(),
@@ -659,6 +660,7 @@ router.post("/backup/full", async (req, res) => {
       const createdSupplier = await tx.supplier.create({
         data: {
           name: String(supplier.name || "").trim(),
+          websiteUrl: String(supplier.websiteUrl || "").trim(),
           contactEmail: String(supplier.contactEmail || "").trim(),
           contactPhone: String(supplier.contactPhone || "").trim(),
           notes: String(supplier.notes || "").trim(),

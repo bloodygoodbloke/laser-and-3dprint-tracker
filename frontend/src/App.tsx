@@ -18,6 +18,17 @@ const BILLING_LOCAL_STORAGE_KEY = "billing-settings-local-backup-v1";
 const BAMBU_POLL_INTERVAL_ACTIVE_MS = 30000;
 const BAMBU_POLL_INTERVAL_IDLE_MS = 90000;
 
+const getSafeExternalUrl = (value?: string) => {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+};
+
 type ThemePreset = {
   name: string;
   background: string;
@@ -306,7 +317,7 @@ function App() {
   const [customerHistory, setCustomerHistory] = useState<Job[]>([]);
   const [customerMessage, setCustomerMessage] = useState("");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [supplierForm, setSupplierForm] = useState({ name: "", contactEmail: "", contactPhone: "", notes: "" });
+  const [supplierForm, setSupplierForm] = useState({ name: "", websiteUrl: "", contactEmail: "", contactPhone: "", notes: "" });
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [supplierPurchases, setSupplierPurchases] = useState<MaterialPurchase[]>([]);
@@ -2132,7 +2143,7 @@ function App() {
   };
 
   const resetSupplierForm = () => {
-    setSupplierForm({ name: "", contactEmail: "", contactPhone: "", notes: "" });
+    setSupplierForm({ name: "", websiteUrl: "", contactEmail: "", contactPhone: "", notes: "" });
     setEditingSupplierId(null);
   };
 
@@ -2157,6 +2168,7 @@ function App() {
     setEditingSupplierId(supplier.id);
     setSupplierForm({
       name: supplier.name || "",
+      websiteUrl: supplier.websiteUrl || "",
       contactEmail: supplier.contactEmail || "",
       contactPhone: supplier.contactPhone || "",
       notes: supplier.notes || "",
@@ -3869,6 +3881,10 @@ function App() {
                   <input value={supplierForm.name} onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
                 </label>
                 <label className="flex items-center gap-4 text-sm text-slate-300">
+                  <span className="w-40 shrink-0">Website URL</span>
+                  <input type="url" placeholder="https://example.com" value={supplierForm.websiteUrl} onChange={(e) => setSupplierForm({ ...supplierForm, websiteUrl: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                </label>
+                <label className="flex items-center gap-4 text-sm text-slate-300">
                   <span className="w-40 shrink-0">Email</span>
                   <input value={supplierForm.contactEmail} onChange={(e) => setSupplierForm({ ...supplierForm, contactEmail: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                 </label>
@@ -3888,22 +3904,30 @@ function App() {
               <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
                 <h3 className="text-lg font-semibold text-white">Suppliers</h3>
                 <div className="space-y-2">
-                  {suppliers.map((supplier) => (
-                    <div key={supplier.id} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-white">{supplier.name}</p>
-                          <p className="text-xs text-slate-400">{supplier.contactEmail || "No email"} • {supplier.contactPhone || "No phone"}</p>
+                  {suppliers.map((supplier) => {
+                    const websiteUrl = getSafeExternalUrl(supplier.websiteUrl);
+                    return (
+                      <div key={supplier.id} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-white">{supplier.name}</p>
+                            <p className="text-xs text-slate-400">{supplier.contactEmail || "No email"} • {supplier.contactPhone || "No phone"}</p>
+                            {supplier.websiteUrl ? (
+                              <p className="mt-1 break-all text-xs">
+                                {websiteUrl ? <a className="text-cyan-300 underline" href={websiteUrl} target="_blank" rel="noopener noreferrer">{supplier.websiteUrl}</a> : supplier.websiteUrl}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => loadSupplierPurchases(supplier.id)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Purchases</button>
+                            <button type="button" onClick={() => startEditingSupplier(supplier)} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">Edit</button>
+                            <button type="button" onClick={() => removeSupplier(supplier.id)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Delete</button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => loadSupplierPurchases(supplier.id)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Purchases</button>
-                          <button type="button" onClick={() => startEditingSupplier(supplier)} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">Edit</button>
-                          <button type="button" onClick={() => removeSupplier(supplier.id)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Delete</button>
-                        </div>
+                        {supplier.notes ? <p className="mt-2 text-xs text-slate-400">{supplier.notes}</p> : null}
                       </div>
-                      {supplier.notes ? <p className="mt-2 text-xs text-slate-400">{supplier.notes}</p> : null}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

@@ -1,0 +1,1 @@
+ALTER TABLE "Supplier" ADD COLUMN "websiteUrl" TEXT NOT NULL DEFAULT '';

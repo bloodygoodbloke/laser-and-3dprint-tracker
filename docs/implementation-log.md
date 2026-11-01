@@ -2,7 +2,7 @@
 
 Tracks implemented features and completed bug fixes from day-to-day execution work.
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 
 | ID | Type | Priority | Status | Title | Actioned On | Details |
 |---|---|---|---|---|---|---|
@@ -93,6 +93,7 @@ Last updated: 2026-10-31
 | CHG-098 | Feature | P2 Medium | Implemented | GitHub Issues replaces backlog workflow | 2026-10-31 | Help page bug/feature form now creates GitHub issues via `POST /api/issues` (labels `bug`/`enhancement`, version/build/environment/browser/date metadata, shows issue number and URL; token from `GITHUB_TOKEN`). Removed `docs/backlog.md`, the Direct to backlog toggle, email export and the Admin Help requests inbox with their `/api/admin` routes; added issue templates and `docs/github-issues.md`. |
 | CHG-100 | Documentation | P2 Medium | Implemented | Release 0.7.0 and upgrade Node.js and application dependencies | 2026-10-31 | Set Node.js 26.13 LTS as the supported runtime and upgraded Prisma 7 with the SQLite adapter and ESM client, Express 5, Multer 2, React 19, Vite 8, TypeScript 7, and Tailwind CSS 4. Updated container/local install workflows and release documentation; checked Prisma migrations against a temporary copy of the local database. |
 | CHG-101 | Feature | P2 Medium | Implemented | Quick quote entry for new jobs | 2026-10-31 | Reduced the new-job form to job name, customer, equipment, print time, and material usage; added a generic Model URL with best-effort title lookup and source-hosted image preview for 3Drop, Printables (Prusa), MakerWorld, Thingiverse, and Cults3D, without storing source images in MakerFlow. Templates, optional pricing, and production tracking sit behind disclosures. New entries default to Quote Draft and have costs calculated on submission. The source link is saved; users can enter a name manually when a site blocks lookup or the link is not a specific model page. Full edit fields remain available, with Refresh costs for recalculation after edits. |
+| CHG-102 | Feature | P3 Low | Implemented | Supplier website URLs | 2026-11-01 | Added an optional supplier website URL to create/edit workflows, displayed valid HTTP(S) addresses as external links, and preserved the field in supplier and full backup restores. |
 
 ## New Entry Template
 

@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Added an optional website URL to supplier records, shown as a safe external link and preserved in supplier and full backups.
 - Simplified new job entry to a quote-first basics form with optional model/template, pricing, and production details. New quotes default to `Quote Draft`, material usage no longer starts at an arbitrary 100 g, and costs are calculated on submission. Added a platform-neutral Model URL with best-effort model-title lookup and a source-hosted image embed in Job File Preview for 3Drop, Printables (Prusa), MakerWorld, Thingiverse, and Cults3D. The image is fetched directly from its source in the browser and is not stored in MakerFlow. Full job editing remains available; use Refresh costs after editing.
 
 ## [0.7.0] - 2026-10-31

@@ -132,6 +132,7 @@ export interface Job {
 export interface Supplier {
   id: string;
   name: string;
+  websiteUrl?: string;
   contactEmail?: string;
   contactPhone?: string;
   notes?: string;
