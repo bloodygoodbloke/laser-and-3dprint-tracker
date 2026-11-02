@@ -30,7 +30,11 @@ Set in `frontend/.env.local` (build-time): `VITE_ENTRA_CLIENT_ID` and `VITE_ENTR
 
 ## Uploads
 
-Files under `/uploads` require sign-in. Because plain links and `<img>` tags cannot send the token, job file previews, Open file and Download file fetch the file with the token and show it from a temporary in-memory URL (`frontend/src/JobFilePreview.tsx`). Do not link to `/uploads/...` directly from the UI. File type and content validation is still tracked in #25.
+Files under `/uploads` require sign-in. Because plain links and `<img>` tags cannot send the token, job file previews, Open file and Download file fetch the file with the token and show it from a temporary in-memory URL (`frontend/src/JobFilePreview.tsx`). Do not link to `/uploads/...` directly from the UI.
+
+Uploads are limited to 10 MB and the server accepts SVG, STL, PNG, JPG/JPEG, WebP and GIF files. The backend checks both the filename extension and file contents; the browser's `accept` attribute and the supplied MIME type are not trusted. SVG content is rejected if it contains scripts, event handlers, active embedded elements, or external references. SVG responses use `nosniff`, a restrictive sandbox Content Security Policy and attachment disposition; the UI previews SVG through an authenticated fetch rather than a direct same-origin link. Files remain in memory until validation succeeds, then are written under a generated UUID filename. Rejected files are never written to disk, and a file is removed if saving its job reference fails.
+
+Focused checks cover accepted SVG/STL/image signatures, unsupported extensions, mismatched contents, unsafe SVG, empty files and the size limit. Run `npm run test:upload` from `backend/`.
 
 ## Production
 

@@ -100,7 +100,7 @@ const getFullBackupPayload = async (includeBillingSettings = true) => {
       "bambu maintenance predictions",
       "bambu failure logs",
       "reports (derived from jobs, costs, customers, and materials)",
-      ...(includeBillingSettings ? ["billing settings", "theme colors"] : []),
+      ...(includeBillingSettings ? ["billing settings", "theme colours"] : []),
     ],
     jobs,
     materials,

@@ -1,22 +1,40 @@
-import fs from "fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from "node:fs";
 import multer from "multer";
+import type { RequestHandler } from "express";
+import { MAX_UPLOAD_BYTES } from "./uploadValidation.js";
 
-const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
-const uploadDir = process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(currentDirectory, "..", "uploads");
-fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const extension = path.extname(file.originalname) || "";
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
-    cb(null, uniqueName);
-  },
-});
-
+// Keep uploads in memory until their extension and content have both been validated.
 export const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
 });
+
+export const uploadSingleFile: RequestHandler = (req, res, next) => {
+  upload.single("file")(req, res, (error: unknown) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError) {
+      const status = error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+      const message = error.code === "LIMIT_FILE_SIZE"
+        ? "File exceeds the 10 MB upload limit."
+        : error.code === "LIMIT_UNEXPECTED_FILE"
+          ? "Upload one file using the 'file' field."
+          : "The file upload could not be accepted.";
+      res.status(status).json({ error: message });
+      return;
+    }
+
+    next(error);
+  });
+};
+
+export const removeUploadedFile = async (filePath: string) => {
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+};

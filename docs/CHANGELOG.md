@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Secured job file uploads (#25): server-side allowlisting and content-signature validation for SVG, STL and supported image files, 10 MB limit with clear errors, safe SVG restrictions and response headers, generated server filenames, and focused upload tests.
+- Fixed Billing numeric fields (#39): a value of 0 now shows as "0" and can be saved, decimals such as 0.1 can be typed without the box resetting, and a 0% material or electricity markup is respected instead of reverting to 25%.
+- UK English (#38): "catalogue" and "colours" in remaining labels and help text, and the page language is now `en-GB`. Dates and numbers already follow the browser locale.
+- Dashboard UX refresh (presentation only, no calculation changes): colour-coded KPI cards, equipment utilisation progress bars, colour-coded production summary cards, status chips, customer total, Edit job and Refresh costs buttons on recent jobs, an "Add customer" quick action, and clearer low-data messages such as "Awaiting more completed jobs".
 
 ## [0.8.0] - 2026-11-02
 - Materials page redesign: collapsible material-type groups with counts, search, type filter and sort by name/stock/status, searchable Type/Colour/Usage Unit dropdowns with "+ Add New", and cards showing type and colour badges, stock, cost and a Healthy / Reorder Soon / Low Stock / Out of Stock status. Fully backwards compatible: no schema, API, costing, invoice or report changes.

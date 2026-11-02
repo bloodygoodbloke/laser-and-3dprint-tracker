@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
 import { MaterialsPage } from "./MaterialsPage";
+import { NumberInput } from "./NumberInput";
 import HelpPage from "./HelpPage";
+import { KpiCard, StatusChip, SummaryCard, UtilisationRow, onTimeTone, overdueTone, utilisationTone } from "./dashboardUi";
 import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchVersionInfo, formatVersionBadge, type VersionInfo } from "./version";
 import PrintTimeInput from "./PrintTimeInput";
@@ -205,11 +207,11 @@ const ensureContrast = (colour: string, background: string, target = 4.8) => {
 };
 const normalizeMarkupPercent = (value: unknown) => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 25;
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(parsed) && parsed >= 0 ? parsed : 25;
 };
 const normalizeOptionalMarkupPercent = (value: unknown) => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 };
 
 const normalizeBillingSettingsForUi = (settings: Partial<BillingSettings>): BillingSettings => ({
@@ -273,7 +275,6 @@ const normalizeBillingSettingsForUi = (settings: Partial<BillingSettings>): Bill
   },
 });
 
-const toClearableNumberInput = (value: number) => (value === 0 ? "" : String(value));
 const parseNumberInput = (value: string) => (value.trim() === "" ? 0 : Number(value));
 const jobStatusOptions = ["Quote Draft", "Quote Sent", "Quote Approved", "Estimate Template", "Pending", "In Progress", "Completed", "Invoiced"];
 const paymentStatusOptions = ["Unpaid", "Partially Paid", "Paid", "Overdue"];
@@ -1304,8 +1305,11 @@ function App() {
       setSelectedJobId(job.id);
       setExpandedJobId(job.id);
       setJobFileMessage((current) => ({ ...current, [job.id]: `Uploaded ${file.name}.` }));
-    } catch (_error) {
-      setJobFileMessage((current) => ({ ...current, [job.id]: "Upload failed. Please try again." }));
+    } catch (error) {
+      setJobFileMessage((current) => ({
+        ...current,
+        [job.id]: error instanceof Error ? error.message : "Upload failed. Please try again.",
+      }));
     } finally {
       setUploadingJobId(null);
       event.target.value = "";
@@ -1913,7 +1917,7 @@ function App() {
   };
   const saveCurrentEstimateTemplate = async () => {
     if (!newJobForm.name.trim()) {
-      setMakerWorldMessage("Enter a job name before saving to the estimate catalog.");
+      setMakerWorldMessage("Enter a job name before saving to the estimate catalogue.");
       return;
     }
 
@@ -1937,7 +1941,7 @@ function App() {
 
     const templates = await api.getEstimateTemplates();
     setSavedEstimateTemplates(templates);
-    setMakerWorldMessage("Saved to estimate catalog.");
+    setMakerWorldMessage("Saved to estimate catalogue.");
   };
 
   const applySavedEstimateTemplate = async (template: EstimateTemplate) => {
@@ -2455,73 +2459,76 @@ function App() {
             <div className="grid gap-6 lg:grid-cols-3">
               <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
                 <h2 className="text-xl font-semibold">Workshop operations</h2>
-                <div className="mt-4 grid gap-4 md:grid-cols-4">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">On-time delivery</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.onTimePercent.toFixed(1)}%</p>
-                    <p className="text-xs text-slate-400">{deliveryAndUtilization.onTimeCount} of {deliveryAndUtilization.dueEligibleCount} due jobs</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Overdue open jobs</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.overdueOpen}</p>
-                    <p className="text-xs text-slate-400">Pending or in-progress past due date</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Queued runtime</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.scheduledHours.toFixed(1)} h</p>
-                    <p className="text-xs text-slate-400">Across {deliveryAndUtilization.machineCount} equipment queues</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Weekly utilization</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{deliveryAndUtilization.utilizationPercent.toFixed(1)}%</p>
-                    <p className="text-xs text-slate-400">vs {WORKSHOP_DAILY_CAPACITY_HOURS}h/day capacity assumption</p>
-                  </div>
-                </div>
+                {(() => {
+                  const d = deliveryAndUtilization;
+                  const onTime = onTimeTone(d.onTimePercent, d.dueEligibleCount);
+                  const overdue = overdueTone(d.overdueOpen);
+                  const util = utilisationTone(d.utilizationPercent, d.scheduledHours);
+                  return (
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      <KpiCard
+                        label="On-time delivery"
+                        tone={onTime.tone}
+                        chip={onTime.label}
+                        value={d.dueEligibleCount === 0 ? "—" : `${d.onTimePercent.toFixed(1)}%`}
+                        note={d.dueEligibleCount === 0 ? "Awaiting more completed jobs with due dates" : `${d.onTimeCount} of ${d.dueEligibleCount} completed due ${d.dueEligibleCount === 1 ? "job" : "jobs"}${d.dueEligibleCount < 3 ? " • early data" : ""}`}
+                      />
+                      <KpiCard
+                        label="Overdue open jobs"
+                        tone={overdue.tone}
+                        chip={overdue.label}
+                        value={d.overdueOpen}
+                        note={d.overdueOpen === 0 ? "No overdue jobs" : "Pending or in-progress past due date"}
+                      />
+                      <KpiCard
+                        label="Queued runtime"
+                        tone={d.scheduledHours > 0 ? "info" : "neutral"}
+                        value={`${d.scheduledHours.toFixed(1)} h`}
+                        note={d.scheduledHours > 0 ? `Across ${d.machineCount} equipment queues` : "Nothing queued yet"}
+                      />
+                      <KpiCard
+                        label="Weekly utilisation"
+                        tone={util.tone}
+                        chip={util.label}
+                        value={`${d.utilizationPercent.toFixed(1)}%`}
+                        note={`vs ${WORKSHOP_DAILY_CAPACITY_HOURS}h/day capacity assumption`}
+                      />
+                    </div>
+                  );
+                })()}
                 <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <h3 className="text-sm font-semibold text-white">Equipment utilization (next 7-day queue model)</h3>
-                  <div className="mt-2 space-y-2 text-xs">
+                  <h3 className="text-sm font-semibold text-white">Equipment utilisation <span className="font-normal text-slate-400">(next 7-day queue model)</span></h3>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
                     {deliveryAndUtilization.utilizationByMachine.map((row) => (
-                      <div key={`utilization-${row.machineType}`} className="flex items-center justify-between">
-                        <span className="text-slate-300">{row.machineType}</span>
-                        <span className="text-slate-200">{row.hours.toFixed(1)} h ({row.utilizationPercent.toFixed(1)}%)</span>
-                      </div>
+                      <UtilisationRow key={`utilization-${row.machineType}`} name={row.machineType} hours={row.hours} percent={row.utilizationPercent} />
                     ))}
-                    {!deliveryAndUtilization.utilizationByMachine.length ? <p className="text-slate-500">No queued equipment utilization data yet.</p> : null}
                   </div>
+                  {!deliveryAndUtilization.utilizationByMachine.length ? <p className="mt-2 text-sm text-slate-400">No queued equipment yet. Queue a job to see utilisation here.</p> : null}
                 </div>
               </section>
 
               <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-xl font-semibold">Production Jobs</h2>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab("jobs");
-                      openNewJobEditor();
-                    }}
-                    className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300"
-                  >
-                    Price a job
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab("jobs");
+                        openNewJobEditor();
+                      }}
+                      className="mf-btn"
+                    >
+                      Price a job
+                    </button>
+                    <button type="button" onClick={() => setActiveTab("customers")} className="mf-btn mf-btn--outline">Add customer</button>
+                  </div>
                 </div>
-                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Pending production jobs</h3>
-                    <p className="mt-2 text-3xl font-semibold">{pendingJobs.length}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Total production jobs</h3>
-                    <p className="mt-2 text-3xl font-semibold">{jobs.length}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Production jobs waiting for payment</h3>
-                    <p className="mt-2 text-3xl font-semibold">{jobsWaitingPayment}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Production jobs waiting for dispatch</h3>
-                    <p className="mt-2 text-3xl font-semibold">{jobsWaitingDispatch}</p>
-                  </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <SummaryCard label="Pending production jobs" tone="info" value={pendingJobs.length} note={pendingJobs.length === 0 ? "No pending jobs" : "Ready to produce"} />
+                  <SummaryCard label="Total production jobs" tone="neutral" value={jobs.length} note="All jobs in MakerFlow" />
+                  <SummaryCard label="Waiting for payment" tone={jobsWaitingPayment === 0 ? "good" : "warn"} value={jobsWaitingPayment} note={jobsWaitingPayment === 0 ? "No action required" : "Pending jobs not yet paid"} />
+                  <SummaryCard label="Waiting for dispatch" tone={jobsWaitingDispatch === 0 ? "good" : "violet"} value={jobsWaitingDispatch} note={jobsWaitingDispatch === 0 ? "No action required" : "Paid and ready to dispatch"} />
                 </div>
               </section>
 
@@ -2529,14 +2536,36 @@ function App() {
                 <h2 className="text-xl font-semibold">Recent production jobs</h2>
                 <div className="mt-4 space-y-3">
                   {recentJobs.map((job) => (
-                    <div key={job.id} className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3">
-                      <div>
-                        <p className="font-medium">{job.name}</p>
-                        <p className="text-sm text-slate-400">{job.jobNumber || "No job number"} • {job.machineType} • {job.status}</p>
+                    <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-white">{job.name}</p>
+                          <StatusChip status={job.status} />
+                        </div>
+                        <p className="mt-1 text-sm text-slate-400">{job.jobNumber || "No job number"} • {job.machineType}</p>
                       </div>
-                      <button onClick={() => calculateJobCost(job)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">{getCostButtonLabel(job)}</button>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-xs uppercase tracking-wide text-slate-400">Customer total</p>
+                          <p className="text-lg font-semibold text-white">{job.cost ? formatCurrency(getInvoiceChargeBreakdown(job).customerCharge) : "Not costed"}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("jobs");
+                            setExpandedJobId(job.id);
+                            setSelectedJobId(job.id);
+                            setJobEditorMode("edit");
+                          }}
+                          className="mf-btn mf-btn--outline mf-btn--sm"
+                        >
+                          Edit job
+                        </button>
+                        <button type="button" onClick={() => calculateJobCost(job)} className="mf-btn mf-btn--sm">{getCostButtonLabel(job)}</button>
+                      </div>
                     </div>
                   ))}
+                  {recentJobs.length === 0 ? <p className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">No jobs yet. Use "Price a job" to create your first one.</p> : null}
                 </div>
               </section>
 
@@ -3380,7 +3409,7 @@ function App() {
                     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <h4 className="text-sm font-semibold text-white">Estimate catalog</h4>
+                          <h4 className="text-sm font-semibold text-white">Estimate catalogue</h4>
                           <p className="mt-1 text-xs text-slate-400">Save model-based templates for quick pricing without customer details.</p>
                         </div>
                         <button
@@ -3862,8 +3891,8 @@ function App() {
               <p className="mt-2 text-sm text-slate-400" style={adminMutedTextStyle}>Export jobs, materials, and the full app data snapshot, then restore them later if needed.</p>
 
               <div className="mt-6 rounded-2xl border border-slate-800 p-4" style={adminCardStyle}>
-                <h3 className="text-sm font-semibold" style={{ color: adminTextColor }}>Site theme colors</h3>
-                <p className="mt-2 text-xs" style={adminMutedTextStyle}>Set custom background and text colors for the whole app to match your business color scheme.</p>
+                <h3 className="text-sm font-semibold" style={{ color: adminTextColor }}>Site theme colours</h3>
+                <p className="mt-2 text-xs" style={adminMutedTextStyle}>Set custom background and text colours for the whole app to match your business colour scheme.</p>
                 <div className="mt-4">
                   <p className="text-xs" style={adminMutedTextStyle}>Quick presets</p>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -4122,15 +4151,15 @@ function App() {
                   <div className="space-y-3">
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Electricity cost / kWh</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.electricityCostPerKwh)} onChange={(e) => updateBilling("electricityCostPerKwh", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.electricityCostPerKwh} onValue={(v) => updateBilling("electricityCostPerKwh", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Electricity markup %</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.electricityMarkupPercent)} onChange={(e) => updateBilling("electricityMarkupPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.electricityMarkupPercent} onValue={(v) => updateBilling("electricityMarkupPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Depreciation markup %</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.depreciationMarkupPercent)} onChange={(e) => updateBilling("depreciationMarkupPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.depreciationMarkupPercent} onValue={(v) => updateBilling("depreciationMarkupPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                   </div>
                 </details>
@@ -4143,7 +4172,7 @@ function App() {
                   <div className="space-y-3">
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Global material markup %</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.materialMarkupPercent)} onChange={(e) => updateBilling("materialMarkupPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.materialMarkupPercent} onValue={(v) => updateBilling("materialMarkupPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                   </div>
 
@@ -4156,7 +4185,7 @@ function App() {
                       {billingMaterialTypes.map((materialType) => (
                         <div key={materialType} className="grid grid-cols-[1.4fr_1fr] items-center gap-3 px-4 py-3 text-sm">
                           <div className="font-medium text-white">{materialType}</div>
-                          <input type="number" step="0.01" aria-label={`Markup percent for ${materialType}`} value={toClearableNumberInput(billingSettings.materialTypeMarkups?.[materialType]?.percent ?? 0)} onChange={(e) => updateMaterialTypeMarkup(materialType, parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                          <NumberInput step="0.01" min="0" aria-label={`Markup percent for ${materialType}`} value={billingSettings.materialTypeMarkups?.[materialType]?.percent ?? 0} onValue={(v) => updateMaterialTypeMarkup(materialType, v)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                         </div>
                       ))}
                     </div>
@@ -4170,7 +4199,7 @@ function App() {
                   </div>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Labour rate / hour</span>
-                    <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.labourRate)} onChange={(e) => updateBilling("labourRate", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    <NumberInput step="0.01" min="0" value={billingSettings.labourRate} onValue={(v) => updateBilling("labourRate", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                   </label>
                 </details>
 
@@ -4181,7 +4210,7 @@ function App() {
                   </div>
                   <label className="flex items-center gap-4 text-sm text-slate-300">
                     <span className="w-56 shrink-0">Workshop hourly rate</span>
-                    <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.workshopHourlyRate)} onChange={(e) => updateBilling("workshopHourlyRate", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    <NumberInput step="0.01" min="0" value={billingSettings.workshopHourlyRate} onValue={(v) => updateBilling("workshopHourlyRate", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                   </label>
                   <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
                     Workshop costs are calculated from machine runtime hours multiplied by this hourly rate.
@@ -4196,15 +4225,15 @@ function App() {
                   <div className="space-y-3">
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Minimum charge (£)</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.minimumCharge)} onChange={(e) => updateBilling("minimumCharge", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.minimumCharge} onValue={(v) => updateBilling("minimumCharge", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Rush fee %</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.rushFeePercent)} onChange={(e) => updateBilling("rushFeePercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.rushFeePercent} onValue={(v) => updateBilling("rushFeePercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Waste factor %</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.wasteFactorPercent)} onChange={(e) => updateBilling("wasteFactorPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.wasteFactorPercent} onValue={(v) => updateBilling("wasteFactorPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                   </div>
                 </details>
@@ -4217,15 +4246,15 @@ function App() {
                   <div className="space-y-3">
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">VAT %</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.vatPercent)} onChange={(e) => updateBilling("vatPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.vatPercent} onValue={(v) => updateBilling("vatPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Suggested deposit %</span>
-                      <input type="number" step="0.01" value={toClearableNumberInput(billingSettings.depositPercent)} onChange={(e) => updateBilling("depositPercent", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="0.01" min="0" value={billingSettings.depositPercent} onValue={(v) => updateBilling("depositPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                     <label className="flex items-center gap-4 text-sm text-slate-300">
                       <span className="w-56 shrink-0">Payment terms (days)</span>
-                      <input type="number" step="1" value={toClearableNumberInput(billingSettings.paymentTermsDays)} onChange={(e) => updateBilling("paymentTermsDays", parseNumberInput(e.target.value))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                      <NumberInput step="1" min="0" value={billingSettings.paymentTermsDays} onValue={(v) => updateBilling("paymentTermsDays", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                     </label>
                   </div>
                 </details>

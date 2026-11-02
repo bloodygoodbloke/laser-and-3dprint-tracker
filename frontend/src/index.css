@@ -297,3 +297,37 @@ body {
   font-size: 0.8em;
   color: var(--app-text);
 }
+
+/* Dashboard tones (presentation only). Colours come from the theme tokens so they adapt to light and dark. */
+.mf-tone { --tone: var(--app-info); }
+.mf-tone--good { --tone: var(--app-success); }
+.mf-tone--warn { --tone: var(--app-warning); }
+.mf-tone--bad { --tone: var(--app-danger); }
+.mf-tone--info { --tone: var(--app-info); }
+.mf-tone--violet { --tone: var(--app-violet); }
+.mf-tone--neutral { --tone: var(--app-link); }
+
+.mf-kpi {
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+  border-left-width: 4px;
+  border-left-color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 8%, transparent);
+  padding: 1rem;
+  min-width: 0;
+}
+.mf-kpi__label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.mf-kpi__value { margin-top: 0.4rem; font-size: 1.75rem; line-height: 1.1; font-weight: 700; color: var(--tone); }
+.mf-kpi__note { margin-top: 0.25rem; font-size: 0.8rem; }
+
+.mf-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;
+  border-radius: 9999px; padding: 0.15rem 0.6rem;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--tone);
+  border: 1px solid color-mix(in srgb, var(--tone) 60%, transparent);
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+}
+
+.mf-meter { height: 0.6rem; border-radius: 9999px; overflow: hidden; background: color-mix(in srgb, var(--tone) 18%, transparent); }
+.mf-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--tone); transition: width 0.3s ease; }

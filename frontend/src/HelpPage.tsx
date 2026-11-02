@@ -305,8 +305,8 @@ export default function HelpPage({ versionInfo, versionError }: HelpPageProps) {
             <h4 className="font-semibold text-white">What goes into the price</h4>
             <ul className="mt-1 list-disc space-y-1 pl-5">
               <li>Material usage</li>
-              <li>Machine runtime electricity and depreciation</li>
-              <li>Labour time and your workshop hourly rate</li>
+              <li>Machine runtime electricity and depreciation (machine cost / runtime hours)</li>
+              <li>Labour time and your workshop costs as an hourly rate</li>
               <li>Guardrails from Billing Rules: minimum charge, rush fee % and waste factor %</li>
               <li>Optional per-job setup fee and delivery charge</li>
             </ul>
@@ -331,7 +331,9 @@ export default function HelpPage({ versionInfo, versionError }: HelpPageProps) {
           <div>
             <h4 className="font-semibold text-white">Billing</h4>
             <ul className="mt-1 list-disc space-y-1 pl-5">
-              <li>Markups, electricity rate, labour rate and workshop hourly rate</li>
+              <li>Markups, electricity rate your PerKw rate form your supplier</li>
+              <li>Labour rate which is what you class as your hourly rate </li>
+              <li> Workshop hourly costs if you have costs for your workshop such as rent.</li>
               <li>Pricing guardrails: minimum charge, rush fee % and waste factor %</li>
               <li>Invoice finance settings: VAT, suggested deposit % and payment terms (days)</li>
             </ul>
@@ -354,7 +356,7 @@ export default function HelpPage({ versionInfo, versionError }: HelpPageProps) {
           <div>
             <h4 className="font-semibold text-white">Change the theme</h4>
             <ol className="mt-1 list-decimal space-y-1 pl-5">
-              <li>In <strong>Admin</strong>, open <strong>Site theme colors</strong> and customise the background, text, inputs and accent buttons.</li>
+              <li>In <strong>Admin</strong>, open <strong>Site theme colours</strong> and customise the background, text, inputs and accent buttons.</li>
               <li>Or pick a preset: MakerFlow (restores the defaults), Light, Dark, High Contrast, Forest, Night Shift or Paper Invoice.</li>
               <li>Click <strong>Save site theme</strong> to keep your choices.</li>
             </ol>

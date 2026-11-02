@@ -29,7 +29,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Use the Dashboard scheduling calendar to view a rolling 14-day due-date plan with projected completion timestamps by machine queue.
 - Capture QA checklist items, QA pass/fail status, and rework costs/notes per job with cost impact tracking.
 - Add multi-material usage per job with simplified material selection plus quantity in grams.
-- Upload SVG, STL or image (PNG/JPG/WebP/GIF) job files from expanded job cards and preview them inline directly in job detail; STL files render in a built-in drag-to-rotate viewer.
+- Upload SVG, STL or image (PNG/JPG/WebP/GIF) job files up to 10 MB from expanded job cards and preview them inline in job detail; uploads are validated by the server, SVGs are restricted and served safely, and STL files render in a built-in drag-to-rotate viewer.
 - Track materials with colour in collapsible type groups, with search, filters, sorting, searchable dropdowns (add new types, colours and units inline), stock health status, and quick copy/edit workflows.
 - Material creation/editing is managed in the Materials tab (Admin no longer contains a duplicate add-material form).
 - Manage CRM Lite customer records (name, address, email, phone, notes) with recent order history lookup.
@@ -60,7 +60,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Docker compose workflow now includes service health checks and frontend startup dependency on backend health for more reliable local runtime startup.
 
 **Theme Presets And Branding**
-- Go to Admin and use Site theme colors to style the entire app.
+- Go to Admin and use Site theme colours to style the entire app.
 - You can set five theme fields: background, text, search/input, accent button, and accent button text.
 - Start from a quick preset row, then fine-tune.
 - The default branding uses a white background, charcoal text, soft grey inputs, and the MakerFlow palette: primary blue `#3A7DFF`, dark blue `#1D63E7` for hover states, and light blue `#5DA8FF` for supporting highlights. Inter is the primary UI font.

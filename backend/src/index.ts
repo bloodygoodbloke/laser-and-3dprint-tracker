@@ -63,7 +63,18 @@ app.use("/api/billing-audit", billingAuditRouter);
 app.use("/api/issues", issuesRouter);
 app.use("/api/models", modelMetadataRouter);
 app.use("/api/admin", adminRouter);
-app.use("/uploads", express.static(process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(currentDirectory, "..", "uploads")));
+app.use("/uploads", express.static(
+  process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(currentDirectory, "..", "uploads"),
+  {
+    setHeaders: (res, filePath) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      if (path.extname(filePath).toLowerCase() === ".svg") {
+        res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'");
+        res.setHeader("Content-Disposition", "attachment");
+      }
+    },
+  },
+));
 app.use(express.static(frontendDistPath));
 
 app.get("/api/version", (_req, res) => {

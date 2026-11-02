@@ -56,8 +56,14 @@ export default function JobFilePreview({ filePath, jobName, previewType }: JobFi
   return (
     <div className="mt-3 space-y-3">
       <div className="flex flex-wrap gap-3 text-xs">
-        <a className="text-cyan-300 underline" href={blobUrl} target="_blank" rel="noreferrer">Open file</a>
-        <a className="text-cyan-300 underline" href={blobUrl} download={fileName}>Download file</a>
+        {previewType === "svg" ? (
+          <a className="text-cyan-300 underline" href={blobUrl} download={fileName}>Download file</a>
+        ) : (
+          <>
+            <a className="text-cyan-300 underline" href={blobUrl} target="_blank" rel="noreferrer">Open file</a>
+            <a className="text-cyan-300 underline" href={blobUrl} download={fileName}>Download file</a>
+          </>
+        )}
       </div>
       {previewType === "svg" || previewType === "image" ? (
         <div className="overflow-hidden rounded-xl border border-slate-800 bg-white p-2">

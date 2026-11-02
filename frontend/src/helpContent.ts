@@ -7,7 +7,7 @@ export const FEATURE_STATUS_LABELS: Record<FeatureStatus, { icon: string; label:
 };
 
 export const QUICK_START_STEPS = [
-  "Create a job manually or import from MakerWorld, Printables, Thingiverse, Cults3D or 3Drop.",
+  "Create a job manually or import from MakerWorld.  Coming soon: Printables, Thingiverse, Cults3D",
   "Enter print time, materials and customer details.",
   "Save the job to calculate costs automatically.",
   "Move the job through Quote, Production and Completed stages.",
@@ -25,12 +25,10 @@ export const WHATS_NEW: ReleaseHighlight[] = [
   { text: "MakerFlow User Guide with Quick Start, support card and collapsible help topics", status: "available" },
   { text: "MakerWorld import fills print time, materials and creator from the first print profile", status: "available" },
   { text: "Model previews are cached as small thumbnail links to keep storage low", status: "available" },
-  { text: "Azure-hosted deployment", status: "available" },
   { text: "Custom branding and business logo support", status: "available" },
   { text: "Reporting improvements", status: "available" },
   { text: "Enhanced billing configuration", status: "available" },
   { text: "Improved backup and restore features", status: "available" },
-  { text: "Bambu telemetry connector", status: "alpha" },
 ];
 
 export const CHANGELOG_URL = "https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/blob/main/docs/CHANGELOG.md";

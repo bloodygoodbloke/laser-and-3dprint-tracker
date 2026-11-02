@@ -325,7 +325,10 @@ const api = {
       method: "POST",
       body: formData,
     });
-    if (!res.ok) throw new Error("Failed to upload file");
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      throw new Error(String(payload?.error || "Failed to upload file"));
+    }
     return res.json();
   },
   async getBambuDashboard(): Promise<BambuDashboardPayload> {

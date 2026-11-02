@@ -1,6 +1,11 @@
 import { Router } from "express";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import prisma from "../prisma.js";
-import { upload } from "../upload.js";
+import { uploadSingleFile, removeUploadedFile } from "../upload.js";
+import { UploadValidationError, validateUploadedFile } from "../uploadValidation.js";
 import { normalizeStoredMinutes } from "../printTime.js";
 import { parseSupportedModelUrl, resolveSourceImageUrl } from "./model-metadata.js";
 
@@ -163,15 +168,40 @@ router.post("/", async (req, res) => {
   res.status(201).json(job);
 });
 
-router.post('/:id/upload', upload.single('file'), async (req, res) => {
+router.post('/:id/upload', uploadSingleFile, async (req, res) => {
   const id = String(req.params.id || "");
+  if (!req.file) return res.status(400).json({ error: "Choose a file to upload." });
 
+  let extension: string;
   try {
-    const filePath = req.file ? `/uploads/${req.file.filename}` : null;
-    const job = await prisma.job.update({ where: { id }, data: { filePath } });
-    res.json(job);
+    extension = validateUploadedFile(req.file.originalname, req.file.buffer);
   } catch (error) {
-    res.status(404).json({ error: 'Job not found' });
+    if (error instanceof UploadValidationError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
+
+  const uploadDirectory = process.env.UPLOAD_DIR
+    ? path.resolve(process.env.UPLOAD_DIR)
+    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads");
+  await fs.mkdir(uploadDirectory, { recursive: true });
+
+  const existingJob = await prisma.job.findUnique({ where: { id }, select: { id: true } });
+  if (!existingJob) return res.status(404).json({ error: "Job not found." });
+
+  const filename = `${randomUUID()}${extension}`;
+  const diskPath = path.join(uploadDirectory, filename);
+  const publicPath = `/uploads/${filename}`;
+
+  await fs.writeFile(diskPath, req.file.buffer, { flag: "wx" });
+  try {
+    const job = await prisma.job.update({ where: { id }, data: { filePath: publicPath } });
+    return res.json(job);
+  } catch (error) {
+    await removeUploadedFile(diskPath);
+    if ((error as { code?: string } | null)?.code === "P2025") {
+      return res.status(404).json({ error: "Job not found." });
+    }
+    throw error;
   }
 });
 
@@ -386,8 +416,13 @@ router.post('/:id/calculate-cost', async (req, res) => {
   const MINIMUM_CHARGE = Number(settings?.minimumCharge ?? 0);
   const RUSH_FEE_PERCENT = Number(settings?.rushFeePercent ?? 0);
   const WASTE_FACTOR_PERCENT = Number(settings?.wasteFactorPercent ?? 0);
-  const MATERIAL_MARKUP_PERCENT = Number(settings?.materialMarkupPercent) > 0 ? Number(settings?.materialMarkupPercent) : 25;
-  const ELECTRICITY_MARKUP_PERCENT = Number(settings?.electricityMarkupPercent) > 0 ? Number(settings?.electricityMarkupPercent) : 25;
+  // An explicit 0 is respected; the 25% default only applies when no settings exist yet.
+  const markupOrDefault = (value: unknown, fallback: number) => {
+    const parsed = Number(value);
+    return value !== null && value !== undefined && Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  };
+  const MATERIAL_MARKUP_PERCENT = markupOrDefault(settings?.materialMarkupPercent, 25);
+  const ELECTRICITY_MARKUP_PERCENT = markupOrDefault(settings?.electricityMarkupPercent, 25);
   const DEPRECIATION_MARKUP_PERCENT = Number(settings?.depreciationMarkupPercent) > 0 ? Number(settings?.depreciationMarkupPercent) : 0;
   const DEPRECIATION_COST = settings?.depreciationCost ?? 0;
   const DEPRECIATION_HOURS = settings?.depreciationHours ?? 0;
