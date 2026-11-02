@@ -8,7 +8,7 @@ How MakerFlow identifies exactly which build is running, locally and in Azure Co
 
 ```json
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "buildNumber": "20261031.1545",
   "gitCommit": "a1b2c3d",
   "gitBranch": "main",
@@ -32,7 +32,7 @@ The values come from environment variables, with development defaults:
 
 ## Where it appears
 
-- **Footer (every page):** compact `v0.7.0 (1545)` that links to Help > Deployment Information.
+- **Footer (every page):** compact `v0.8.0 (1545)` that links to Help > Deployment Information.
 - **Help > Deployment Information:** full details plus a "Copy for support" button.
 - **Hidden developer diagnostics:** on the Help page, click the "MakerFlow vX" heading 5 times to toggle it. It shows API connectivity and latency (`/api/health`), application uptime, the frontend bundle version (warns if it differs from the server), browser user agent and the raw version JSON.
 

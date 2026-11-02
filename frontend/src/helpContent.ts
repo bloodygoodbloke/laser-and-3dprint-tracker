@@ -21,6 +21,8 @@ export interface ReleaseHighlight {
 }
 
 export const WHATS_NEW: ReleaseHighlight[] = [
+  { text: "Redesigned Materials page with collapsible type groups, search, sorting and stock health status", status: "available" },
+  { text: "MakerFlow User Guide with Quick Start, support card and collapsible help topics", status: "available" },
   { text: "MakerWorld import fills print time, materials and creator from the first print profile", status: "available" },
   { text: "Model previews are cached as small thumbnail links to keep storage low", status: "available" },
   { text: "Azure-hosted deployment", status: "available" },

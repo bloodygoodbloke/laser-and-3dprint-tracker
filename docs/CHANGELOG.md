@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [0.8.0] - 2026-11-02
 - Materials page redesign: collapsible material-type groups with counts, search, type filter and sort by name/stock/status, searchable Type/Colour/Usage Unit dropdowns with "+ Add New", and cards showing type and colour badges, stock, cost and a Healthy / Reorder Soon / Low Stock / Out of Stock status. Fully backwards compatible: no schema, API, costing, invoice or report changes.
 - The Help page is now the "MakerFlow User Guide": a Quick Start card, Common Tasks shortcuts, a What's New card, and collapsible guides (with Expand all) instead of one long page. Feature status badges (Available Now, Alpha, Coming Soon) were added, the Model Imports guide was rewritten in plainer language, and deployment/build details moved into a collapsible "Support & Version Information" card. Development-only troubleshooting (Node.js, start-local.sh, Prisma, localhost) is shown only in Development environments; other environments see "contact your administrator or raise a bug report".
 - Support refresh: a "Need help?" card with Report a Bug, Request a Feature, View Release Notes and Copy Support Information; the request form now offers Bug Report, Feature Request, Integration Request and Improvement Suggestion with Critical/High/Medium/Low priority, a "What happens next?" explanation and a Support information card. If GitHub issue creation is not set up, the form offers "Continue on GitHub" (pre-filled) instead of showing an error.
