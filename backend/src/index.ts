@@ -31,6 +31,11 @@ const allowedOrigins = process.env.CORS_ORIGIN
   : process.env.NODE_ENV === "production" ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"];
 const requireAuth = authGate(["/health", "/version", "/branding"]);
 
+// Unauthenticated, dependency-free probe endpoint for Azure Container Apps (registered before cors/auth/static).
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
@@ -119,6 +124,8 @@ app.get("/{*splat}", (req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend listening on http://localhost:${PORT}`);
+// Bind explicitly to all IPv4 interfaces so the ACA ingress/probes can reach the container.
+const HOST = process.env.HOST || "0.0.0.0";
+app.listen(PORT, HOST, () => {
+  console.log(`Backend listening on http://${HOST}:${PORT}`);
 });

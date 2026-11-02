@@ -20,6 +20,23 @@ properties:
         volumeMounts:
           - volumeName: data
             mountPath: /data
+        # Startup runs `prisma migrate deploy` against SQLite on Azure Files, so allow up to ~5 minutes.
+        probes:
+          - type: Startup
+            httpGet:
+              path: /health
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          - type: Liveness
+            httpGet:
+              path: /health
+              port: 4000
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
     volumes:
       - name: data
         storageType: AzureFile
