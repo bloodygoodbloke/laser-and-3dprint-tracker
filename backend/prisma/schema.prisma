@@ -66,6 +66,9 @@ model Job {
   name                  String
   customer              String?
   sourceUrl             String              @default("")
+  sourceImageUrl        String              @default("")
+  sourceImageCheckedAt  DateTime?
+  sourceImageForUrl     String              @default("")
   filePath              String?
   machineType           String
   estTimeMinutes        Int

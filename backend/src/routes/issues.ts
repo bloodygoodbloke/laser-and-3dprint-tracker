@@ -10,7 +10,14 @@ const MAX_TITLE_LENGTH = 200;
 const MAX_DETAILS_LENGTH = 10000;
 const MAX_BROWSER_LENGTH = 300;
 
-type RequestType = "Bug" | "Feature Request";
+type RequestType = "Bug" | "Feature Request" | "Integration Request" | "Improvement Suggestion";
+const REQUEST_TYPES: RequestType[] = ["Bug", "Feature Request", "Integration Request", "Improvement Suggestion"];
+const TITLE_PREFIXES: Record<RequestType, string> = {
+  Bug: "[Bug]",
+  "Feature Request": "[Feature]",
+  "Integration Request": "[Integration]",
+  "Improvement Suggestion": "[Improvement]",
+};
 
 // Credentials only ever come from the environment; they are never returned to the browser.
 const getGitHubConfig = () => {
@@ -23,6 +30,8 @@ const getGitHubConfig = () => {
 const LABELS: Record<RequestType, string> = {
   Bug: "bug",
   "Feature Request": "enhancement",
+  "Integration Request": "enhancement",
+  "Improvement Suggestion": "enhancement",
 };
 
 const clean = (value: unknown, maxLength: number) => String(value ?? "").replace(/\r\n/g, "\n").trim().slice(0, maxLength);
@@ -65,7 +74,7 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "title and details are required" });
   }
 
-  const requestType: RequestType = req.body?.requestType === "Bug" ? "Bug" : "Feature Request";
+  const requestType: RequestType = REQUEST_TYPES.includes(req.body?.requestType) ? req.body.requestType : "Feature Request";
   const requestedPriority = clean(req.body?.priority, 40);
   const priority = ALLOWED_PRIORITIES.has(requestedPriority) ? requestedPriority : "P3 Low";
   const browser = clean(req.body?.browser, MAX_BROWSER_LENGTH) || "unknown";
@@ -82,7 +91,7 @@ router.post("/", async (req, res) => {
         "X-GitHub-Api-Version": "2022-11-28",
       },
       body: JSON.stringify({
-        title: `${requestType === "Bug" ? "[Bug]" : "[Feature]"} ${title}`,
+        title: `${TITLE_PREFIXES[requestType]} ${title}`,
         body: buildIssueBody(details, requestType, priority, browser, submittedAt),
         labels: [LABELS[requestType]],
       }),

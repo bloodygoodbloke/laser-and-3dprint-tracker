@@ -4,18 +4,20 @@ GitHub Issues is the single place for bugs and feature requests. It replaces `do
 
 ## Raising an issue from the app
 
-1. Open **Help** > **Raise a bug or feature request**.
-2. Choose the request type (Bug or Feature Request), a priority, a short title and the details.
-3. Click **Create GitHub issue**. The page then shows the issue number and a link to it.
+1. Open **Help** and use **Report a Bug** / **Request a Feature** in the "Need help?" card (or scroll to **Need Help? Send us a request**).
+2. Choose the request type, a priority (Critical, High, Medium or Low), a short title and the details.
+3. Click **Send request**. The page then shows the issue number and a link to it.
 
-| Request type | Label |
-| --- | --- |
-| Bug | `bug` |
-| Feature Request | `enhancement` |
+| Request type | Title prefix | Label |
+| --- | --- | --- |
+| Bug Report | `[Bug]` | `bug` |
+| Feature Request | `[Feature]` | `enhancement` |
+| Integration Request | `[Integration]` | `enhancement` |
+| Improvement Suggestion | `[Improvement]` | `enhancement` |
 
-Every issue is titled `[Bug] ...` or `[Feature] ...` and its body ends with a table containing: request type, priority, App Version, Build Number, Environment, Browser and Date/Time (UTC). Version, build and environment come from the server (`GET /api/version`); the browser comes from the user's browser; the time is set by the server.
+The priorities are stored as `P1 Critical`, `P1 High`, `P2 Medium` and `P3 Low`. Every issue body ends with a table containing: request type, priority, App Version, Build Number, Environment, Browser and Date/Time (UTC). Version, build and environment come from the server (`GET /api/version`); the browser comes from the user's browser; the time is set by the server.
 
-If the server has no token configured, the form shows a warning and submissions return an error instead of creating an issue.
+If the server has no token configured, the form is not shown as an error: it offers **Continue on GitHub**, a link to a pre-filled new-issue page, as an alternative workflow. **Open in GitHub Issues** is also available beside **Send request** when GitHub is configured.
 
 ## Server configuration
 

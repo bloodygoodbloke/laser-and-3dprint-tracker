@@ -59,7 +59,7 @@ When updating tracker files, follow this flow exactly:
 	- `README.md` for user-facing functionality, setup, workflow, and behavior changes.
 	- `docs/CHANGELOG.md` in the `Unreleased` section for release-note-level changes.
 	- `docs/implementation-log.md` with the completed `CHG-XXX` entry.
-	- In-app Help page content in `frontend/src/App.tsx` for any user-impacting changes.
+	- In-app Help page content in `frontend/src/HelpPage.tsx` (guides) and `frontend/src/helpContent.ts` (Quick Start, What's New, request types) for any user-impacting changes.
 - Do not mark implementation work complete until changelog and in-app Help updates are done.
 
 ## Status Values

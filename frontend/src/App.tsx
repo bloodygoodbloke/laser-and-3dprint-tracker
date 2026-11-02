@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
+import { MaterialsPage } from "./MaterialsPage";
+import HelpPage from "./HelpPage";
 import { parseMakerWorldUrl } from "./makerworldImport";
-import { fetchHealth, fetchVersionInfo, formatBuildDate, formatDeploymentInfo, formatUptime, formatVersionBadge, frontendVersion, type HealthInfo, type VersionInfo } from "./version";
+import { fetchVersionInfo, formatVersionBadge, type VersionInfo } from "./version";
 import PrintTimeInput from "./PrintTimeInput";
 import { calculateMachineLifecycle } from "./machineLifecycle";
 import JobFilePreview from "./JobFilePreview";
@@ -9,10 +11,9 @@ import UserAccessCard from "./UserAccessCard";
 import { useAuth } from "./AuthContext";
 import RuntimeDurationInput, { formatHoursAsDuration } from "./RuntimeDurationInput";
 import { formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
-import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, IssueReportStatus, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "MakerFlow";
-const APP_VERSION = frontendVersion;
 const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
 const SCHEDULE_HORIZON_DAYS = 14;
 const DEFAULT_ADMIN_BACKGROUND_COLOR = "#FFFFFF";
@@ -172,6 +173,36 @@ const hexToRgba = (hex: string, alpha: number) => {
   const b = Number.parseInt(safeHex.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
+const themeHexToRgb = (hex: string): [number, number, number] => {
+  const safeHex = normalizeHexColor(hex, "#000000").replace("#", "");
+  return [0, 2, 4].map((i) => Number.parseInt(safeHex.slice(i, i + 2), 16)) as [number, number, number];
+};
+const rgbToHex = (rgb: number[]) => `#${rgb.map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0")).join("")}`;
+const mixHex = (from: string, to: string, amount: number) => {
+  const a = themeHexToRgb(from);
+  const b = themeHexToRgb(to);
+  return rgbToHex(a.map((v, i) => v + (b[i] - v) * amount));
+};
+const relativeLuminance = (hex: string) => {
+  const [r, g, b] = themeHexToRgb(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrastRatio = (a: string, b: string) => {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+// Nudges a colour away from the background (darker on light themes, lighter on dark ones) until it reaches the target contrast.
+const ensureContrast = (colour: string, background: string, target = 4.8) => {
+  const towards = relativeLuminance(background) > 0.4 ? "#000000" : "#ffffff";
+  let next = colour;
+  for (let step = 0; step < 20 && contrastRatio(next, background) < target; step += 1) {
+    next = mixHex(next, towards, 0.08);
+  }
+  return next;
+};
 const normalizeMarkupPercent = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 25;
@@ -251,6 +282,7 @@ const getPreviewType = (filePath?: string | null) => {
   const normalized = String(filePath || "").toLowerCase();
   if (normalized.endsWith(".svg")) return "svg";
   if (normalized.endsWith(".stl")) return "stl";
+  if (/\.(png|jpe?g|webp|gif)$/.test(normalized)) return "image";
   return "none";
 };
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
@@ -331,7 +363,6 @@ function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
   const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
-  const [materialForm, setMaterialForm] = useState({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(blankBillingSettings());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -341,8 +372,6 @@ function App() {
   const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", postProcessingMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
   const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
-  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
-  const [showMaterialEditor, setShowMaterialEditor] = useState(false);
   const [editingMachineName, setEditingMachineName] = useState<string | null>(null);
   const [showMachineEditor, setShowMachineEditor] = useState(false);
   const [machineForm, setMachineForm] = useState({ name: "", wattage: "0", purchaseDate: "", depreciationCost: "0", replacementRunHours: "0", manualRunHours: "0" });
@@ -379,10 +408,6 @@ function App() {
   const [bambuJobIdInput, setBambuJobIdInput] = useState("");
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [versionError, setVersionError] = useState("");
-  const [versionCopyMessage, setVersionCopyMessage] = useState("");
-  const [diagnosticsVisible, setDiagnosticsVisible] = useState(false);
-  const [diagnosticsClicks, setDiagnosticsClicks] = useState(0);
-  const [apiHealth, setApiHealth] = useState<{ ok: boolean; detail: string; latencyMs: number; uptime: HealthInfo["uptime"] | null } | null>(null);
   const [makerWorldUrl, setMakerWorldUrl] = useState("");
   const [makerWorldMessage, setMakerWorldMessage] = useState("");
   const [modelUrlMessage, setModelUrlMessage] = useState("");
@@ -395,17 +420,6 @@ function App() {
   const [billingAuditLogs, setBillingAuditLogs] = useState<BillingAuditLog[]>([]);
   const [uploadingJobId, setUploadingJobId] = useState<string | null>(null);
   const [jobFileMessage, setJobFileMessage] = useState<Record<string, string>>({});
-  const [helpRequestForm, setHelpRequestForm] = useState({
-    requestType: "Feature Request" as "Bug" | "Feature Request",
-    priority: "P3 Low" as "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations",
-    title: "",
-    details: "",
-  });
-  const [helpRequestMessage, setHelpRequestMessage] = useState("");
-  const [createdIssue, setCreatedIssue] = useState<{ number: number; url: string } | null>(null);
-  const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
-  const [issueReportStatus, setIssueReportStatus] = useState<IssueReportStatus | null>(null);
-  const [issueReportStatusError, setIssueReportStatusError] = useState(false);
   const [dashboardJobMessage, setDashboardJobMessage] = useState("");
   const [isCreatingDashboardJob, setIsCreatingDashboardJob] = useState(false);
   const addJobFormRef = useRef<HTMLFormElement | null>(null);
@@ -522,14 +536,6 @@ function App() {
     loadData().catch(() => undefined);
     loadBillingSettings().catch(() => undefined);
     api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
-    api.getIssueReportStatus()
-      .then((status) => {
-        setIssueReportStatus(status);
-        setIssueReportStatusError(false);
-      })
-      .catch(() => {
-        setIssueReportStatusError(true);
-      });
   }, []);
 
   const applyBambuDashboardUpdate = (payload: BambuDashboardPayload, force = false) => {
@@ -599,13 +605,15 @@ function App() {
     if (modelPreviewByJob[id]?.sourceUrl === sourceUrl) return;
 
     let cancelled = false;
-    setModelPreviewByJob((current) => ({ ...current, [id]: { sourceUrl, imageUrl: null, loading: true } }));
-    api.getModelPreviewImage(sourceUrl)
+    const cachedUrl = expandedModelJob.sourceImageForUrl === sourceUrl ? expandedModelJob.sourceImageUrl || null : null;
+    setModelPreviewByJob((current) => ({ ...current, [id]: { sourceUrl, imageUrl: cachedUrl, loading: true } }));
+    // The server returns the cached thumbnail URL and only re-reads the source when the cache is stale.
+    api.refreshJobSourceImage(id)
       .then(({ imageUrl }) => {
         if (!cancelled) setModelPreviewByJob((current) => ({ ...current, [id]: { sourceUrl, imageUrl, loading: false } }));
       })
       .catch(() => {
-        if (!cancelled) setModelPreviewByJob((current) => ({ ...current, [id]: { sourceUrl, imageUrl: null, loading: false } }));
+        if (!cancelled) setModelPreviewByJob((current) => ({ ...current, [id]: { sourceUrl, imageUrl: cachedUrl, loading: false } }));
       });
 
     return () => { cancelled = true; };
@@ -689,6 +697,10 @@ function App() {
   const siteInputColor = normalizeHexColor(billingSettings.siteInputColor, DEFAULT_SITE_INPUT_COLOR);
   const siteAccentColor = normalizeHexColor(billingSettings.siteAccentColor, DEFAULT_SITE_ACCENT_COLOR);
   const siteAccentTextColor = normalizeHexColor(billingSettings.siteAccentTextColor, DEFAULT_SITE_ACCENT_TEXT_COLOR);
+  // Hover keeps the accent-text contrast: pick whichever of lighter/darker reads better against the button text.
+  const accentLighter = mixHex(siteAccentColor, "#ffffff", 0.14);
+  const accentDarker = mixHex(siteAccentColor, "#000000", 0.14);
+  const accentHoverColor = contrastRatio(siteAccentTextColor, accentLighter) >= contrastRatio(siteAccentTextColor, accentDarker) ? accentLighter : accentDarker;
   const appThemeStyle: CSSProperties = {
     "--app-bg": adminBackgroundColor,
     "--app-surface": hexToRgba(adminBackgroundColor, 0.88),
@@ -700,9 +712,16 @@ function App() {
     "--app-input-bg": siteInputColor,
     "--app-accent": siteAccentColor,
     "--app-accent-text": siteAccentTextColor,
-    "--app-accent-hover": siteAccentColor.toUpperCase() === DEFAULT_SITE_ACCENT_COLOR ? "#1D63E7" : siteAccentColor,
+    "--app-accent-hover": accentHoverColor,
     "--app-accent-highlight": siteAccentColor.toUpperCase() === DEFAULT_SITE_ACCENT_COLOR ? "#5DA8FF" : siteAccentColor,
+    "--app-link": ensureContrast(siteAccentColor, adminBackgroundColor),
+    "--app-success": ensureContrast("#10b981", adminBackgroundColor),
+    "--app-danger": ensureContrast("#f43f5e", adminBackgroundColor),
+    "--app-warning": ensureContrast("#f59e0b", adminBackgroundColor),
+    "--app-info": ensureContrast("#0ea5e9", adminBackgroundColor),
+    "--app-violet": ensureContrast("#8b5cf6", adminBackgroundColor),
     "--app-accent-soft": hexToRgba(siteAccentColor, 0.18),
+    "--app-neutral-soft": hexToRgba(adminTextColor, 0.12),
   } as CSSProperties;
   const adminSectionStyle = {
     backgroundColor: adminBackgroundColor,
@@ -857,10 +876,6 @@ function App() {
     }
   }, [machineOptions, jobForm.machineType, newJobForm.machineType, selectedJobForm.machineType]);
 
-  const resetMaterialForm = () => {
-    setMaterialForm({ name: "", type: "PLA", unit: "g", color: "", costPerUnit: "20", stockLevel: "1", reorderThreshold: "0.2" });
-  };
-
   const toApiJobMaterials = (entries: Array<{ materialId: string; usageQuantity: string }>) => entries
     .filter((entry) => entry.materialId)
     .map((entry) => {
@@ -942,73 +957,6 @@ function App() {
     } finally {
       setIsCreatingDashboardJob(false);
     }
-  };
-
-  const createMaterial = async (e: FormEvent) => {
-    e.preventDefault();
-    const purchaseCostPerKg = Number(materialForm.costPerUnit || 0);
-    const stockKg = Number(materialForm.stockLevel || 0);
-    const reorderKg = Number(materialForm.reorderThreshold || 0);
-    const normalizedPayload = {
-      name: materialForm.name,
-      type: materialForm.type,
-      unit: "g",
-      color: materialForm.color,
-      costPerUnit: purchaseCostPerKg / KG_TO_G,
-      stockLevel: stockKg * KG_TO_G,
-      reorderThreshold: reorderKg * KG_TO_G,
-    };
-
-    if (editingMaterialId) {
-      await api.updateMaterial(editingMaterialId, normalizedPayload);
-    } else {
-      await api.createMaterial(normalizedPayload);
-    }
-    resetMaterialForm();
-    setEditingMaterialId(null);
-    setShowMaterialEditor(false);
-    await loadData();
-  };
-
-  const startEditingMaterial = (material: Material) => {
-    setActiveTab("materials");
-    setShowMaterialEditor(true);
-    setEditingMaterialId(material.id);
-    setMaterialForm({
-      name: material.name,
-      type: material.type,
-      unit: "g",
-      color: material.color || "",
-      costPerUnit: String((material.costPerUnit || 0) * KG_TO_G),
-      stockLevel: String((material.stockLevel || 0) / KG_TO_G),
-      reorderThreshold: String((material.reorderThreshold || 0) / KG_TO_G),
-    });
-  };
-
-  const openAddMaterialForm = () => {
-    setActiveTab("materials");
-    setEditingMaterialId(null);
-    resetMaterialForm();
-    setShowMaterialEditor(true);
-  };
-
-  const closeMaterialForm = () => {
-    setEditingMaterialId(null);
-    resetMaterialForm();
-    setShowMaterialEditor(false);
-  };
-
-  const copyMaterial = async (material: Material) => {
-    await api.createMaterial({
-      name: `${material.name} Copy`,
-      type: material.type,
-      unit: material.unit,
-      color: material.color || "",
-      costPerUnit: material.costPerUnit,
-      stockLevel: material.stockLevel,
-      reorderThreshold: material.reorderThreshold,
-    });
-    await loadData();
   };
 
   const openNewJobEditor = () => {
@@ -1342,8 +1290,8 @@ function App() {
     const file = event.target.files?.[0];
     if (!file) return;
     const fileExtension = file.name.toLowerCase().split(".").pop();
-    if (fileExtension !== "svg" && fileExtension !== "stl") {
-      setJobFileMessage((current) => ({ ...current, [job.id]: "Only SVG and STL files are supported." }));
+    if (!["svg", "stl", "png", "jpg", "jpeg", "webp", "gif"].includes(fileExtension || "")) {
+      setJobFileMessage((current) => ({ ...current, [job.id]: "Only SVG, STL and image (PNG, JPG, WebP, GIF) files are supported." }));
       event.target.value = "";
       return;
     }
@@ -1898,32 +1846,6 @@ function App() {
       .then((info) => { setVersionInfo(info); setVersionError(""); })
       .catch((error) => setVersionError(error instanceof Error ? error.message : "Failed to load version information"));
   }, []);
-  useEffect(() => {
-    if (activeTab !== "help" || !diagnosticsVisible) return;
-    const startedAt = performance.now();
-    fetchHealth()
-      .then((health) => setApiHealth({ ok: health.status === "ok", detail: health.status, latencyMs: Math.round(performance.now() - startedAt), uptime: health.uptime }))
-      .catch((error) => setApiHealth({ ok: false, detail: error instanceof Error ? error.message : "Unreachable", latencyMs: Math.round(performance.now() - startedAt), uptime: null }));
-  }, [activeTab, diagnosticsVisible]);
-  const copyDeploymentInfo = async () => {
-    if (!versionInfo) return;
-    try {
-      await navigator.clipboard.writeText(formatDeploymentInfo(versionInfo));
-      setVersionCopyMessage("Copied to clipboard.");
-    } catch {
-      setVersionCopyMessage("Copy failed. Select the text and copy it manually.");
-    }
-  };
-  // Hidden developer panel: click the "MakerFlow vX" heading 5 times to toggle it.
-  const handleVersionHeadingClick = () => {
-    const next = diagnosticsClicks + 1;
-    if (next >= 5) {
-      setDiagnosticsVisible((visible) => !visible);
-      setDiagnosticsClicks(0);
-    } else {
-      setDiagnosticsClicks(next);
-    }
-  };
   const importMakerWorldAutofill = async () => {
     const payload = await api.autofillMakerWorldJob(makerWorldUrl);
     setMakerWorldMetadata(payload.metadata);
@@ -2473,38 +2395,6 @@ function App() {
     }
   };
 
-  const submitHelpRequest = async (e: FormEvent) => {
-    e.preventDefault();
-    const title = helpRequestForm.title.trim();
-    const details = helpRequestForm.details.trim();
-    if (!title || !details || isSubmittingIssue || issueReportStatus?.configured === false) return;
-
-    setIsSubmittingIssue(true);
-    setCreatedIssue(null);
-    setHelpRequestMessage("");
-    try {
-      const created = await api.createIssue({
-        requestType: helpRequestForm.requestType,
-        priority: helpRequestForm.priority,
-        title,
-        details,
-        browser: navigator.userAgent,
-      });
-      setCreatedIssue(created);
-      setHelpRequestForm({
-        requestType: "Feature Request",
-        priority: "P3 Low",
-        title: "",
-        details: "",
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create GitHub issue";
-      setHelpRequestMessage(message);
-    } finally {
-      setIsSubmittingIssue(false);
-    }
-  };
-
   return (
     <div className="app-theme min-h-screen bg-slate-950 text-slate-100" style={appThemeStyle}>
       <div className="mx-auto max-w-7xl p-6">
@@ -2524,7 +2414,7 @@ function App() {
           </button>
           <div className="flex min-w-0 items-center justify-end gap-3">
             {billingSettings.businessName?.trim() ? (
-              <p className="text-right text-lg font-semibold text-slate-200">{billingSettings.businessName.trim()}</p>
+              <p className="text-right text-lg font-bold text-slate-100">{billingSettings.businessName.trim()}</p>
             ) : null}
             {billingSettings.businessLogoUrl ? (
               <button
@@ -2990,10 +2880,10 @@ function App() {
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Job file preview</p>
                             <label className="cursor-pointer rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">
-                              <span>{uploadingJobId === job.id ? "Uploading..." : "Upload SVG/STL"}</span>
+                              <span>{uploadingJobId === job.id ? "Uploading..." : "Upload SVG/STL/image"}</span>
                               <input
                                 type="file"
-                                accept=".svg,.stl"
+                                accept=".svg,.stl,.png,.jpg,.jpeg,.webp,.gif"
                                 disabled={uploadingJobId === job.id}
                                 className="hidden"
                                 onChange={(event) => uploadJobFile(job, event)}
@@ -3011,6 +2901,7 @@ function App() {
                                   <a href={modelPreviewByJob[job.id].imageUrl || undefined} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`Open source image for ${job.name}`}>
                                     <img
                                       src={modelPreviewByJob[job.id].imageUrl || undefined}
+                                      loading="lazy"
                                       alt={`${job.name} model image from source`}
                                       referrerPolicy="no-referrer"
                                       onError={() => setModelPreviewByJob((current) => ({ ...current, [job.id]: { sourceUrl: job.sourceUrl || "", imageUrl: null, loading: false } }))}
@@ -3020,14 +2911,20 @@ function App() {
                                   <a className="mt-2 inline-block text-xs text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer" referrerPolicy="no-referrer">View model page</a>
                                 </div>
                               ) : (
-                                <p className="mt-2 text-sm text-slate-400">No embeddable image was found. The source link is still available above.</p>
+                                <div className="mt-2 flex items-center gap-3">
+                                  <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-400">No image</div>
+                                  <div className="text-sm text-slate-400">
+                                    <p>No source image is available for this model.</p>
+                                    <a className="text-xs text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer" referrerPolicy="no-referrer">View model page</a>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           ) : null}
                           {job.filePath ? (
                             <JobFilePreview filePath={job.filePath} jobName={job.name} previewType={getPreviewType(job.filePath)} />
                           ) : (
-                            <p className="mt-3 text-sm text-slate-400">Upload an SVG or STL file to preview it here.</p>
+                            <p className="mt-3 text-sm text-slate-400">Upload an SVG, STL or image file to preview it here.</p>
                           )}
                         </div>
                         {job.cost ? (
@@ -3087,24 +2984,24 @@ function App() {
                               key={`${job.id}-${action.status}`}
                               type="button"
                               onClick={() => updateJobStatusQuick(job, action.status)}
-                              className={`rounded-full border px-3 py-1 text-sm ${action.tone}`}
+                              className="mf-btn"
                             >
                               {action.label}
                             </button>
                           ))}
                           {(job.status === "Quote Draft" || job.status === "Quote Sent") ? (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Approved")} className="rounded-full border border-emerald-700 px-3 py-1 text-sm text-emerald-300">Approve quote</button>
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Approved")} className="mf-btn">Approve quote</button>
                           ) : null}
                           {job.status === "Quote Draft" ? (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Sent")} className="rounded-full border border-sky-700 px-3 py-1 text-sm text-sky-300">Send quote</button>
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Sent")} className="mf-btn">Send quote</button>
                           ) : null}
                           {job.status === "Quote Approved" ? (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="rounded-full border border-emerald-700 px-3 py-1 text-sm text-emerald-300">Convert to job</button>
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="mf-btn">Convert to job</button>
                           ) : null}
                           {job.status !== "Estimate Template" ? (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Estimate Template")} className="rounded-full border border-violet-700 px-3 py-1 text-sm text-violet-300">Save as estimate template</button>
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Estimate Template")} className="mf-btn">Save as estimate template</button>
                           ) : (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="rounded-full border border-violet-700 px-3 py-1 text-sm text-violet-300">Convert estimate to pending</button>
+                            <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="mf-btn">Convert estimate to pending</button>
                           )}
                           <button
                             type="button"
@@ -3113,7 +3010,7 @@ function App() {
                               setSelectedJobId(job.id);
                               setJobEditorMode("edit");
                             }}
-                            className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300"
+                            className="mf-btn"
                           >
                             Edit job
                           </button>
@@ -3124,12 +3021,12 @@ function App() {
                               setSelectedJobId(job.id);
                               setJobEditorMode("invoice");
                             }}
-                            className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300"
+                            className="mf-btn"
                           >
                             Create invoice
                           </button>
-                          <button type="button" onClick={() => calculateJobCost(job)} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">{getCostButtonLabel(job)}</button>
-                          <button type="button" onClick={() => deleteJob(job.id)} className="rounded-full border border-rose-700 px-3 py-1 text-sm text-rose-300">Delete job</button>
+                          <button type="button" onClick={() => calculateJobCost(job)} className="mf-btn">{getCostButtonLabel(job)}</button>
+                          <button type="button" onClick={() => deleteJob(job.id)} className="mf-btn mf-btn--danger">Delete job</button>
                         </div>
 
                         {jobEditorMode === "edit" && selectedJobId === job.id && selectedJob ? (
@@ -3503,7 +3400,7 @@ function App() {
                             </div>
                             <div className="flex gap-2">
                               <button type="button" onClick={() => applySavedEstimateTemplate(template).catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-cyan-300">Use</button>
-                              <button type="button" onClick={() => deleteEstimateTemplate(template.id).catch(() => undefined)} className="rounded-full border border-rose-700 px-3 py-1 text-rose-300">Delete</button>
+                              <button type="button" onClick={() => deleteEstimateTemplate(template.id).catch(() => undefined)} className="mf-btn mf-btn--sm mf-btn--danger">Delete</button>
                             </div>
                           </div>
                         ))}
@@ -3684,97 +3581,7 @@ function App() {
           </section>
         )}
 
-        {activeTab === "materials" && (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Materials</h2>
-                <p className="mt-2 text-sm text-slate-400">Group stock by material type and copy or edit entries quickly.</p>
-              </div>
-              <button type="button" onClick={openAddMaterialForm} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add material</button>
-            </div>
-
-            {showMaterialEditor ? (
-              <div className="mt-6 rounded-2xl border border-cyan-700/40 bg-slate-950 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">{editingMaterialId ? "Edit material" : "Add material"}</h3>
-                    <p className="mt-1 text-sm text-slate-400">Fill in the material details and save.</p>
-                  </div>
-                  <button type="button" onClick={closeMaterialForm} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Close</button>
-                </div>
-
-                <form onSubmit={createMaterial} className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block text-sm text-slate-300">
-                      <span className="mb-2 block">Material name</span>
-                      <input value={materialForm.name} onChange={(e) => setMaterialForm({ ...materialForm, name: e.target.value })} placeholder="Material name" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
-                    </label>
-                    <label className="block text-sm text-slate-300">
-                      <span className="mb-2 block">Material type</span>
-                      <input value={materialForm.type} onChange={(e) => setMaterialForm({ ...materialForm, type: e.target.value })} placeholder="Type" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="block text-sm text-slate-300">
-                      <span className="mb-2 block">Colour</span>
-                      <input value={materialForm.color} onChange={(e) => setMaterialForm({ ...materialForm, color: e.target.value })} placeholder="Colour" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="block text-sm text-slate-300">
-                      <span className="mb-2 block">Usage unit</span>
-                      <div className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-300">Grams (g)</div>
-                    </label>
-                    <label className="block text-sm text-slate-300">
-                      <span className="mb-2 block">Purchase cost per kg</span>
-                      <input value={materialForm.costPerUnit} onChange={(e) => setMaterialForm({ ...materialForm, costPerUnit: e.target.value })} placeholder="Cost per kg" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="block text-sm text-slate-300">
-                      <span className="mb-2 block">Stock purchased (kg)</span>
-                      <input value={materialForm.stockLevel} onChange={(e) => setMaterialForm({ ...materialForm, stockLevel: e.target.value })} placeholder="e.g. 1" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="block text-sm text-slate-300 md:col-span-2">
-                      <span className="mb-2 block">Reorder threshold (kg)</span>
-                      <input value={materialForm.reorderThreshold} onChange={(e) => setMaterialForm({ ...materialForm, reorderThreshold: e.target.value })} placeholder="e.g. 0.2" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                  </div>
-
-                  <div className="flex justify-end gap-3">
-                    <button type="button" onClick={closeMaterialForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel</button>
-                    <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingMaterialId ? "Save material" : "Add material"}</button>
-                  </div>
-                </form>
-              </div>
-            ) : null}
-
-            <div className="mt-6 space-y-6">
-              {groupedMaterials.map(([type, typeMaterials]) => (
-                <div key={type} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-white">{type}</h3>
-                    <span className="text-sm text-slate-400">{typeMaterials.length} entries</span>
-                  </div>
-                  <div className="space-y-3">
-                    {typeMaterials.map((material) => (
-                      <div key={material.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{material.name}</p>
-                            <p className="text-sm text-slate-400">{material.color || "No colour"} • {(material.stockLevel / KG_TO_G).toFixed(2)} kg ({material.stockLevel.toFixed(0)} g) • £{(material.costPerUnit * KG_TO_G).toFixed(2)} / kg (£{material.costPerUnit.toFixed(4)} / g)</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => startEditingMaterial(material)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Edit</button>
-                            <button type="button" onClick={() => copyMaterial(material)} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Copy</button>
-                            <span className={`rounded-full px-3 py-1 text-xs ${material.stockLevel <= material.reorderThreshold ? "bg-amber-600/20 text-amber-300" : "bg-emerald-600/20 text-emerald-300"}`}>
-                              {material.stockLevel <= material.reorderThreshold ? "Low stock" : "Healthy"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {activeTab === "materials" && <MaterialsPage materials={materials} onChanged={loadData} />}
 
         {activeTab === "machines" && (
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
@@ -3915,8 +3722,8 @@ function App() {
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => loadCustomerOrders(customer.id)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Order history</button>
-                          <button type="button" onClick={() => startEditingCustomer(customer)} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">Edit</button>
-                          <button type="button" onClick={() => removeCustomer(customer.id)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Delete</button>
+                          <button type="button" onClick={() => startEditingCustomer(customer)} className="mf-btn mf-btn--sm">Edit</button>
+                          <button type="button" onClick={() => removeCustomer(customer.id)} className="mf-btn mf-btn--sm mf-btn--danger">Delete</button>
                         </div>
                       </div>
                       {customer.address ? <p className="mt-2 text-xs text-slate-400">{customer.address}</p> : null}
@@ -4008,8 +3815,8 @@ function App() {
                           </div>
                           <div className="flex gap-2">
                             <button type="button" onClick={() => loadSupplierPurchases(supplier.id)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Purchases</button>
-                            <button type="button" onClick={() => startEditingSupplier(supplier)} className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">Edit</button>
-                            <button type="button" onClick={() => removeSupplier(supplier.id)} className="rounded-full border border-rose-700 px-3 py-1 text-xs text-rose-300">Delete</button>
+                            <button type="button" onClick={() => startEditingSupplier(supplier)} className="mf-btn mf-btn--sm">Edit</button>
+                            <button type="button" onClick={() => removeSupplier(supplier.id)} className="mf-btn mf-btn--sm mf-btn--danger">Delete</button>
                           </div>
                         </div>
                         {supplier.notes ? <p className="mt-2 text-xs text-slate-400">{supplier.notes}</p> : null}
@@ -4450,195 +4257,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === "help" && (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <h2 className="text-xl font-semibold">Help guide</h2>
-            <p className="mt-2 text-sm text-slate-400">Use this page as your operating manual for daily workflows, then raise bugs/features straight to GitHub Issues.</p>
-            <div className="mt-6 space-y-4 text-sm text-slate-300">
-              <div id="about-makerflow" className="rounded-2xl border border-cyan-800/50 bg-slate-950 p-4">
-                <h3 className="select-none font-semibold text-white" onClick={handleVersionHeadingClick}>MakerFlow {versionInfo ? `v${versionInfo.version}` : ""}</h3>
-                <h4 className="mt-2 text-xs uppercase tracking-[0.25em] text-slate-400">Deployment Information</h4>
-                {versionInfo ? (
-                  <>
-                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs">
-                      <dt className="text-slate-500">Version</dt><dd>{versionInfo.version}</dd>
-                      <dt className="text-slate-500">Build Number</dt><dd>{versionInfo.buildNumber}</dd>
-                      <dt className="text-slate-500">Git Commit</dt><dd>{versionInfo.gitCommit}</dd>
-                      <dt className="text-slate-500">Branch</dt><dd>{versionInfo.gitBranch}</dd>
-                      <dt className="text-slate-500">Built</dt><dd>{formatBuildDate(versionInfo.buildDate)}</dd>
-                      <dt className="text-slate-500">Environment</dt><dd>{versionInfo.environment}</dd>
-                    </dl>
-                    <div className="mt-3 flex items-center gap-3">
-                      <button type="button" onClick={() => copyDeploymentInfo()} className="rounded-xl border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Copy for support</button>
-                      {versionCopyMessage ? <span className="text-xs text-cyan-300">{versionCopyMessage}</span> : null}
-                    </div>
-                  </>
-                ) : (
-                  <p className="mt-2 text-xs text-slate-400">{versionError || "Loading version information..."}</p>
-                )}
-                {diagnosticsVisible ? (
-                  <div className="mt-4 rounded-xl border border-amber-700/50 bg-slate-900 p-3">
-                    <h4 className="text-sm font-semibold text-amber-300">Developer diagnostics</h4>
-                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs">
-                      <dt className="text-slate-500">API connectivity</dt>
-                      <dd className={apiHealth ? (apiHealth.ok ? "text-emerald-400" : "text-red-400") : ""}>{apiHealth ? `${apiHealth.ok ? "OK" : "FAILED"} (${apiHealth.detail}, ${apiHealth.latencyMs} ms)` : "Checking..."}</dd>
-                      <dt className="text-slate-500">Application uptime</dt><dd>{apiHealth?.uptime != null ? formatUptime(apiHealth.uptime) : "n/a"}</dd>
-                      <dt className="text-slate-500">Frontend bundle</dt>
-                      <dd className={versionInfo && versionInfo.version !== frontendVersion ? "text-amber-400" : ""}>{frontendVersion}{versionInfo && versionInfo.version !== frontendVersion ? " (differs from server, refresh the page)" : ""}</dd>
-                      <dt className="text-slate-500">Browser</dt><dd className="break-all">{navigator.userAgent}</dd>
-                      <dt className="text-slate-500">Metadata</dt>
-                      <dd><pre className="whitespace-pre-wrap break-all">{versionInfo ? JSON.stringify(versionInfo, null, 2) : "Not loaded"}</pre></dd>
-                    </dl>
-                  </div>
-                ) : null}
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Creating a job</h3>
-                <p className="mt-2">Use Jobs &gt; Add job to start with the basics: job name, customer, equipment, estimated print time, and material use. New entries start as Quote Draft, and the app calculates costs when you save. Paste a supported 3D model page into Model URL and choose Fill job name to try to read its title from 3Drop, Printables (Prusa), MakerWorld, Thingiverse, or Cults3D. The link is saved with the job; if a site blocks title lookup or the link is a search/listing page, type the model name yourself and keep the URL. Optional pricing and production details and saved estimates are also available. Open Edit job for the full set of production, payment, QA, rework, and failure fields; after saving edits, choose Refresh costs to update the estimate. Each job receives an automatic number. If the customer is new, you can add their contact details when prompted.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Calculating costs</h3>
-                <p className="mt-2">Saving a new job calculates its price automatically. After editing an existing job, choose Refresh costs to recalculate. Costing uses material usage, machine runtime electricity/depreciation, labour time, workshop hourly rate, plus guardrails from Billing Rules (minimum charge, rush fee %, waste factor %). Setup fee and delivery charge are optional per-job details. Job cards show the internal breakdown; invoices show customer-facing totals.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Quote to job workflow</h3>
-                <p className="mt-2">Open a quote in Jobs and use quick actions to move it through Quote Draft → Quote Sent → Quote Approved. Use Convert to job to set it to Pending and begin production. When a job is changed to Completed, the app refreshes costs and opens invoice mode automatically.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Equipment and billing rules</h3>
-                <p className="mt-2">Manage equipment profiles in Equipment (add/edit/remove wattage, depreciation, and replacement runtime). In Billing, set markups, electricity rate, labour rate, workshop hourly rate, pricing guardrails (minimum charge, rush fee %, waste factor %), and invoice finance settings (VAT, suggested deposit %, payment terms days). Setup fee and delivery charge are job-level fields in the job forms/cards. Billing and personalization sections are collapsible for easier navigation.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Site theme customization</h3>
-                <p className="mt-2">The app starts with the MakerFlow light branding: white background, Charcoal `#1C1C1E` text, Soft Grey `#E5E5E7` inputs, Primary Blue `#3A7DFF`, Dark Blue `#1D63E7` for hover states, and Light Blue `#5DA8FF` for supporting highlights. Inter is the primary UI font. In Admin, use Site theme colors to customize the background, text, inputs, and accent buttons. The MakerFlow preset restores these defaults; Light, Dark, High Contrast, Forest, Night Shift, and Paper Invoice are also available. Click Save site theme to keep your choices.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Business and customers</h3>
-                <p className="mt-2">Set your workshop name, logo, address, email, phone, and website in Billing. MakerFlow branding stays separate: the MakerFlow logo at the top-left returns to Dashboard, while your business name and logo stay at the top-right; clicking your business logo opens Billing. Manage customer records in Customers and reuse those details in invoices.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Invoices and backup</h3>
-                <p className="mt-2">Open a job card and choose Create invoice for print/PDF output. The invoice panel includes Refresh costs, Print / Save PDF, and Close invoice actions. Invoices keep your workshop's business name, logo, and contact details, with a “Made with MakerFlow” footer. Invoice totals include SubTotal, VAT, Suggested deposit, Deposit paid, Grand total, and Balance due, and show payment terms when configured. Delivery (when checked on a job) is included in the Production costs subtotal. In Admin tools, use the single Backup and restore card to select Workshop, Customers, Suppliers, and Billing sections for one JSON backup. Workshop jobs, materials, and equipment are grouped to preserve their relationships. Restoring a selected backup replaces only its included sections; older full and individual JSON backups plus jobs/materials CSV backups remain supported. A full backup restore replaces all current app data.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Reporting page</h3>
-                <p className="mt-2">Use Reports to filter production jobs by date range, status, equipment, and customer. The page shows summary metrics (jobs, revenue, base cost, margin), includes margin reporting views by machine/material/customer, and lets you export the filtered report rows as CSV.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Model links</h3>
-                <p className="mt-2">In Jobs &gt; Add job, paste the model page into Model URL. Choose Fill job name to ask the backend to read the page title from 3Drop, Printables (Prusa), MakerWorld, Thingiverse, or Cults3D. The original link is saved with the job. When you expand the job, Job File Preview also looks for the page's model image and embeds it directly from the source site; MakerFlow does not download or store that image.</p>
-                <p className="mt-2">Title and image lookup depend on each site allowing the app to read its page. If the site blocks the request, the link is a search/category page, or the page has no embeddable image, enter the job name yourself and use the source link to view the model.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Bambu telemetry integration</h3>
-                <p className="mt-2">A local telemetry connector for tracking your Bambu printer status is coming soon. The feature is in alpha testing and will be available when the application is deployed locally.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">If the app is not responding</h3>
-                <p className="mt-2">Use Node.js 26.13 LTS and npm for local development. The app uses Prisma 7 with SQLite. For one-command local startup, run `bash start-local.sh` from the repository root; it supplies a default SQLite database URL (`file:./dev.db`) for Prisma. If running services manually, check that frontend `127.0.0.1:5173` and backend `localhost:4000` are both running, then verify backend health at `/api/health`. Restart both dev servers if either side is down.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Release notes and change history</h3>
-                <p className="mt-2">Review project updates and release notes in the changelog: <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/blob/main/docs/CHANGELOG.md" target="_blank" rel="noopener noreferrer">CHANGELOG.md</a>.</p>
-              </div>
-              <form onSubmit={submitHelpRequest} className="rounded-2xl border border-cyan-700/40 bg-slate-950 p-4">
-                <h3 className="font-semibold text-white">Raise a bug or feature request</h3>
-                <p className="mt-2 text-sm text-slate-300">
-                  Open requests are tracked in <a className="text-cyan-300 underline" href="https://github.com/bloodygoodbloke/laser-and-3dprint-tracker/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>.
-                </p>
-                <p className="mt-2 text-sm text-slate-300">
-                  Create an issue in GitHub to report a problem or suggest an improvement. Choose a request type, set its priority, and add a short title and clear details. The app adds its version, build, environment, browser, and submission time automatically.
-                </p>
-
-                {issueReportStatusError ? (
-                  <p className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/20 p-3 text-sm text-amber-200">
-                    We couldn’t check the GitHub issue setup. You can still submit, and any problem will be shown here.
-                  </p>
-                ) : issueReportStatus?.configured ? (
-                  <p className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-3 text-sm text-emerald-200">
-                    Server configuration found for <code>{issueReportStatus.repository}</code>. GitHub will confirm the token can create issues when you submit.
-                  </p>
-                ) : issueReportStatus && !issueReportStatus.configured ? (
-                  <p className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/20 p-3 text-sm text-amber-200">
-                    GitHub issue creation isn’t configured on this server. Contact the app administrator to enable it.
-                  </p>
-                ) : (
-                  <p className="mt-3 text-xs text-slate-400">Checking GitHub issue setup…</p>
-                )}
-
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm text-slate-300">
-                    <span className="mb-1 block">Request type</span>
-                    <select
-                      value={helpRequestForm.requestType}
-                      onChange={(e) => setHelpRequestForm((current) => ({ ...current, requestType: e.target.value as "Bug" | "Feature Request" }))}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                    >
-                      <option value="Feature Request">Feature Request</option>
-                      <option value="Bug">Bug</option>
-                    </select>
-                  </label>
-
-                  <label className="block text-sm text-slate-300">
-                    <span className="mb-1 block">Priority</span>
-                    <select
-                      value={helpRequestForm.priority}
-                      onChange={(e) => setHelpRequestForm((current) => ({ ...current, priority: e.target.value as "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations" }))}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                    >
-                      <option value="P1 Critical">P1 Critical</option>
-                      <option value="P1 High">P1 High</option>
-                      <option value="P2 Medium">P2 Medium</option>
-                      <option value="P3 Low">P3 Low</option>
-                      <option value="Integrations">Integrations</option>
-                    </select>
-                  </label>
-
-                  <label className="block text-sm text-slate-300 sm:col-span-2">
-                    <span className="mb-1 block">Short title</span>
-                    <input
-                      value={helpRequestForm.title}
-                      onChange={(e) => setHelpRequestForm((current) => ({ ...current, title: e.target.value }))}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                      placeholder="Example: Invoice line-item audit history"
-                      maxLength={200}
-                      required
-                    />
-                  </label>
-
-                  <label className="block text-sm text-slate-300 sm:col-span-2">
-                    <span className="mb-1 block">Details</span>
-                    <textarea
-                      value={helpRequestForm.details}
-                      onChange={(e) => setHelpRequestForm((current) => ({ ...current, details: e.target.value }))}
-                      className="min-h-[130px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                      placeholder={helpRequestForm.requestType === "Bug"
-                        ? "What happened, what did you expect, and how can we reproduce it?"
-                        : "What problem should this solve, and what outcome would you like?"}
-                      maxLength={10000}
-                      required
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-4 flex justify-end">
-                  <button type="submit" disabled={isSubmittingIssue || issueReportStatus?.configured === false} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">
-                    {isSubmittingIssue ? "Creating issue..." : "Create GitHub issue"}
-                  </button>
-                </div>
-
-                {helpRequestMessage ? <p role="alert" className="mt-3 text-sm text-rose-300">{helpRequestMessage}</p> : null}
-                {createdIssue ? (
-                  <div className="mt-3 rounded-xl border border-emerald-700/50 bg-emerald-900/10 p-3 text-sm text-emerald-300" role="status">
-                    <p>GitHub issue created: <span className="font-semibold">#{createdIssue.number}</span></p>
-                    <p className="mt-1 break-all"><a className="underline" href={createdIssue.url} target="_blank" rel="noopener noreferrer">View issue on GitHub</a></p>
-                  </div>
-                ) : null}
-              </form>
-            </div>
-            <div className="mt-6 text-left text-xs text-slate-500">Version {APP_VERSION}</div>
-          </section>
-        )}
+        {activeTab === "help" && <HelpPage versionInfo={versionInfo} versionError={versionError} />}
 
         {(billingSettings.businessAddress || billingSettings.businessEmail || billingSettings.businessPhone || billingSettings.businessWebsite) ? (
           <footer className="mt-10 border-t border-slate-800 pt-4 text-xs text-slate-400">

@@ -101,6 +101,9 @@ export interface Job {
   name: string;
   customer?: string | null;
   sourceUrl?: string;
+  sourceImageUrl?: string;
+  sourceImageForUrl?: string;
+  sourceImageCheckedAt?: string | null;
   filePath?: string | null;
   machineType: string;
   estTimeMinutes: number;
@@ -290,7 +293,7 @@ export interface MakerWorldPrintProfile {
 }
 
 export interface IssueReportRequest {
-  requestType: "Bug" | "Feature Request";
+  requestType: "Bug" | "Feature Request" | "Integration Request" | "Improvement Suggestion";
   priority: "P1 Critical" | "P1 High" | "P2 Medium" | "P3 Low" | "Integrations";
   title: string;
   details: string;

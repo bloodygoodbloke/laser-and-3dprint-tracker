@@ -74,6 +74,13 @@ The standalone frontend Dockerfiles (`frontend/Dockerfile`, `frontend/Dockerfile
 4. **Env vars missing/stale:** `buildNumber` of `local` or `gitCommit` of `unknown` means the build args/env vars were not applied; re-run the workflow.
 5. **Browser shows an old frontend:** the diagnostics panel flags a frontend bundle version that differs from the server; hard refresh.
 6. **Image mismatch:** compare the Container App image tag with the commit in GitHub.
+7. **`ProbeFailed: Probe of StartUp failed`:** the server binds `0.0.0.0` (override with `HOST`) on `PORT` (4000) and exposes a public `GET /health` returning 200. `infra/containerapp.yaml` defines startup (up to ~5 minutes, because `prisma migrate deploy` on SQLite over Azure Files can be slow at low CPU) and liveness probes. The yaml is only applied by `infra/setup.sh` (`az containerapp update --yaml`), so re-run it, or add the same probes in the portal, for an existing app.
+
+## Optional runtime settings
+
+- `SOURCE_IMAGE_CACHE_DAYS` (default `7`): how long a cached source-image thumbnail URL is trusted before it is re-read from the source site.
+- `SOURCE_IMAGE_MISS_CACHE_DAYS` (default `1`): how long to wait before retrying a model that had no image.
+- `HOST` (default `0.0.0.0`) and `PORT` (default `4000`): listen address of the backend.
 
 ## Checks
 

@@ -29,17 +29,19 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 - Use the Dashboard scheduling calendar to view a rolling 14-day due-date plan with projected completion timestamps by machine queue.
 - Capture QA checklist items, QA pass/fail status, and rework costs/notes per job with cost impact tracking.
 - Add multi-material usage per job with simplified material selection plus quantity in grams.
-- Upload SVG/STL job files from expanded job cards and preview them inline directly in job detail.
-- Track materials with colour, grouped material-type views, and quick copy/edit workflows.
+- Upload SVG, STL or image (PNG/JPG/WebP/GIF) job files from expanded job cards and preview them inline directly in job detail; STL files render in a built-in drag-to-rotate viewer.
+- Track materials with colour in collapsible type groups, with search, filters, sorting, searchable dropdowns (add new types, colours and units inline), stock health status, and quick copy/edit workflows.
 - Material creation/editing is managed in the Materials tab (Admin no longer contains a duplicate add-material form).
 - Manage CRM Lite customer records (name, address, email, phone, notes) with recent order history lookup.
 - Manage supplier records, website URLs, and material purchase history (material, quantity, cost, date, notes) from a dedicated Suppliers tab.
 - Track margin reporting by machine, material type, and customer from the Reports page.
 - Monitor delivery and utilization KPIs including on-time rate, overdue open jobs, queued runtime, and per-machine utilization.
 - Use a dedicated Reports page with date-range, status, machine, and customer filters plus CSV export-ready report rows, summary metrics, and margin breakdown views.
-- Use the Help page as an in-app guide and raise bug/feature requests directly from the app. Each submission creates a GitHub issue (labelled `bug` or `enhancement`) with app version, build number, environment, browser and date/time attached, then shows the issue number and link. See `docs/github-issues.md`.
+- Use the MakerFlow User Guide (Help page) for a Quick Start, Common Tasks shortcuts, What's New and collapsible guides; development-only troubleshooting is shown only when the server environment is Development. Raise bug, feature, integration or improvement requests directly from the app. Each submission creates a GitHub issue (labelled `bug` or `enhancement`) with app version, build number, environment, browser and date/time attached, then shows the issue number and link. See `docs/github-issues.md`.
 - Bambu telemetry is currently shown as an alpha/coming-soon feature in Machines; live status, event automation, spool deductions, failure logs, and predictive maintenance are not currently available in the app.
-- Add a generic Model URL to a quote from 3Drop, Printables (Prusa), MakerWorld, Thingiverse, or Cults3D. The backend tries to read the model title and fills the job name; the source link is saved with the job. Job File Preview can also embed the source page's image directly, without downloading or storing the picture in MakerFlow. Title and image lookup depend on each site allowing page access, so enter the name manually if lookup is blocked or the link is a search/category page.
+- Add a generic Model URL to a quote from 3Drop, Printables (Prusa), MakerWorld, Thingiverse, or Cults3D. The backend tries to read the model title and fills the job name; the source link is saved with the job. Title lookup depends on each site allowing page access, so enter the name manually if lookup is blocked or the link is a search/category page.
+- MakerWorld import: the Import button on a MakerWorld URL fills the job name and Model URL from the link, then reads MakerWorld's public design JSON (`GET https://makerworld.com/api/v1/design-service/design/{id}`, via `POST /api/makerworld/import`) for print time, filament weight/type/colour, creator and cover image. It always uses the first print profile, maps each filament to an existing material (type + colour, falling back to the first material), and falls back to the URL slug if the lookup fails. MakerWorld blocks plain HTTP clients, so the backend retries with headless Chromium (installed in the Docker image).
+- Source model images: the job stores only a small thumbnail URL (`sourceImageUrl`, `sourceImageCheckedAt`, `sourceImageForUrl`), never image bytes. `POST /api/jobs/:id/source-image` returns the cached URL and re-reads the source only when the cache is older than `SOURCE_IMAGE_CACHE_DAYS` (default 7), when the source URL changed, or when a previous miss is older than `SOURCE_IMAGE_MISS_CACHE_DAYS` (default 1). MakerWorld covers are requested as 480px WebP from the CDN. Jobs without an image show a "No image" placeholder with a link to the model page.
 - Manage machine profiles from a dedicated Machines tab with add/edit/remove workflows.
 - Calculate production costs for 3D and laser workflows using machine runtime electricity + depreciation plus separate labour-time charging.
 - Configure billing rules for percentage markups, electricity, labour rate, workshop hourly rate, per-machine wattage/depreciation assumptions, and invoice add-ons (delivery + VAT).
@@ -95,7 +97,7 @@ Built by a maker for people already selling made-to-order products: 3D printing 
 
 **Running with Docker Compose**
 - Build and start: `docker compose up --build`
-- Backend health endpoint: `http://127.0.0.1:4000/api/health`
+- Backend health endpoint: `http://127.0.0.1:4000/api/health` (also public `GET /health`, used by Azure Container Apps probes)
 - Frontend app: `http://127.0.0.1:5173`
 
 **Staging deployment**
@@ -156,6 +158,6 @@ If the UI appears unresponsive, verify both ports are listening (`4000` and `517
 See `docs/CHANGELOG.md` for version history and recent changes.
 
 ## Versioning and deployment diagnostics
-- `GET /api/version` reports `version`, `buildNumber`, `gitCommit`, `gitBranch`, `buildDate` and `environment`; the footer (`v<version> (<build>)`) and Help > Deployment Information show the same data.
+- `GET /api/version` reports `version`, `buildNumber`, `gitCommit`, `gitBranch`, `buildDate` and `environment`; the footer (`v<version> (<build>)`) and Help > Support & Version Information show the same data.
 - The semantic version is the `package.json` version; build metadata is injected by GitHub Actions through Docker build args and Container App env vars.
 - See [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md) for how versions and build numbers work, how to identify and verify what is running in Azure, and troubleshooting.

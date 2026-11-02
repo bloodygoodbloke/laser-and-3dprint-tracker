@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Job" ADD COLUMN "sourceImageUrl" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Job" ADD COLUMN "sourceImageCheckedAt" DATETIME;
+ALTER TABLE "Job" ADD COLUMN "sourceImageForUrl" TEXT NOT NULL DEFAULT '';

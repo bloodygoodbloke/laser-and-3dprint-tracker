@@ -49,6 +49,23 @@ const api = {
     if (!res.ok) throw new Error(body?.error || `Could not read model image (${res.status})`);
     return body;
   },
+  async refreshJobSourceImage(id: string): Promise<{ imageUrl: string | null }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(`/api/jobs/${id}/source-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+        signal: controller.signal,
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error || `Could not load source image (${res.status})`);
+      return body;
+    } finally {
+      clearTimeout(timer);
+    }
+  },
   async updateJob(id: string, payload: Partial<Job>) {
     const res = await fetch(`/api/jobs/${id}`, {
       method: "PUT",

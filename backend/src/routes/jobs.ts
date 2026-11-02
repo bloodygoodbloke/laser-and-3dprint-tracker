@@ -2,6 +2,7 @@ import { Router } from "express";
 import prisma from "../prisma.js";
 import { upload } from "../upload.js";
 import { normalizeStoredMinutes } from "../printTime.js";
+import { parseSupportedModelUrl, resolveSourceImageUrl } from "./model-metadata.js";
 
 const router = Router();
 
@@ -172,6 +173,43 @@ router.post('/:id/upload', upload.single('file'), async (req, res) => {
   } catch (error) {
     res.status(404).json({ error: 'Job not found' });
   }
+});
+
+// Source-image cache: only a CDN thumbnail URL is stored (never image bytes). Refreshed from the source when stale.
+const dayMs = 24 * 60 * 60 * 1000;
+const cacheDays = () => Math.max(Number(process.env.SOURCE_IMAGE_CACHE_DAYS) || 7, 0);
+const missCacheDays = () => Math.max(Number(process.env.SOURCE_IMAGE_MISS_CACHE_DAYS) || 1, 0);
+
+router.post("/:id/source-image", async (req, res) => {
+  const id = String(req.params.id);
+  const job = await prisma.job.findUnique({ where: { id } });
+  if (!job) return res.status(404).json({ error: "Job not found" });
+
+  const sourceUrl = String(job.sourceUrl || "").trim();
+  const result = (imageUrl: string, refreshed: boolean) => res.json({ imageUrl: imageUrl || null, refreshed, checkedAt: job.sourceImageCheckedAt });
+  if (!sourceUrl) return result("", false);
+
+  const modelUrl = parseSupportedModelUrl(sourceUrl);
+  if (!modelUrl) return result("", false);
+
+  const sameSource = job.sourceImageForUrl === sourceUrl;
+  const ttlDays = job.sourceImageUrl ? cacheDays() : missCacheDays();
+  const fresh = Boolean(job.sourceImageCheckedAt) && Date.now() - new Date(job.sourceImageCheckedAt as Date).getTime() < ttlDays * dayMs;
+  if (sameSource && fresh && !req.body?.force) return result(job.sourceImageUrl, false);
+
+  let imageUrl = "";
+  try {
+    imageUrl = (await resolveSourceImageUrl(modelUrl)) || "";
+  } catch (_error) {
+    // Source unreachable: keep any existing cached URL and retry after the miss TTL.
+    imageUrl = sameSource ? job.sourceImageUrl : "";
+  }
+
+  const updated = await prisma.job.update({
+    where: { id },
+    data: { sourceImageUrl: imageUrl, sourceImageCheckedAt: new Date(), sourceImageForUrl: sourceUrl },
+  });
+  return res.json({ imageUrl: updated.sourceImageUrl || null, refreshed: true, checkedAt: updated.sourceImageCheckedAt });
 });
 
 router.get("/:id", async (req, res) => {

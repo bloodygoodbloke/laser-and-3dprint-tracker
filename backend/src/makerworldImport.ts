@@ -1,3 +1,4 @@
+import { chromium } from "playwright";
 import { extractDurationMinutes } from "./printTime.js";
 
 export const MAKERWORLD_DESIGN_ENDPOINT = "https://makerworld.com/api/v1/design-service/design";
@@ -144,3 +145,23 @@ export function buildImportResult(design: RawDesign, designId: string, modelUrl:
     missing,
   };
 }
+
+// Cloudflare rejects Node's TLS fingerprint (403), so fall back to the Chromium already used by fetchHtml.
+export const fetchDesignJson = async (endpoint: string): Promise<RawDesign> => {
+  try {
+    const response = await fetch(endpoint, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(10000) });
+    if (response.ok && /json/i.test(response.headers.get("content-type") || "")) return (await response.json()) as RawDesign;
+  } catch {
+    // fall through to browser
+  }
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await (await browser.newContext()).newPage();
+    const response = await page.goto(endpoint, { waitUntil: "domcontentloaded", timeout: 45000 });
+    const status = response?.status() ?? 0;
+    if (status >= 400) throw new Error(`MakerWorld API returned ${status}.`);
+    return JSON.parse(await page.locator("body").innerText()) as RawDesign;
+  } finally {
+    await browser.close().catch(() => undefined);
+  }
+};

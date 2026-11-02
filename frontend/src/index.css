@@ -24,11 +24,24 @@ body {
 }
 
 .app-theme .bg-slate-900\/70,
-.app-theme .bg-slate-900\/60 {
+.app-theme .bg-slate-900\/60,
+.app-theme .bg-slate-900\/40,
+.app-theme .bg-slate-950\/50,
+.app-theme .bg-slate-950\/70,
+.app-theme .bg-slate-950\/80,
+.app-theme .bg-slate-950\/90 {
   background-color: var(--app-surface-alt) !important;
 }
 
+/* Neutral pills (e.g. the Quote Draft status) and hover fills: a light tint of the text colour so the theme text stays readable on it. */
+.app-theme .bg-slate-700,
+.app-theme .bg-slate-800,
+.app-theme .hover\:bg-slate-800:hover {
+  background-color: var(--app-neutral-soft) !important;
+}
+
 .app-theme .text-slate-100,
+.app-theme .text-slate-200,
 .app-theme .text-slate-300,
 .app-theme .text-white {
   color: var(--app-text) !important;
@@ -81,8 +94,21 @@ body {
 .app-theme .text-cyan-200,
 .app-theme .text-cyan-400,
 .app-theme a.text-cyan-300 {
-  color: var(--app-accent) !important;
+  color: var(--app-link) !important;
 }
+
+/* Status text: tinted per theme so it keeps WCAG AA contrast on light and dark backgrounds. */
+.app-theme .text-emerald-200,
+.app-theme .text-emerald-300,
+.app-theme .text-emerald-400 { color: var(--app-success) !important; }
+.app-theme .text-rose-300,
+.app-theme .text-red-400 { color: var(--app-danger) !important; }
+.app-theme .text-amber-200,
+.app-theme .text-amber-300,
+.app-theme .text-amber-400,
+.app-theme .text-yellow-300 { color: var(--app-warning) !important; }
+.app-theme .text-sky-300 { color: var(--app-info) !important; }
+.app-theme .text-violet-300 { color: var(--app-violet) !important; }
 
 .app-theme button.border-cyan-700,
 .app-theme label.border-cyan-700,
@@ -110,6 +136,147 @@ body {
   color: var(--app-text-faint) !important;
 }
 
+/* Shared button component: solid accent pill with clear hover, focus and pressed states. */
+.app-theme .mf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 1px solid var(--app-accent);
+  border-radius: 9999px;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  background-color: var(--app-accent) !important;
+  color: var(--app-accent-text) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: background-color 120ms ease, box-shadow 120ms ease, transform 60ms ease;
+}
+
+.app-theme .mf-btn:hover:not(:disabled) {
+  background-color: var(--app-accent-hover) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+}
+
+.app-theme .mf-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  filter: brightness(0.92);
+}
+
+.app-theme .mf-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.app-theme .mf-btn--sm {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+/* White on rose-700/800 is 6.5:1 and 8.5:1, so it passes AA on any theme background. */
+.app-theme .mf-btn--danger {
+  border-color: #9f1239;
+  background-color: #be123c !important;
+  color: #ffffff !important;
+}
+
+.app-theme .mf-btn--danger:hover:not(:disabled) {
+  background-color: #9f1239 !important;
+}
+
+/* Secondary button: outlined, so it pairs with the solid .mf-btn without competing with it. */
+.app-theme .mf-btn--outline {
+  background-color: var(--app-surface) !important;
+  color: var(--app-text) !important;
+  box-shadow: none;
+}
+
+.app-theme .mf-btn--outline:hover:not(:disabled) {
+  background-color: var(--app-accent-soft) !important;
+  box-shadow: none;
+}
+
+/* Help page building blocks. */
+.app-theme .mf-hero {
+  background: linear-gradient(135deg, var(--app-accent-soft), var(--app-surface));
+  border: 1px solid var(--app-accent-highlight);
+  border-left: 6px solid var(--app-accent);
+}
+
+.app-theme .mf-step {
+  background-color: var(--app-accent);
+  color: var(--app-accent-text);
+}
+
+.app-theme .mf-summary {
+  transition: background-color 120ms ease;
+}
+
+.app-theme .mf-summary::-webkit-details-marker {
+  display: none;
+}
+
+.app-theme .mf-summary:hover {
+  background-color: var(--app-surface-alt);
+}
+
+.app-theme .mf-chevron {
+  transition: transform 150ms ease;
+}
+
+.app-theme details[open] > .mf-summary .mf-chevron {
+  transform: rotate(180deg);
+}
+
+.app-theme .mf-task:hover {
+  background-color: var(--app-accent-soft);
+  border-color: var(--app-accent);
+}
+
+.app-theme .mf-choice {
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  background-color: var(--app-surface-alt);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.app-theme .mf-choice:hover {
+  border-color: var(--app-accent);
+}
+
+.app-theme .mf-choice:has(input:checked) {
+  border-color: var(--app-accent);
+  background-color: var(--app-accent-soft);
+  box-shadow: 0 0 0 1px var(--app-accent);
+}
+
+.app-theme .mf-choice:has(input:focus-visible) {
+  outline: 3px solid var(--app-text);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-theme .mf-chevron,
+  .app-theme .mf-summary,
+  .app-theme .mf-choice {
+    transition: none;
+  }
+}
+
+/* Visible keyboard focus on every interactive control; the text colour always contrasts with the background. */
+.app-theme :is(button, a, summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--app-text);
+  outline-offset: 2px;
+}
+
+.app-theme button.border-cyan-700 {
+  font-weight: 600;
+}
+
 @media print {
   body {
     background: white;
@@ -119,4 +286,14 @@ body {
   .no-print {
     display: none !important;
   }
+}
+
+/* Inline code in the Help guides: readable on every theme. */
+.app-theme details code {
+  border-radius: 0.375rem;
+  background-color: var(--app-surface-alt);
+  border: 1px solid var(--app-border);
+  padding: 0.05rem 0.35rem;
+  font-size: 0.8em;
+  color: var(--app-text);
 }

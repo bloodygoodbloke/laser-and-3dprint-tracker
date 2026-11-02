@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as cheerio from "cheerio";
+import { MAKERWORLD_DESIGN_ENDPOINT, fetchDesignJson, parseMakerWorldUrlRef } from "../makerworldImport.js";
 
 const router = Router();
 const supportedDomains = ["three-drop.com", "makerworld.com", "printables.com", "thingiverse.com", "cults3d.com"];
@@ -195,6 +196,34 @@ router.post("/lookup", async (req, res) => {
   }
 });
 
+// MakerWorld's CDN resizes on request, so a ~4 MB cover becomes a ~20 KB WebP thumbnail without us storing anything.
+export const toThumbnailUrl = (imageUrl: string): string => {
+  try {
+    const url = new URL(imageUrl);
+    if (url.hostname.endsWith("bblmw.com") && !url.search) return `${imageUrl}?x-oss-process=image/resize,w_480`;
+  } catch {
+    // keep original
+  }
+  return imageUrl;
+};
+
+export const resolveSourceImageUrl = async (modelUrl: URL): Promise<string | null> => {
+  // MakerWorld pages sit behind a Cloudflare challenge (403 for plain fetch), so use its JSON design API instead.
+  const makerWorldRef = modelUrl.hostname.toLowerCase().endsWith("makerworld.com") ? parseMakerWorldUrlRef(modelUrl.toString()) : null;
+  let imageUrl: string | null;
+  if (makerWorldRef) {
+    const design = await fetchDesignJson(`${MAKERWORLD_DESIGN_ENDPOINT}/${makerWorldRef.designId}`);
+    const cover = String(design.coverUrl || design.instances?.find(Boolean)?.cover || "");
+    imageUrl = cover.startsWith("https://") ? cover : null;
+  } else {
+    const { html, pageUrl } = await fetchModelPage(modelUrl);
+    imageUrl = getImageUrl(html, pageUrl);
+  }
+  return imageUrl ? toThumbnailUrl(imageUrl) : null;
+};
+
+export const parseSupportedModelUrl = parseModelUrl;
+
 router.post("/preview", async (req, res) => {
   const modelUrl = parseModelUrl(req.body?.url);
   if (!modelUrl) {
@@ -202,8 +231,7 @@ router.post("/preview", async (req, res) => {
   }
 
   try {
-    const { html, pageUrl } = await fetchModelPage(modelUrl);
-    return res.json({ imageUrl: getImageUrl(html, pageUrl) });
+    return res.json({ imageUrl: await resolveSourceImageUrl(modelUrl) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not read the model page.";
     return res.status(502).json({ error: message });
