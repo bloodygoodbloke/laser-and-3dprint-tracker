@@ -112,6 +112,8 @@ Last updated: 2026-11-01
 | CHG-118 | Bug | P2 Medium | Completed Bug Fix | Billing zero values and decimals (#39) | 2026-11-02 | New NumberInput keeps typed text so 0 and 0.1 can be entered; 0% material/electricity markup is honoured in the UI and in jobs.ts instead of falling back to 25%. |
 | CHG-119 | Bug | P3 Low | Completed Bug Fix | UK spelling (#38) | 2026-11-02 | Replaced remaining US spellings in user-visible text (catalogue, colours) and set the page language to en-GB. |
 | CHG-120 | Bug | P1 High | Completed Bug Fix | Validate and safely serve job uploads (#25) | 2026-11-02 | Uploads are memory-buffered until extension/content validation passes; generated UUID filenames are persisted only after validation, invalid requests return clear errors, SVGs reject active/external content and are sandboxed/download-only. Tests run via `npm run test:upload`; upload behaviour is documented in README.md and docs/authentication.md. |
+| CHG-121 | Bug | P2 Medium | Completed Bug Fix | Source image lookup stuck in loading state | 2026-11-02 | Removed preview state from the image lookup effect dependencies; setting loading=true had cleaned up the active request and left the component permanently loading. Failed lookups now reach the existing no-image placeholder. |
+| CHG-122 | Bug | P1 High | Completed Bug Fix | Admin backup restore foreign-key failure | 2026-11-02 | Clear JobMaterial rows before deleting jobs in both restore paths. The jobs/materials restore preserves Bambu telemetry records and clears their optional jobId references before replacing jobs. |
 
 ## New Entry Template
 

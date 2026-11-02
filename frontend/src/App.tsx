@@ -603,7 +603,8 @@ function App() {
   useEffect(() => {
     if (!expandedModelJob?.sourceUrl) return;
     const { id, sourceUrl } = expandedModelJob;
-    if (modelPreviewByJob[id]?.sourceUrl === sourceUrl) return;
+    const currentPreview = modelPreviewByJob[id];
+    if (currentPreview?.sourceUrl === sourceUrl && (currentPreview.loading || currentPreview.imageUrl)) return;
 
     let cancelled = false;
     const cachedUrl = expandedModelJob.sourceImageForUrl === sourceUrl ? expandedModelJob.sourceImageUrl || null : null;
@@ -618,7 +619,9 @@ function App() {
       });
 
     return () => { cancelled = true; };
-  }, [expandedModelJob?.id, expandedModelJob?.sourceUrl, modelPreviewByJob]);
+  // Do not depend on modelPreviewByJob: setting loading=true would clean up this request,
+  // then the next effect run would see the matching source and leave it loading forever.
+  }, [expandedModelJob?.id, expandedModelJob?.sourceUrl]);
 
   useEffect(() => {
     if (jobs.length && !selectedJobId) {

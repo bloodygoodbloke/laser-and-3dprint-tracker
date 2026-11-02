@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Fixed Admin backup restore foreign-key failures: clear job-material rows before replacing jobs; the jobs-and-materials restore preserves Bambu telemetry while unlinking its optional job references.
+- Fixed the source model image lookup getting stuck on “Looking for a source image...” after the preview state changed; image lookup now completes and unavailable images reach the existing placeholder.
 - Secured job file uploads (#25): server-side allowlisting and content-signature validation for SVG, STL and supported image files, 10 MB limit with clear errors, safe SVG restrictions and response headers, generated server filenames, and focused upload tests.
 - Fixed Billing numeric fields (#39): a value of 0 now shows as "0" and can be saved, decimals such as 0.1 can be typed without the box resetting, and a 0% material or electricity markup is respected instead of reverting to 25%.
 - UK English (#38): "catalogue" and "colours" in remaining labels and help text, and the page language is now `en-GB`. Dates and numbers already follow the browser locale.

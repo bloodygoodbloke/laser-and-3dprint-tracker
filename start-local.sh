@@ -58,14 +58,16 @@ echo "Preparing backend database and Prisma client..."
 echo "Starting backend on http://127.0.0.1:4000 ..."
 (
   cd "$BACKEND_DIR"
-  npm run dev
+  # Local development intentionally bypasses Entra; production ignores this flag.
+  AUTH_DISABLED=true NODE_ENV=development npm run dev
 ) &
 BACKEND_PID=$!
 
 echo "Starting frontend on http://127.0.0.1:5173 ..."
 (
   cd "$FRONTEND_DIR"
-  npm run dev -- --host 127.0.0.1 --port 5173
+  # Ignore any production Entra build settings from frontend/.env.local for this local-only session.
+  VITE_ENTRA_CLIENT_ID= VITE_ENTRA_AUTHORITY= npm run dev -- --host 127.0.0.1 --port 5173
 ) &
 FRONTEND_PID=$!
 

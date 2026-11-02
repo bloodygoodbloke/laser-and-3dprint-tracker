@@ -145,7 +145,12 @@ router.post("/backup", async (req, res) => {
   const { jobs = [], materials = [] } = req.body || {};
 
   await prisma.$transaction(async (tx) => {
+    await tx.jobMaterial.deleteMany();
     await tx.jobCost.deleteMany();
+    await tx.bambuMachineStatus.updateMany({ where: { jobId: { not: null } }, data: { jobId: null } });
+    await tx.bambuEvent.updateMany({ where: { jobId: { not: null } }, data: { jobId: null } });
+    await tx.bambuUsageLog.updateMany({ where: { jobId: { not: null } }, data: { jobId: null } });
+    await tx.bambuFailureLog.updateMany({ where: { jobId: { not: null } }, data: { jobId: null } });
     await tx.job.deleteMany();
     await tx.material.deleteMany();
 
@@ -596,6 +601,7 @@ router.post("/backup/full", async (req, res) => {
     await tx.bambuEvent.deleteMany();
     await tx.bambuMachineStatus.deleteMany();
     await tx.bambuDevice.deleteMany();
+    await tx.jobMaterial.deleteMany();
     await tx.jobCost.deleteMany();
     await tx.billingAuditLog.deleteMany();
     await tx.estimateTemplate.deleteMany();
