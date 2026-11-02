@@ -248,6 +248,23 @@ export interface MakerWorldMetadata {
   estimatedMaterialGrams: number;
 }
 
+export interface MakerWorldImportResult {
+  title: string;
+  modelUrl: string;
+  creatorName: string | null;
+  previewImageUrl: string | null;
+  printMinutes: number | null;
+  printHours: number | null;
+  printRemainderMinutes: number | null;
+  filamentGrams: number | null;
+  filamentTypes: string[];
+  filamentColours: string[];
+  filaments: Array<{ type: string; colour: string; grams: number | null }>;
+  profileName: string | null;
+  source: { endpoint: string; fields: Record<string, string> };
+  missing: string[];
+}
+
 export interface MakerWorldJobDraft {
   name: string;
   machineType: string;

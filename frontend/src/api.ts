@@ -1,4 +1,4 @@
-import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, IssueReportRequest, IssueReportResponse, IssueReportStatus, Job, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
+import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, IssueReportRequest, IssueReportResponse, IssueReportStatus, Job, MakerWorldImportResult, MakerWorldJobDraft, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const csvHeader = "jobNumber,name,customer,machineType,machineRunTimeMinutes,labourTimeMinutes,status\n";
 const materialsCsvHeader = "name,type,unit,costPerUnit,stockLevel,reorderThreshold,color\n";
@@ -342,6 +342,16 @@ const api = {
     });
     if (!res.ok) throw new Error("Failed to generate Bambu simulation tick");
     return res.json();
+  },
+  async importMakerWorldV2(url: string): Promise<MakerWorldImportResult> {
+    const res = await fetch("/api/makerworld/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: normalizeMakerWorldUrl(url) }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.error || `MakerWorld import failed (${res.status})`);
+    return body;
   },
   async importMakerWorldMetadata(url: string): Promise<MakerWorldMetadata> {
     const rawUrl = normalizeMakerWorldUrl(url);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import api from "./api";
+import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchHealth, fetchVersionInfo, formatBuildDate, formatDeploymentInfo, formatUptime, formatVersionBadge, frontendVersion, type HealthInfo, type VersionInfo } from "./version";
 import PrintTimeInput from "./PrintTimeInput";
 import { calculateMachineLifecycle } from "./machineLifecycle";
@@ -291,6 +292,37 @@ const buildBambuDashboardFingerprint = (payload: BambuDashboardPayload | null) =
   ].join("|");
 };
 
+const COLOUR_NAMES: Array<[string, [number, number, number]]> = [
+  ["black", [0, 0, 0]], ["white", [255, 255, 255]], ["grey", [128, 128, 128]], ["silver", [192, 192, 192]], ["red", [220, 30, 30]],
+  ["orange", [255, 140, 0]], ["yellow", [255, 220, 0]], ["green", [40, 160, 60]], ["blue", [30, 80, 220]], ["purple", [130, 50, 180]],
+  ["pink", [255, 130, 180]], ["brown", [120, 80, 40]], ["beige", [220, 200, 160]],
+];
+const hexToRgb = (hex: string): [number, number, number] | null => {
+  const m = hex.trim().match(/^#?([0-9a-f]{6})/i);
+  return m ? [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16)] : null;
+};
+const nearestColourName = (hex: string) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return "";
+  const dist = (c: [number, number, number]) => (c[0] - rgb[0]) ** 2 + (c[1] - rgb[1]) ** 2 + (c[2] - rgb[2]) ** 2;
+  return COLOUR_NAMES.reduce((best, entry) => (dist(entry[1]) < dist(best[1]) ? entry : best))[0];
+};
+// Matches on filament type and colour (hex, or nearest colour name against the material's colour text); undefined if none.
+const findMatchingMaterial = (materials: Material[], filament: { type: string; colour: string }) => {
+  const type = filament.type.toLowerCase();
+  if (!type) return undefined;
+  const wantedName = nearestColourName(filament.colour);
+  return materials.find((material) => {
+    const typeText = `${material.type} ${material.name}`.toLowerCase();
+    if (!new RegExp(`(^|[^a-z])${type.replace(/[^a-z0-9]/g, "")}([^a-z]|$)`).test(typeText)) return false;
+    const materialColour = String(material.color || "").trim();
+    if (!materialColour) return false;
+    const materialRgb = hexToRgb(materialColour);
+    if (materialRgb) return materialColour.replace("#", "").toLowerCase() === filament.colour.replace("#", "").toLowerCase();
+    return !!wantedName && materialColour.toLowerCase().includes(wantedName);
+  });
+};
+
 function App() {
   const { user: currentUser, logout } = useAuth();
   const KG_TO_G = 1000;
@@ -354,6 +386,7 @@ function App() {
   const [makerWorldUrl, setMakerWorldUrl] = useState("");
   const [makerWorldMessage, setMakerWorldMessage] = useState("");
   const [modelUrlMessage, setModelUrlMessage] = useState("");
+  const [makerWorldImportPreview, setMakerWorldImportPreview] = useState<string | null>(null);
   const [isLookingUpModelName, setIsLookingUpModelName] = useState(false);
   const [makerWorldMetadata, setMakerWorldMetadata] = useState<MakerWorldMetadata | null>(null);
   const [makerWorldProfile, setMakerWorldProfile] = useState<MakerWorldPrintProfile | null>(null);
@@ -1802,6 +1835,49 @@ function App() {
     const url = newJobForm.sourceUrl.trim();
     if (!url) {
       setModelUrlMessage("Enter a model page link first.");
+      return;
+    }
+    if (/^https?:\/\/([^/]+\.)?makerworld\.com(\/|$)/i.test(url)) {
+      setIsLookingUpModelName(true);
+      setModelUrlMessage("");
+      try {
+        const data = await api.importMakerWorldV2(url);
+        setNewJobForm((current) => ({
+          ...current,
+          name: data.title || parseMakerWorldUrl(url).jobName,
+          sourceUrl: data.modelUrl || url,
+          machineRunTimeMinutes: data.printMinutes !== null ? String(data.printMinutes) : current.machineRunTimeMinutes,
+        }));
+        if (data.filaments.length && materials.length) {
+          // Unmatched filaments fall back to the default (first) material.
+          setNewJobMaterialEntries(data.filaments.map((filament) => ({
+            materialId: (findMatchingMaterial(materials, filament) || materials[0]).id,
+            usageQuantity: filament.grams !== null ? String(filament.grams) : "",
+          })));
+        }
+        setMakerWorldUrl(data.modelUrl || url);
+        setMakerWorldImportPreview(data.previewImageUrl);
+        const parts = [
+          data.creatorName ? `by ${data.creatorName}` : "",
+          data.printHours !== null ? `print time ${data.printHours}h ${data.printRemainderMinutes}m` : "",
+          data.filamentGrams !== null ? `${data.filamentGrams} g` : "",
+          data.filamentTypes.length ? data.filamentTypes.join("/") : "",
+          data.filamentColours.length ? data.filamentColours.join(", ") : "",
+        ].filter(Boolean);
+        setModelUrlMessage(`Imported "${data.title}"${parts.length ? ` — ${parts.join(" · ")}` : ""}.${data.missing.length ? ` Not available: ${data.missing.join(", ")}.` : ""}`);
+      } catch {
+        try {
+          const { jobName, modelUrl } = parseMakerWorldUrl(url);
+          setNewJobForm((current) => ({ ...current, name: jobName, sourceUrl: modelUrl }));
+          setMakerWorldUrl(modelUrl);
+          setMakerWorldImportPreview(null);
+          setModelUrlMessage(`Imported "${jobName}" from URL (MakerWorld details unavailable).`);
+        } catch (error) {
+          setModelUrlMessage(error instanceof Error ? error.message : "MakerWorld import failed");
+        }
+      } finally {
+        setIsLookingUpModelName(false);
+      }
       return;
     }
     setIsLookingUpModelName(true);
@@ -3472,6 +3548,7 @@ function App() {
                         </button>
                         <p className="text-xs text-slate-500 sm:col-span-2">Try a link from 3Drop, Printables (Prusa), MakerWorld, Thingiverse or Cults3D. You can also enter the job name yourself.</p>
                         {modelUrlMessage ? <p className="text-xs text-cyan-300 sm:col-span-2" role="status">{modelUrlMessage}</p> : null}
+                        {makerWorldImportPreview ? <img src={makerWorldImportPreview} alt="MakerWorld model preview" className="h-24 w-24 rounded-xl object-cover sm:col-span-2" /> : null}
                       </div>
                     </div>
 
