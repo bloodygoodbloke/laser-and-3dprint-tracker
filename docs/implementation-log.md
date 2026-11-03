@@ -2,7 +2,7 @@
 
 Tracks implemented features and completed bug fixes from day-to-day execution work.
 
-Last updated: 2026-11-01
+Last updated: 2026-11-03
 
 | ID | Type | Priority | Status | Title | Actioned On | Details |
 |---|---|---|---|---|---|---|
@@ -26,6 +26,7 @@ Last updated: 2026-11-01
 | CHG-018 | Feature | P2 Medium | Implemented | Job file upload endpoint | Historic | Added backend endpoint for job file path upload. |
 | CHG-019 | Feature | P2 Medium | Implemented | Dashboard pending/low-stock summaries | Historic | Added dashboard summary cards for pending jobs and low stock. |
 | CHG-020 | Documentation | P2 Medium | Implemented | In-app help refresh | Historic | Help content updated to reflect current workflows and tooling. |
+| CHG-125 | Refactor | P3 Low | Implemented | Split frontend App.tsx into feature modules (#41) | 2026-11-03 | Extracted Billing, Reports, Suppliers, Customers, Equipment, Dashboard, Admin, Jobs toolbar, New job dialog, Job card and Job invoice into their own components, plus `invoicing.ts` (invoice maths and print window) and `billingSettings.ts` (defaults, normalisation, local backup). App.tsx reduced from 4,376 to 2,479 lines with no routing, permission or API changes. Removed the redundant "Bambu linked" badge from Equipment. |
 | CHG-124 | Bug Fix | P1 High | Implemented | Production sign-in configuration | 2026-11-03 | Pass required Entra token-verification settings into the Container App during deployment and fail clearly when repository variables are missing. |
 | CHG-021 | Feature | P3 Low | Implemented | App rename to Fabrication Workshop Tracker | Historic | Updated app-facing labels/title and related UI naming. |
 | CHG-022 | Feature | P2 Medium | Implemented | Delete-job action | Historic | Added delete action in expanded job card controls. |
