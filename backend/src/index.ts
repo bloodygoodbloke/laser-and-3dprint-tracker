@@ -20,6 +20,7 @@ import { getVersionInfo } from "./version.js";
 import { authGate } from "./auth.js";
 import accessRouter from "./routes/access.js";
 import prisma from "./prisma.js";
+import { storage, contentTypeForName } from "./storage/index.js";
 
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
@@ -63,18 +64,33 @@ app.use("/api/billing-audit", billingAuditRouter);
 app.use("/api/issues", issuesRouter);
 app.use("/api/models", modelMetadataRouter);
 app.use("/api/admin", adminRouter);
-app.use("/uploads", express.static(
-  process.env.UPLOAD_DIR ? path.resolve(process.env.UPLOAD_DIR) : path.resolve(currentDirectory, "..", "uploads"),
-  {
-    setHeaders: (res, filePath) => {
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      if (path.extname(filePath).toLowerCase() === ".svg") {
-        res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'");
-        res.setHeader("Content-Disposition", "attachment");
-      }
-    },
-  },
-));
+// Uploads are streamed from the configured storage provider (local disk or Azure Blob Storage).
+app.get("/uploads/:name", async (req, res) => {
+  const name = String(req.params.name || "");
+  try {
+    const file = await storage.get(name);
+    if (!file) {
+      console.warn(`[storage] missing file requested: ${name} (${storage.provider}: ${storage.location})`);
+      return res.status(404).json({ error: "File not found." });
+    }
+    res.setHeader("Content-Type", contentTypeForName(name));
+    if (file.size !== undefined) res.setHeader("Content-Length", String(file.size));
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    if (path.extname(name).toLowerCase() === ".svg") {
+      res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'");
+      res.setHeader("Content-Disposition", "attachment");
+    }
+    file.stream.on("error", (error) => {
+      console.error(`[storage] stream error for ${name}`, error);
+      res.destroy(error);
+    });
+    return file.stream.pipe(res);
+  } catch (error) {
+    console.error(`[storage] could not read ${name}`, error);
+    return res.status(/^Invalid storage file name/.test(String((error as Error).message)) ? 400 : 502).json({ error: "File could not be read." });
+  }
+});
 app.use(express.static(frontendDistPath));
 
 app.get("/api/version", (_req, res) => {

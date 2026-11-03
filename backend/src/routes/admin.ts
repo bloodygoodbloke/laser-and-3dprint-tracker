@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../prisma.js";
+import { findMissingStoredFiles } from "../storage/index.js";
 
 const router = Router();
 
@@ -121,6 +122,28 @@ const getFullBackupPayload = async (includeBillingSettings = true) => {
   };
 };
 
+// After a restore, jobs must not point at files that are not in storage: clear dangling references
+// (the backup JSON still holds them) and report which files need re-uploading.
+const reconcileJobFiles = async (): Promise<string[]> => {
+  const jobs = await prisma.job.findMany({ where: { filePath: { not: null } }, select: { id: true, filePath: true } });
+  const missing = await findMissingStoredFiles(jobs.map((job) => job.filePath));
+  if (!missing || missing.length === 0) return [];
+  const missingSet = new Set(missing);
+  const dangling = jobs.filter((job) => job.filePath && missingSet.has(job.filePath));
+  await prisma.job.updateMany({ where: { id: { in: dangling.map((job) => job.id) } }, data: { filePath: null } });
+  console.warn(`[storage] restore cleared ${dangling.length} job file reference(s) with no file in storage`, missing);
+  return missing;
+};
+
+// Admin: which jobs reference files that are not in storage.
+router.get("/storage/check", async (_req, res) => {
+  const jobs = await prisma.job.findMany({ where: { filePath: { not: null } }, select: { jobNumber: true, filePath: true } });
+  const missing = await findMissingStoredFiles(jobs.map((job) => job.filePath));
+  if (missing === null) return res.status(502).json({ error: "Storage could not be listed." });
+  const missingSet = new Set(missing);
+  res.json({ checked: jobs.length, missing: jobs.filter((job) => job.filePath && missingSet.has(job.filePath)) });
+});
+
 router.get("/backup", async (_req, res) => {
   try {
     const includeBillingSettings = await hasBillingBackupSchemaSupport();
@@ -175,6 +198,10 @@ router.post("/backup", async (req, res) => {
           name: job.name,
           customer: job.customer,
           sourceUrl: String(job.sourceUrl || ""),
+          filePath: job.filePath ? String(job.filePath) : null,
+          sourceImageUrl: String(job.sourceImageUrl || ""),
+          sourceImageCheckedAt: job.sourceImageCheckedAt ? new Date(String(job.sourceImageCheckedAt)) : null,
+          sourceImageForUrl: String(job.sourceImageForUrl || ""),
           machineType: job.machineType,
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
@@ -203,7 +230,8 @@ router.post("/backup", async (req, res) => {
     }
   });
 
-  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length });
+  const missingFiles = await reconcileJobFiles();
+  res.json({ restored: true, jobsCount: jobs.length, materialsCount: materials.length, missingFiles });
 });
 
 router.get("/backup/full", async (_req, res) => {
@@ -700,6 +728,10 @@ router.post("/backup/full", async (req, res) => {
           name: job.name,
           customer: job.customer,
           sourceUrl: String(job.sourceUrl || ""),
+          filePath: job.filePath ? String(job.filePath) : null,
+          sourceImageUrl: String(job.sourceImageUrl || ""),
+          sourceImageCheckedAt: job.sourceImageCheckedAt ? new Date(String(job.sourceImageCheckedAt)) : null,
+          sourceImageForUrl: String(job.sourceImageForUrl || ""),
           machineType: job.machineType,
           estTimeMinutes: Number(job.estTimeMinutes || 0),
           machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
@@ -884,8 +916,10 @@ router.post("/backup/full", async (req, res) => {
     }
     });
 
+    const missingFiles = await reconcileJobFiles();
     return res.json({
       restored: true,
+      missingFiles,
       jobsCount: jobs.length,
       materialsCount: materials.length,
       billingSettingsCount: includeBillingSettings ? (Array.isArray(billingSettings) ? billingSettings.length : billingSettings ? 1 : 0) : 0,

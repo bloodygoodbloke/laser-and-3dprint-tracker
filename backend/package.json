@@ -13,10 +13,11 @@
     "start": "node dist/index.js",
     "prisma": "prisma",
     "check:api-smoke": "node ../scripts/smoke-api-check.js",
-    "check:local": "npm run test:print-time && npm run test:auth && npm run test:upload && npm run check:version && npm run check:api-smoke && npm run check:tracker && npm run check:quality-cadence && npm run check:release",
+    "check:local": "npm run test:print-time && npm run test:auth && npm run test:upload && npm run test:storage && npm run check:version && npm run check:api-smoke && npm run check:tracker && npm run check:quality-cadence && npm run check:release",
     "test:print-time": "node --test ../scripts/print-time.test.js",
     "test:auth": "node --import tsx --test ../scripts/auth.test.js",
     "test:upload": "node --import tsx --test ../scripts/upload.test.js",
+    "test:storage": "node --import tsx --test ../scripts/storage.test.js",
     "check:version": "node ../scripts/check-version-info.js",
     "check:release": "node ../scripts/check-release-notes.js",
     "check:tracker": "node ../scripts/check-tracker-consistency.js",
@@ -24,6 +25,8 @@
     "preversion": "npm run check:release && npm run check:tracker && npm run check:quality-cadence"
   },
   "dependencies": {
+    "@azure/identity": "^4.14.1",
+    "@azure/storage-blob": "^12.34.0",
     "@prisma/adapter-better-sqlite3": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "cheerio": "^1.2.0",

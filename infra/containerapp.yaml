@@ -17,6 +17,13 @@ properties:
             value: file:/data/makerflow.db
           - name: UPLOAD_DIR
             value: /data/uploads
+          # Uploads live in Blob Storage (managed identity, no keys). UPLOAD_DIR is only the local fallback.
+          - name: STORAGE_PROVIDER
+            value: azure
+          - name: AZURE_STORAGE_ACCOUNT
+            value: ${AZURE_STORAGE_ACCOUNT}
+          - name: AZURE_STORAGE_CONTAINER
+            value: uploads
         volumeMounts:
           - volumeName: data
             mountPath: /data

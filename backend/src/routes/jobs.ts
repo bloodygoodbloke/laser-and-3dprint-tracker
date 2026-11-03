@@ -1,10 +1,8 @@
 import { Router } from "express";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import prisma from "../prisma.js";
-import { uploadSingleFile, removeUploadedFile } from "../upload.js";
+import { uploadSingleFile } from "../upload.js";
+import { storage, contentTypeForName, STORED_FILE_URL_PREFIX } from "../storage/index.js";
 import { UploadValidationError, validateUploadedFile } from "../uploadValidation.js";
 import { normalizeStoredMinutes } from "../printTime.js";
 import { parseSupportedModelUrl, resolveSourceImageUrl } from "./model-metadata.js";
@@ -180,24 +178,24 @@ router.post('/:id/upload', uploadSingleFile, async (req, res) => {
     throw error;
   }
 
-  const uploadDirectory = process.env.UPLOAD_DIR
-    ? path.resolve(process.env.UPLOAD_DIR)
-    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "uploads");
-  await fs.mkdir(uploadDirectory, { recursive: true });
-
   const existingJob = await prisma.job.findUnique({ where: { id }, select: { id: true } });
   if (!existingJob) return res.status(404).json({ error: "Job not found." });
 
   const filename = `${randomUUID()}${extension}`;
-  const diskPath = path.join(uploadDirectory, filename);
-  const publicPath = `/uploads/${filename}`;
+  const publicPath = `${STORED_FILE_URL_PREFIX}${filename}`;
 
-  await fs.writeFile(diskPath, req.file.buffer, { flag: "wx" });
+  try {
+    await storage.put(filename, req.file.buffer, contentTypeForName(filename));
+  } catch (error) {
+    console.error(`[storage] upload to ${storage.provider} (${storage.location}) failed`, error);
+    return res.status(502).json({ error: "The file could not be saved to storage." });
+  }
   try {
     const job = await prisma.job.update({ where: { id }, data: { filePath: publicPath } });
+    console.log(`[storage] job ${id} now references ${publicPath}`);
     return res.json(job);
   } catch (error) {
-    await removeUploadedFile(diskPath);
+    await storage.delete(filename).catch((cleanupError) => console.error("[storage] cleanup failed", cleanupError));
     if ((error as { code?: string } | null)?.code === "P2025") {
       return res.status(404).json({ error: "Job not found." });
     }
@@ -230,9 +228,12 @@ router.post("/:id/source-image", async (req, res) => {
   let imageUrl = "";
   try {
     imageUrl = (await resolveSourceImageUrl(modelUrl)) || "";
-  } catch (_error) {
-    // Source unreachable: keep any existing cached URL and retry after the miss TTL.
-    imageUrl = sameSource ? job.sourceImageUrl : "";
+    console.log(`[source-image] job ${id} ${modelUrl.hostname}: ${imageUrl ? `resolved ${imageUrl}` : "no image found on page"}`);
+  } catch (error) {
+    // Source unreachable (e.g. blocked from the hosting IP): log it and do not cache the failure,
+    // so the next view retries instead of showing "no image" for the miss TTL.
+    console.error(`[source-image] job ${id} ${modelUrl.hostname} lookup failed: ${error instanceof Error ? error.message : error}`);
+    return result(sameSource ? job.sourceImageUrl : "", false);
   }
 
   const updated = await prisma.job.update({

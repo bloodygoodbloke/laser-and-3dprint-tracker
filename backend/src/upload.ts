@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import multer from "multer";
 import type { RequestHandler } from "express";
 import { MAX_UPLOAD_BYTES } from "./uploadValidation.js";
@@ -29,12 +28,4 @@ export const uploadSingleFile: RequestHandler = (req, res, next) => {
 
     next(error);
   });
-};
-
-export const removeUploadedFile = async (filePath: string) => {
-  try {
-    await fs.promises.unlink(filePath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
 };

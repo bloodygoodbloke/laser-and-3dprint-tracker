@@ -120,3 +120,4 @@ Last updated: 2026-11-01
 | ID | Type | Priority | Status | Title | Actioned On | Details |
 |---|---|---|---|---|---|---|
 | CHG-XXX | Feature/Bug/Integration/Automation/Documentation/Feature Request | P1 Critical/P1 High/P2 Medium/P3 Low/Integrations | Implemented/Completed Bug Fix | Short title | YYYY-MM-DD or Historic | Clear summary of what changed. |
+| CHG-123 | Feature | P1 High | Implemented | Blob-backed file storage provider | 2026-11-02 | Added StorageService with LocalStorageProvider and AzureBlobStorageProvider (auto-detected from environment), streamed /uploads from the provider, storage and source-image diagnostics, restore keeps file metadata and clears missing-file references, infra grants the app identity Blob access. |

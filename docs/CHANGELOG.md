@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Added a storage provider abstraction for uploaded files: local disk for development (`UPLOAD_PATH`) and Azure Blob Storage for Azure Container Apps (`STORAGE_PROVIDER`, `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER`). `/uploads/<file>` URLs are unchanged and are now streamed from the active provider, with storage and source-image diagnostic logging. See `docs/storage.md`.
+- Fixed Admin restore dropping job file references and cached source-image fields; restore now clears references to files that are missing from storage and returns them as `missingFiles`. Added `GET /api/admin/storage/check`.
+- Source-image lookup failures are now logged and no longer cached as "no image" for a day.
 - Fixed Admin backup restore foreign-key failures: clear job-material rows before replacing jobs; the jobs-and-materials restore preserves Bambu telemetry while unlinking its optional job references.
 - Fixed the source model image lookup getting stuck on “Looking for a source image...” after the preview state changed; image lookup now completes and unavailable images reach the existing placeholder.
 - Secured job file uploads (#25): server-side allowlisting and content-signature validation for SVG, STL and supported image files, 10 MB limit with clear errors, safe SVG restrictions and response headers, generated server filenames, and focused upload tests.

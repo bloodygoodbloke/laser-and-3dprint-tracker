@@ -36,6 +36,13 @@ sleep 30   # role propagation
 ACR_SERVER=$(az acr show -n "$ACR" -g "$ACR_RG" --query loginServer -o tsv)
 az containerapp registry set -n "$APP" -g "$RG" --server "$ACR_SERVER" --identity system
 
+# 4b. Blob container for uploads; the app's managed identity reads/writes it (no keys or connection strings)
+az storage container create --account-name "$STORAGE" -n uploads --auth-mode login
+STORAGE_ID=$(az storage account show -n "$STORAGE" -g "$RG" --query id -o tsv)
+az role assignment create --assignee-object-id "$PID" --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" --scope "$STORAGE_ID"
+export AZURE_STORAGE_ACCOUNT="$STORAGE"
+
 # 5. Ingress port (app listens on 4000) and apply volume/mount/env/scale
 az containerapp ingress update -n "$APP" -g "$RG" --target-port 4000
 export IMAGE=$(az containerapp show -n "$APP" -g "$RG" --query "properties.template.containers[0].image" -o tsv)
