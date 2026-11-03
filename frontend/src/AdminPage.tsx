@@ -1,6 +1,7 @@
-import type { ChangeEvent, CSSProperties, Dispatch, FormEvent, SetStateAction } from "react";
+import { useState, type ChangeEvent, CSSProperties, Dispatch, FormEvent, SetStateAction } from "react";
 import UserAccessCard from "./UserAccessCard";
 import type { BillingSettings } from "./types";
+import { formatBuildDate, formatDeploymentInfo, type VersionInfo } from "./version";
 
 interface ThemePreset {
   name: string;
@@ -40,6 +41,9 @@ interface AdminPageProps {
   downloadSelectedBackup: () => Promise<void>;
   restoreSelectedBackup: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   backupMessage: string;
+  workspaceId: string;
+  versionInfo: VersionInfo | null;
+  versionError: string;
 }
 
 export default function AdminPage({
@@ -63,7 +67,36 @@ export default function AdminPage({
   downloadSelectedBackup,
   restoreSelectedBackup,
   backupMessage,
+  workspaceId,
+  versionInfo,
+  versionError,
 }: AdminPageProps) {
+  const [copyMessage, setCopyMessage] = useState("");
+
+  const copySupportInfo = async () => {
+    if (!versionInfo) return;
+    try {
+      await navigator.clipboard.writeText(`${formatDeploymentInfo(versionInfo)}\nWorkspace ID: ${workspaceId}`);
+      setCopyMessage("Support information copied to clipboard.");
+    } catch {
+      setCopyMessage("Copy failed. Select the details and copy them manually.");
+    }
+  };
+
+  const supportRows: [string, string][] = [
+    ["Workspace ID", workspaceId],
+    ...(versionInfo
+      ? ([
+          ["Version", versionInfo.version],
+          ["Build number", versionInfo.buildNumber],
+          ["Git commit", versionInfo.gitCommit && versionInfo.gitCommit !== "unknown" ? versionInfo.gitCommit : "Not available"],
+          ["Branch", versionInfo.gitBranch],
+          ["Built", formatBuildDate(versionInfo.buildDate)],
+          ["Environment", versionInfo.environment],
+        ] as [string, string][])
+      : []),
+  ];
+
   return (
     <div className="space-y-6" style={{ color: adminTextColor }}>
       {isSuperAdmin ? <UserAccessCard /> : null}
@@ -256,6 +289,24 @@ export default function AdminPage({
           </div>
           <p className="mt-3 text-xs" style={adminMutedTextStyle}>A MakerFlow selected backup replaces only the sections saved in that file. Older full and individual JSON backups, plus jobs and materials CSV backups, are also supported. Full backup restores replace all current app data.</p>
           {backupMessage ? <p role="status" className="mt-4 text-sm text-cyan-300">{backupMessage}</p> : null}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6" style={adminSectionStyle}>
+        <h2 className="text-xl font-semibold">Support information</h2>
+        <p className="mt-2 text-sm text-slate-400" style={adminMutedTextStyle}>Quote these details when contacting support.</p>
+        <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          {supportRows.map(([label, value]) => (
+            <div key={label} className="contents">
+              <dt style={adminMutedTextStyle}>{label}</dt>
+              <dd className="select-all break-all font-mono text-xs">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        {!versionInfo ? <p className="mt-2 text-xs" style={adminMutedTextStyle}>{versionError || "Loading version information..."}</p> : null}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => void copySupportInfo()} disabled={!versionInfo} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">Copy support information</button>
+          {copyMessage ? <span role="status" className="text-xs">{copyMessage}</span> : null}
         </div>
       </section>
     </div>

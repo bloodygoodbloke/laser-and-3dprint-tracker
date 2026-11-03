@@ -383,7 +383,16 @@ function App() {
       const localBackup = readBillingSettingsFromLocalBackup();
       if (localBackup) {
         setBillingSettings(localBackup);
-        setBillingSaveMessage("Backend returned no billing settings. Loaded your local browser backup.");
+        try {
+          // Migrate settings that only exist in this browser (e.g. saved while the API was rejecting requests) into the database.
+          const saved = await api.saveBillingSettings(localBackup);
+          const normalized = normalizeBillingSettingsForUi((saved || localBackup) as BillingSettings);
+          setBillingSettings(normalized);
+          saveBillingSettingsToLocalBackup(normalized);
+          setBillingSaveMessage("Billing and equipment settings from your local browser backup were saved to the database.");
+        } catch (_error) {
+          setBillingSaveMessage("Backend returned no billing settings. Loaded your local browser backup, but saving it to the database failed.");
+        }
         return;
       }
 
@@ -2373,6 +2382,9 @@ function App() {
             downloadSelectedBackup={downloadSelectedBackup}
             restoreSelectedBackup={restoreSelectedBackup}
             backupMessage={backupMessage}
+            workspaceId={currentUser.workspaceId}
+            versionInfo={versionInfo}
+            versionError={versionError}
           />
         )}
 

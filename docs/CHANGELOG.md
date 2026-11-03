@@ -3,6 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Billing and equipment settings that exist only in the browser backup are now saved to the database when the server has none, instead of only being displayed from the local copy.
+- Added a "Support information" card to the Admin page showing workspace ID, version, build, commit, branch, build date and environment, with a Copy support information button.
 - Refactor (#41): split `frontend/src/App.tsx` (4,376 → 2,479 lines) into page and feature components (`BillingPage`, `ReportsPage`, `SuppliersPage`, `CustomersPage`, `MachinesPage`, `DashboardPage`, `AdminPage`, `JobsToolbar`, `NewJobDialog`, `JobCard`, `JobInvoice`) and logic modules (`invoicing.ts`, `billingSettings.ts`). No behaviour, routing or permission changes.
 - Removed the redundant "Bambu linked" badge from the Equipment page.
 - Fixed production sign-in configuration: deployments now apply the Entra client ID, issuer and JWKS URI to the Container App and stop with a clear error if required repository variables are missing.
