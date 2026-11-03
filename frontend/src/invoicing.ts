@@ -112,7 +112,7 @@ export const computeInvoiceChargeBreakdown = (job: Job, billingSettings: Billing
 };
 export const openInvoicePrintWindow = (job: Job, context: InvoicePrintContext) => {
   const { billingSettings, businessDisplayName, selectedCustomerProfile, formatCurrency } = context;
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=980,height=700");
+  const printWindow = window.open("", "_blank", "width=980,height=700");
   if (!printWindow) {
     window.alert("Could not open print window. Please allow pop-ups and try again.");
     return;
