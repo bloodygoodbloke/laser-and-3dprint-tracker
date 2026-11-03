@@ -19,7 +19,6 @@ import modelMetadataRouter from "./routes/model-metadata.js";
 import { getVersionInfo } from "./version.js";
 import { authGate } from "./auth.js";
 import accessRouter from "./routes/access.js";
-import prisma from "./prisma.js";
 import { storage, contentTypeForName } from "./storage/index.js";
 
 const app = express();
@@ -30,7 +29,7 @@ const frontendDistPath = path.resolve(currentDirectory, "../../frontend/dist");
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean)
   : process.env.NODE_ENV === "production" ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"];
-const requireAuth = authGate(["/health", "/version", "/branding"]);
+const requireAuth = authGate(["/health", "/version"]);
 
 // Unauthenticated, dependency-free probe endpoint for Azure Container Apps (registered before cors/auth/static).
 app.get("/health", (_req, res) => {
@@ -44,12 +43,6 @@ app.use(express.json());
 app.use("/api", requireAuth);
 app.use("/uploads", requireAuth);
 app.use("/makerworld-test", requireAuth);
-
-// Public: only the business name and logo, so the sign-in page can show them before login.
-app.get("/api/branding", async (_req, res) => {
-  const setting = await prisma.billingSetting.findFirst();
-  res.json({ businessName: setting?.businessName ?? "", businessLogoUrl: setting?.businessLogoUrl ?? "" });
-});
 
 app.use("/api", accessRouter);
 app.use("/api/jobs", jobsRouter);

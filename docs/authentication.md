@@ -9,7 +9,7 @@ The backend requires a signed-in user for everything except `GET /api/health` an
 - Emails in `SUPER_ADMIN_EMAILS` are super admins: on first sign-in they become `Owner` of the first workspace and get **Admin > User access**. This is set on the server only, so it cannot be changed from the app. Emails in `OWNER_EMAILS` also become `Owner` on first sign-in, without super admin rights.
 - All existing data belongs to the first workspace. Its ID is randomly generated and is shown in **Billing**.
 - **Admin > User access** (super admin only) lists people waiting for approval, open invitations and current users. You can invite by email, approve a waiting user, cancel an invite and remove access.
-- The sign-in page shows the MakerFlow logo and the business name/logo (served by the public `GET /api/branding`). Signed-in users have a **Log out** button in the header.
+- The sign-in page shows only the MakerFlow logo; business name and logo are workspace settings and appear after sign-in. Signed-in users have a **Log out** button in the header.
 - If the Entra settings are missing the protected routes return `503` (fail closed). `AUTH_DISABLED=true` skips authentication and is ignored when `NODE_ENV=production`.
 - CORS is limited to `CORS_ORIGIN` (none in production). Bearer tokens are not sent automatically by browsers, so classic CSRF does not apply.
 

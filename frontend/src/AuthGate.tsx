@@ -8,26 +8,11 @@ type Stage =
   | { name: "pending"; email: string }
   | { name: "ready"; user: CurrentUser };
 
-interface Branding {
-  businessName: string;
-  businessLogoUrl: string;
-}
-
 function Shell({ children }: { children: ReactNode }) {
-  const [branding, setBranding] = useState<Branding | null>(null);
-
-  useEffect(() => {
-    fetch("/api/branding").then((res) => (res.ok ? res.json() : null)).then(setBranding).catch(() => undefined);
-  }, []);
-
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-100">
       <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center shadow-xl">
         <img src="/branding/makerflow-primary.svg" alt="MakerFlow — Your workshop, organised." className="mx-auto h-20 w-60 rounded-lg bg-white object-contain" />
-        {branding?.businessLogoUrl ? (
-          <img src={branding.businessLogoUrl} alt={branding.businessName ? `${branding.businessName} logo` : "Business logo"} className="mx-auto mt-6 h-20 w-20 rounded-full border border-slate-800 bg-slate-950 object-cover" />
-        ) : null}
-        {branding?.businessName ? <p className="mt-3 text-lg font-semibold text-slate-200">{branding.businessName}</p> : null}
         <div className="mt-6">{children}</div>
       </div>
     </main>
