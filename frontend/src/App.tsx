@@ -2,28 +2,40 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSPropert
 import api from "./api";
 import { MaterialsPage } from "./MaterialsPage";
 import { NumberInput } from "./NumberInput";
+import BillingPage from "./BillingPage";
+import ReportsPage from "./ReportsPage";
+import SuppliersPage from "./SuppliersPage";
+import CustomersPage from "./CustomersPage";
+import MachinesPage from "./MachinesPage";
+import DashboardPage from "./DashboardPage";
+import AdminPage from "./AdminPage";
+import JobsToolbar from "./JobsToolbar";
+import NewJobDialog from "./NewJobDialog";
+import JobCard from "./JobCard";
+import {
+  blankBillingSettings,
+  DEFAULT_ADMIN_BACKGROUND_COLOR,
+  DEFAULT_ADMIN_TEXT_COLOR,
+  DEFAULT_SITE_ACCENT_COLOR,
+  DEFAULT_SITE_ACCENT_TEXT_COLOR,
+  DEFAULT_SITE_INPUT_COLOR,
+  defaultMachineNames,
+  normalizeBillingSettingsForUi,
+  normalizeHexColor,
+  readBillingSettingsFromLocalBackup,
+  saveBillingSettingsToLocalBackup,
+} from "./billingSettings";
+import { computeInvoiceChargeBreakdown, computeRuntimeBreakdown, openInvoicePrintWindow } from "./invoicing";
 import HelpPage from "./HelpPage";
-import { KpiCard, StatusChip, SummaryCard, UtilisationRow, onTimeTone, overdueTone, utilisationTone } from "./dashboardUi";
 import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchVersionInfo, formatVersionBadge, type VersionInfo } from "./version";
-import PrintTimeInput from "./PrintTimeInput";
-import { calculateMachineLifecycle } from "./machineLifecycle";
-import JobFilePreview from "./JobFilePreview";
-import UserAccessCard from "./UserAccessCard";
 import { useAuth } from "./AuthContext";
-import RuntimeDurationInput, { formatHoursAsDuration } from "./RuntimeDurationInput";
-import { formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
+import { parsePrintTimeToMinutes } from "./printTime";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "MakerFlow";
 const WORKSHOP_DAILY_CAPACITY_HOURS = 8;
 const SCHEDULE_HORIZON_DAYS = 14;
-const DEFAULT_ADMIN_BACKGROUND_COLOR = "#FFFFFF";
-const DEFAULT_ADMIN_TEXT_COLOR = "#1C1C1E";
-const DEFAULT_SITE_INPUT_COLOR = "#E5E5E7";
-const DEFAULT_SITE_ACCENT_COLOR = "#3A7DFF";
-const DEFAULT_SITE_ACCENT_TEXT_COLOR = "#1C1C1E";
-const BILLING_LOCAL_STORAGE_KEY = "billing-settings-local-backup-v1";
 const BAMBU_POLL_INTERVAL_ACTIVE_MS = 30000;
 const BAMBU_POLL_INTERVAL_IDLE_MS = 90000;
 
@@ -106,68 +118,10 @@ const quickThemePresets: ThemePreset[] = [
   },
 ];
 
-const defaultMachineNames = [
-  "BambuLab P2S Printer",
-  "Creality Falcon A1 Pro Laser",
-  "Anycubic SLA Printer",
-  "Neje Laser",
-  "3018 CNC/Laser",
-  "Other",
-];
 
-const getDefaultMachineRuntimeSettings = () => Object.fromEntries(
-  defaultMachineNames
-    .filter((name) => name !== "Other")
-    .map((name) => [name, { name, wattage: 0, depreciationCost: 0, replacementRunHours: 0 }]),
-);
 
-const blankBillingSettings = (): BillingSettings => ({
-  businessName: "",
-  businessLogoUrl: "",
-  businessAddress: "",
-  businessEmail: "",
-  businessPhone: "",
-  businessWebsite: "",
-  adminBackgroundColor: DEFAULT_ADMIN_BACKGROUND_COLOR,
-  adminTextColor: DEFAULT_ADMIN_TEXT_COLOR,
-  siteInputColor: DEFAULT_SITE_INPUT_COLOR,
-  siteAccentColor: DEFAULT_SITE_ACCENT_COLOR,
-  siteAccentTextColor: DEFAULT_SITE_ACCENT_TEXT_COLOR,
-  materialMarkupPercent: 25,
-  materialMarkupAmount: 0,
-  materialTypeMarkups: {},
-  electricityMarkupPercent: 25,
-  electricityMarkupAmount: 0,
-  labourMarkupPercent: 0,
-  labourMarkupAmount: 0,
-  overheadMarkupPercent: 0,
-  overheadMarkupAmount: 0,
-  electricityCostPerKwh: 0.2,
-  depreciationCost: 0,
-  depreciationHours: 0,
-  depreciationMarkupPercent: 0,
-  labourRate: 20,
-  workshopHourlyRate: 0,
-  minimumCharge: 0,
-  setupFee: 0,
-  rushFeePercent: 0,
-  wasteFactorPercent: 0,
-  deliveryAmount: 0,
-  vatPercent: 0,
-  depositPercent: 0,
-  paymentTermsDays: 0,
-  overheadPercent: 0.15,
-  machineElectricitySettings: getDefaultMachineRuntimeSettings(),
-});
 
 const getJobMode = (machineType: string) => (machineType.toLowerCase().includes("laser") || machineType.toLowerCase().includes("cnc") ? "laser" : "3d");
-const normalizeHexColor = (value: unknown, fallback: string) => {
-  const candidate = String(value || "").trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(candidate)) {
-    return candidate.toLowerCase();
-  }
-  return fallback;
-};
 const hexToRgba = (hex: string, alpha: number) => {
   const safeHex = normalizeHexColor(hex, "#000000").replace("#", "");
   const r = Number.parseInt(safeHex.slice(0, 2), 16);
@@ -205,75 +159,7 @@ const ensureContrast = (colour: string, background: string, target = 4.8) => {
   }
   return next;
 };
-const normalizeMarkupPercent = (value: unknown) => {
-  const parsed = Number(value);
-  return value !== null && value !== undefined && value !== "" && Number.isFinite(parsed) && parsed >= 0 ? parsed : 25;
-};
-const normalizeOptionalMarkupPercent = (value: unknown) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-};
 
-const normalizeBillingSettingsForUi = (settings: Partial<BillingSettings>): BillingSettings => ({
-  ...blankBillingSettings(),
-  ...settings,
-  materialMarkupPercent: normalizeMarkupPercent(settings.materialMarkupPercent),
-  materialMarkupAmount: Number(settings.materialMarkupAmount ?? 0),
-  electricityMarkupPercent: normalizeMarkupPercent(settings.electricityMarkupPercent),
-  electricityMarkupAmount: Number(settings.electricityMarkupAmount ?? 0),
-  labourMarkupPercent: Number(settings.labourMarkupPercent ?? 0),
-  labourMarkupAmount: Number(settings.labourMarkupAmount ?? 0),
-  overheadMarkupPercent: Number(settings.overheadMarkupPercent ?? 0),
-  overheadMarkupAmount: Number(settings.overheadMarkupAmount ?? 0),
-  electricityCostPerKwh: Number(settings.electricityCostPerKwh ?? 0.2),
-  depreciationCost: Number(settings.depreciationCost ?? 0),
-  depreciationHours: Number(settings.depreciationHours ?? 0),
-  depreciationMarkupPercent: Number(settings.depreciationMarkupPercent ?? 0),
-  labourRate: Number(settings.labourRate ?? 20),
-  workshopHourlyRate: Number(settings.workshopHourlyRate ?? 0),
-  minimumCharge: Number(settings.minimumCharge ?? 0),
-  setupFee: Number(settings.setupFee ?? 0),
-  rushFeePercent: Number(settings.rushFeePercent ?? 0),
-  wasteFactorPercent: Number(settings.wasteFactorPercent ?? 0),
-  deliveryAmount: Number(settings.deliveryAmount ?? 0),
-  vatPercent: Number(settings.vatPercent ?? 0),
-  depositPercent: Number(settings.depositPercent ?? 0),
-  paymentTermsDays: Number(settings.paymentTermsDays ?? 0),
-  businessName: String(settings.businessName ?? ""),
-  businessLogoUrl: String(settings.businessLogoUrl ?? ""),
-  businessAddress: String(settings.businessAddress ?? ""),
-  businessEmail: String(settings.businessEmail ?? ""),
-  businessPhone: String(settings.businessPhone ?? ""),
-  businessWebsite: String(settings.businessWebsite ?? ""),
-  adminBackgroundColor: normalizeHexColor(settings.adminBackgroundColor, DEFAULT_ADMIN_BACKGROUND_COLOR),
-  adminTextColor: normalizeHexColor(settings.adminTextColor, DEFAULT_ADMIN_TEXT_COLOR),
-  siteInputColor: normalizeHexColor(settings.siteInputColor, DEFAULT_SITE_INPUT_COLOR),
-  siteAccentColor: normalizeHexColor(settings.siteAccentColor, DEFAULT_SITE_ACCENT_COLOR),
-  siteAccentTextColor: normalizeHexColor(settings.siteAccentTextColor, DEFAULT_SITE_ACCENT_TEXT_COLOR),
-  overheadPercent: Number(settings.overheadPercent ?? 0.15),
-  materialTypeMarkups: Object.fromEntries(
-    Object.entries(settings.materialTypeMarkups || {}).map(([materialType, rule]) => [
-      materialType,
-      { percent: normalizeOptionalMarkupPercent(rule?.percent) },
-    ]),
-  ),
-  machineElectricitySettings: {
-    ...getDefaultMachineRuntimeSettings(),
-    ...Object.fromEntries(
-      Object.entries(settings.machineElectricitySettings || {}).map(([machineName, machineSetting]) => [
-        machineName,
-        {
-          name: machineName,
-          wattage: Number(machineSetting?.wattage ?? 0),
-          purchaseDate: machineSetting?.purchaseDate || "",
-          depreciationCost: Number(machineSetting?.depreciationCost ?? 0),
-          replacementRunHours: Number(machineSetting?.replacementRunHours ?? 0),
-          manualRunHours: Number(machineSetting?.manualRunHours ?? 0),
-        },
-      ]),
-    ),
-  },
-});
 
 const parseNumberInput = (value: string) => (value.trim() === "" ? 0 : Number(value));
 const jobStatusOptions = ["Quote Draft", "Quote Sent", "Quote Approved", "Estimate Template", "Pending", "In Progress", "Completed", "Invoiced"];
@@ -483,24 +369,6 @@ function App() {
     }
   };
 
-  const saveBillingSettingsToLocalBackup = (settingsToCache: BillingSettings) => {
-    try {
-      window.localStorage.setItem(BILLING_LOCAL_STORAGE_KEY, JSON.stringify(settingsToCache));
-    } catch (_error) {
-      // Ignore storage failures (private mode/quota limits).
-    }
-  };
-
-  const readBillingSettingsFromLocalBackup = (): BillingSettings | null => {
-    try {
-      const raw = window.localStorage.getItem(BILLING_LOCAL_STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as Partial<BillingSettings>;
-      return normalizeBillingSettingsForUi(parsed || {});
-    } catch (_error) {
-      return null;
-    }
-  };
 
   const loadBillingSettings = async () => {
     try {
@@ -839,10 +707,6 @@ function App() {
         .slice(0, 5),
       [jobs],
     );
-  const linkedBambuMachineName = useMemo(
-    () => machineProfiles.find(([machineName]) => machineName.toLowerCase().includes("bambu"))?.[0] || null,
-    [machineProfiles],
-  );
   const groupedMaterials = useMemo(() => {
     const groups = new Map<string, Material[]>();
     materials.forEach((material) => {
@@ -1473,86 +1337,8 @@ function App() {
   };
 
   const formatCurrency = (value?: number | null) => `£${(value ?? 0).toFixed(2)}`;
-  const calculateRuntimeBreakdown = (job: Job) => {
-    const machineRunTimeMinutes = Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
-    const materialWeightGrams = (job.materials || []).reduce((sum, entry) => sum + Number(entry.usageQuantity || 0), 0);
-    const machineSettings = billingSettings.machineElectricitySettings || {};
-    const normalizeMachineName = (value: string) => value.trim().toLowerCase();
-    const normalizedMachineName = normalizeMachineName(String(job.machineType || ""));
-    const selectedMachineEntry = Object.entries(machineSettings).find(([savedName]) => normalizeMachineName(savedName) === normalizedMachineName);
-    const selectedMachine = machineSettings[job.machineType] || selectedMachineEntry?.[1] || {};
-    const machineDepreciationCost = Number(selectedMachine?.depreciationCost ?? billingSettings.depreciationCost ?? 0);
-    const machineReplacementRunHours = Number(selectedMachine?.replacementRunHours ?? billingSettings.depreciationHours ?? 0);
-    const depreciationCost = machineReplacementRunHours > 0
-      ? (machineRunTimeMinutes / 60) * (machineDepreciationCost / machineReplacementRunHours)
-      : 0;
-    const electricityCost = Math.max(0, Number(job.cost?.electricityCost ?? 0) - depreciationCost);
-
-    return {
-      machineRunTimeMinutes,
-      materialWeightGrams,
-      depreciationCost,
-      electricityCost,
-      workshopCost: Number(job.cost?.overheadCost ?? 0),
-    };
-  };
-  const getMaterialTypeMarkupPercent = (materialType: string) => {
-    const normalizedMaterialType = String(materialType || "Other").trim().toLowerCase();
-    const matchedEntry = Object.entries(billingSettings.materialTypeMarkups || {}).find(([typeName]) => typeName.trim().toLowerCase() === normalizedMaterialType);
-    const percent = Number(matchedEntry?.[1]?.percent ?? 0);
-    return Number.isFinite(percent) && percent > 0 ? percent : 0;
-  };
-  const getInvoiceChargeBreakdown = (job: Job) => {
-    const wasteFactorMultiplier = 1 + (Math.max(0, Number(billingSettings.wasteFactorPercent || 0)) / 100);
-    const baseMaterialCost = Number(job.cost?.materialCost ?? 0);
-    const runtimeBreakdown = calculateRuntimeBreakdown(job);
-    const baseElectricityCost = Number(runtimeBreakdown.electricityCost ?? 0);
-    const baseDepreciationCost = Number(runtimeBreakdown.depreciationCost ?? 0);
-    const baseLabourCost = Number(job.cost?.labourCost ?? 0);
-    const baseOverheadCost = Number(job.cost?.overheadCost ?? 0);
-    const materialMarkupPercent = Number(billingSettings.materialMarkupPercent || 0);
-    const electricityMarkupPercent = Number(billingSettings.electricityMarkupPercent || 0);
-    const depreciationMarkupPercent = Number(billingSettings.depreciationMarkupPercent || 0);
-
-    const materialTypeMarkupCharge = (job.materials || []).reduce((sum, entry) => {
-      const lineBase = (Number(entry.usageQuantity || 0) * Number(entry.usageUnitCost || 0)) * wasteFactorMultiplier;
-      const materialType = entry.material?.type || "Other";
-      const typeMarkupPercent = getMaterialTypeMarkupPercent(materialType);
-      return sum + (lineBase * (typeMarkupPercent / 100));
-    }, 0);
-
-    const materialCharge = baseMaterialCost + materialTypeMarkupCharge + (baseMaterialCost * (materialMarkupPercent / 100));
-    const electricityCharge = baseElectricityCost + (baseElectricityCost * (electricityMarkupPercent / 100));
-    const depreciationCharge = baseDepreciationCost + (baseDepreciationCost * (depreciationMarkupPercent / 100));
-    const labourCharge = baseLabourCost;
-    const overheadCharge = baseOverheadCost;
-    const preGuardrailCustomerCharge = materialCharge + electricityCharge + depreciationCharge + labourCharge + overheadCharge;
-    const setupFeeAmount = Math.max(0, Number(job.setupFee || 0));
-    const rushFeeAmount = job.isRush
-      ? (preGuardrailCustomerCharge + setupFeeAmount) * (Math.max(0, Number(billingSettings.rushFeePercent || 0)) / 100)
-      : 0;
-    const deliveryCharge = Math.max(0, Number(job.deliveryCharge || 0));
-    const qaReworkCharge = Math.max(0, Number(job.reworkCost || 0));
-    const customerSubtotalBeforeMinimum = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount + deliveryCharge + qaReworkCharge;
-    const minimumChargeApplied = Math.max(0, Math.max(0, Number(billingSettings.minimumCharge || 0)) - customerSubtotalBeforeMinimum);
-    const productionCharge = electricityCharge + depreciationCharge + overheadCharge + setupFeeAmount + rushFeeAmount + deliveryCharge + qaReworkCharge + minimumChargeApplied;
-    const customerCharge = customerSubtotalBeforeMinimum + minimumChargeApplied;
-
-    return {
-      materialCharge,
-      electricityCharge,
-      depreciationCharge,
-      labourCharge,
-      overheadCharge,
-      setupFeeAmount,
-      rushFeeAmount,
-      deliveryCharge,
-      qaReworkCharge,
-      minimumChargeApplied,
-      productionCharge,
-      customerCharge,
-    };
-  };
+  const calculateRuntimeBreakdown = (job: Job) => computeRuntimeBreakdown(job, billingSettings);
+  const getInvoiceChargeBreakdown = (job: Job) => computeInvoiceChargeBreakdown(job, billingSettings);
   const getBaseCostTotal = (job: Job) => Number(job.cost?.totalCost ?? 0);
   const getProfitTotal = (job: Job) => {
     if (!job.cost) return 0;
@@ -2017,124 +1803,7 @@ function App() {
     await loadData();
   };
 
-  const printInvoice = (job: Job) => {
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=980,height=700");
-    if (!printWindow) {
-      window.alert("Could not open print window. Please allow pop-ups and try again.");
-      return;
-    }
-
-    const safe = (value: string) => value
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
-
-    const customerName = job.customer || "Walk-in customer";
-    const jobRuntime = Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
-    const labourRuntime = Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0);
-    const chargeBreakdown = getInvoiceChargeBreakdown(job);
-    const materialAmount = chargeBreakdown.materialCharge;
-    const productionAmount = chargeBreakdown.productionCharge;
-    const labourAmount = chargeBreakdown.labourCharge;
-    const subTotal = chargeBreakdown.customerCharge;
-    const vatPercent = Number(billingSettings.vatPercent || 0);
-    const vatAmount = subTotal * (vatPercent / 100);
-    const grandTotal = subTotal + vatAmount;
-    const suggestedDepositAmount = grandTotal * (Math.max(0, Number(billingSettings.depositPercent || 0)) / 100);
-    const depositPaidAmount = Number(job.depositPaidAmount || 0);
-    const balanceDue = Math.max(0, grandTotal - depositPaidAmount);
-    const paymentTermsDays = Number(billingSettings.paymentTermsDays || 0);
-    const dueLabel = paymentTermsDays > 0 ? `Due in ${paymentTermsDays} days` : "Due on receipt";
-
-    const printMarkup = `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Invoice ${safe(job.jobNumber || "TBC")}</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; margin: 24px; color: #0f172a; }
-      h1, h2, h3, p { margin: 0; }
-      .muted { color: #475569; }
-      .row { display: flex; justify-content: space-between; gap: 12px; }
-      .card { border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; }
-      .table { border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; margin-top: 16px; }
-      .thead, .trow { display: grid; grid-template-columns: 2fr 1fr; }
-      .thead { background: #f8fafc; font-weight: 600; }
-      .thead div, .trow div { padding: 10px 12px; }
-      .trow { border-top: 1px solid #e2e8f0; }
-      .totals { margin-top: 16px; margin-left: auto; width: 280px; border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; }
-      .totals .row { margin-bottom: 8px; }
-      .totals .row:last-child { margin-bottom: 0; font-weight: 700; border-top: 1px solid #cbd5e1; padding-top: 8px; }
-      .footer { margin-top: 16px; font-size: 12px; color: #475569; display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
-      .makerflow-footer { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 8px; text-align: center; color: #64748b; font-size: 10px; }
-    </style>
-  </head>
-  <body>
-    <div class="row">
-      <div>
-        <p class="muted" style="letter-spacing:0.08em; text-transform:uppercase; font-size:12px;">Invoice</p>
-        <h2 style="margin-top:6px;">${safe(job.name)}</h2>
-        <p class="muted" style="margin-top:4px;">${safe(customerName)}</p>
-        ${businessDisplayName ? `<p class="muted" style="margin-top:12px;">From: <strong style="color:#0f172a;">${safe(businessDisplayName)}</strong></p>` : ""}
-        ${billingSettings.businessAddress ? `<p class="muted">${safe(billingSettings.businessAddress)}</p>` : ""}
-      </div>
-      <div style="text-align:right;">
-        ${billingSettings.businessLogoUrl ? `<img src="${safe(billingSettings.businessLogoUrl)}" alt="${safe(businessDisplayName || "Business logo")}" style="max-width:72px;max-height:72px;object-fit:contain;margin-bottom:8px;" />` : ""}
-        <p><strong>#${safe(job.jobNumber || "TBC")}</strong></p>
-        <p class="muted">Issued ${safe(new Date().toLocaleDateString())}</p>
-        <p class="muted">${safe(dueLabel)}</p>
-      </div>
-    </div>
-
-    <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-      <div class="card">
-        <p class="muted" style="font-size:12px; letter-spacing:0.08em; text-transform:uppercase;">Bill to</p>
-        <p style="margin-top:8px;"><strong>${safe(customerName)}</strong></p>
-        ${selectedCustomerProfile?.address ? `<p class="muted">${safe(selectedCustomerProfile.address)}</p>` : ""}
-        ${selectedCustomerProfile?.email ? `<p class="muted">${safe(selectedCustomerProfile.email)}</p>` : ""}
-        ${selectedCustomerProfile?.phone ? `<p class="muted">${safe(selectedCustomerProfile.phone)}</p>` : ""}
-      </div>
-      <div class="card">
-        <p class="muted" style="font-size:12px; letter-spacing:0.08em; text-transform:uppercase;">Job summary</p>
-        <p style="margin-top:8px;"><strong>${safe(job.status || "Pending")}</strong></p>
-        <p class="muted">Runtime ${safe(String(jobRuntime))} mins • Labour ${safe(String(labourRuntime))} mins</p>
-      </div>
-    </div>
-
-    <div class="table">
-      <div class="thead"><div>Description</div><div style="text-align:right;">Amount</div></div>
-      <div class="trow"><div><strong>Materials</strong></div><div style="text-align:right;"><strong>${safe(formatCurrency(materialAmount))}</strong></div></div>
-      <div class="trow"><div><strong>Production costs subtotal</strong></div><div style="text-align:right;"><strong>${safe(formatCurrency(productionAmount))}</strong></div></div>
-      <div class="trow"><div><strong>Labour (${safe(String(labourRuntime))} mins)</strong></div><div style="text-align:right;"><strong>${safe(formatCurrency(labourAmount))}</strong></div></div>
-    </div>
-
-    <div class="totals">
-      <div class="row"><span class="muted">SubTotal</span><span class="muted">${safe(formatCurrency(subTotal))}</span></div>
-      <div class="row"><span class="muted">VAT (${safe(vatPercent.toFixed(0))}%)</span><span class="muted">${safe(formatCurrency(vatAmount))}</span></div>
-      <div class="row"><span class="muted">Suggested deposit (${safe(Number(billingSettings.depositPercent || 0).toFixed(0))}%)</span><span class="muted">${safe(formatCurrency(suggestedDepositAmount))}</span></div>
-      <div class="row"><span class="muted">Deposit paid</span><span class="muted">${safe(formatCurrency(depositPaidAmount))}</span></div>
-      <div class="row"><span>Grand total</span><span>${safe(formatCurrency(grandTotal))}</span></div>
-      <div class="row"><span>Balance due</span><span>${safe(formatCurrency(balanceDue))}</span></div>
-    </div>
-
-    ${(billingSettings.businessAddress || billingSettings.businessEmail || billingSettings.businessPhone || billingSettings.businessWebsite) ? `<div class="footer">
-      ${billingSettings.businessAddress ? `<span>${safe(billingSettings.businessAddress)}</span>` : ""}
-      ${billingSettings.businessEmail ? `<span>${safe(billingSettings.businessEmail)}</span>` : ""}
-      ${billingSettings.businessPhone ? `<span>${safe(billingSettings.businessPhone)}</span>` : ""}
-      ${billingSettings.businessWebsite ? `<span>${safe(billingSettings.businessWebsite)}</span>` : ""}
-    </div>` : ""}
-    <div class="makerflow-footer">Made with MakerFlow</div>
-  </body>
-</html>`;
-
-    printWindow.document.open();
-    printWindow.document.write(printMarkup);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-  };
+  const printInvoice = (job: Job) => openInvoicePrintWindow(job, { billingSettings, businessDisplayName, selectedCustomerProfile, formatCurrency });
 
   const startEditingCustomer = (customer: Customer) => {
     setActiveTab("customers");
@@ -2458,918 +2127,126 @@ function App() {
         </div>
 
         {activeTab === "dashboard" && (
-          <div className="space-y-6">
-            <div className="grid gap-6 lg:grid-cols-3">
-              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h2 className="text-xl font-semibold">Workshop operations</h2>
-                {(() => {
-                  const d = deliveryAndUtilization;
-                  const onTime = onTimeTone(d.onTimePercent, d.dueEligibleCount);
-                  const overdue = overdueTone(d.overdueOpen);
-                  const util = utilisationTone(d.utilizationPercent, d.scheduledHours);
-                  return (
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                      <KpiCard
-                        label="On-time delivery"
-                        tone={onTime.tone}
-                        chip={onTime.label}
-                        value={d.dueEligibleCount === 0 ? "—" : `${d.onTimePercent.toFixed(1)}%`}
-                        note={d.dueEligibleCount === 0 ? "Awaiting more completed jobs with due dates" : `${d.onTimeCount} of ${d.dueEligibleCount} completed due ${d.dueEligibleCount === 1 ? "job" : "jobs"}${d.dueEligibleCount < 3 ? " • early data" : ""}`}
-                      />
-                      <KpiCard
-                        label="Overdue open jobs"
-                        tone={overdue.tone}
-                        chip={overdue.label}
-                        value={d.overdueOpen}
-                        note={d.overdueOpen === 0 ? "No overdue jobs" : "Pending or in-progress past due date"}
-                      />
-                      <KpiCard
-                        label="Queued runtime"
-                        tone={d.scheduledHours > 0 ? "info" : "neutral"}
-                        value={`${d.scheduledHours.toFixed(1)} h`}
-                        note={d.scheduledHours > 0 ? `Across ${d.machineCount} equipment queues` : "Nothing queued yet"}
-                      />
-                      <KpiCard
-                        label="Weekly utilisation"
-                        tone={util.tone}
-                        chip={util.label}
-                        value={`${d.utilizationPercent.toFixed(1)}%`}
-                        note={`vs ${WORKSHOP_DAILY_CAPACITY_HOURS}h/day capacity assumption`}
-                      />
-                    </div>
-                  );
-                })()}
-                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <h3 className="text-sm font-semibold text-white">Equipment utilisation <span className="font-normal text-slate-400">(next 7-day queue model)</span></h3>
-                  <div className="mt-3 grid gap-4 md:grid-cols-2">
-                    {deliveryAndUtilization.utilizationByMachine.map((row) => (
-                      <UtilisationRow key={`utilization-${row.machineType}`} name={row.machineType} hours={row.hours} percent={row.utilizationPercent} />
-                    ))}
-                  </div>
-                  {!deliveryAndUtilization.utilizationByMachine.length ? <p className="mt-2 text-sm text-slate-400">No queued equipment yet. Queue a job to see utilisation here.</p> : null}
-                </div>
-              </section>
-
-              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-xl font-semibold">Production Jobs</h2>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTab("jobs");
-                        openNewJobEditor();
-                      }}
-                      className="mf-btn"
-                    >
-                      Price a job
-                    </button>
-                    <button type="button" onClick={() => setActiveTab("customers")} className="mf-btn mf-btn--outline">Add customer</button>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  <SummaryCard label="Pending production jobs" tone="info" value={pendingJobs.length} note={pendingJobs.length === 0 ? "No pending jobs" : "Ready to produce"} />
-                  <SummaryCard label="Total production jobs" tone="neutral" value={jobs.length} note="All jobs in MakerFlow" />
-                  <SummaryCard label="Waiting for payment" tone={jobsWaitingPayment === 0 ? "good" : "warn"} value={jobsWaitingPayment} note={jobsWaitingPayment === 0 ? "No action required" : "Pending jobs not yet paid"} />
-                  <SummaryCard label="Waiting for dispatch" tone={jobsWaitingDispatch === 0 ? "good" : "violet"} value={jobsWaitingDispatch} note={jobsWaitingDispatch === 0 ? "No action required" : "Paid and ready to dispatch"} />
-                </div>
-              </section>
-
-              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <h2 className="text-xl font-semibold">Recent production jobs</h2>
-                <div className="mt-4 space-y-3">
-                  {recentJobs.map((job) => (
-                    <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-semibold text-white">{job.name}</p>
-                          <StatusChip status={job.status} />
-                        </div>
-                        <p className="mt-1 text-sm text-slate-400">{job.jobNumber || "No job number"} • {job.machineType}</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">Customer total</p>
-                          <p className="text-lg font-semibold text-white">{job.cost ? formatCurrency(getInvoiceChargeBreakdown(job).customerCharge) : "Not costed"}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveTab("jobs");
-                            setExpandedJobId(job.id);
-                            setSelectedJobId(job.id);
-                            setJobEditorMode("edit");
-                          }}
-                          className="mf-btn mf-btn--outline mf-btn--sm"
-                        >
-                          Edit job
-                        </button>
-                        <button type="button" onClick={() => calculateJobCost(job)} className="mf-btn mf-btn--sm">{getCostButtonLabel(job)}</button>
-                      </div>
-                    </div>
-                  ))}
-                  {recentJobs.length === 0 ? <p className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-400">No jobs yet. Use "Price a job" to create your first one.</p> : null}
-                </div>
-              </section>
-
-              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold">Scheduling calendar (next {SCHEDULE_HORIZON_DAYS} days)</h2>
-                    <p className="mt-2 text-sm text-slate-400">Calendar view combines due dates with projected completion based on machine queue order and runtime.</p>
-                  </div>
-                  <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">{machineQueueProjections.length} machine queues</span>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {scheduleCalendarDays.map((day) => (
-                    <div key={day.date.toISOString()} className="rounded-2xl border border-slate-800 bg-slate-950 p-3">
-                      <p className="text-sm font-medium text-white">{day.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</p>
-                      <p className="mt-1 text-xs text-slate-400">Due jobs: {day.dueCount}</p>
-                      <p className="text-xs text-slate-400">Projected completions: {day.projectedCount}</p>
-                      <p className="text-xs text-slate-400">Queued runtime due: {(day.totalRuntimeMinutes / 60).toFixed(1)} h</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 space-y-2">
-                  {machineQueueProjections.map((group) => (
-                    <div key={group.machineType} className="rounded-2xl border border-slate-800 bg-slate-950 p-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-white">{group.machineType}</span>
-                        <span className="text-slate-400">Projected queue runtime {(group.totalMinutes / 60).toFixed(1)} h</span>
-                      </div>
-                      <div className="mt-2 space-y-1">
-                        {group.projectedJobs.slice(0, 3).map(({ job, projectedCompletion }) => (
-                          <p key={`${group.machineType}-${job.id}`} className="text-xs text-slate-400">{job.name}: completes ~ {projectedCompletion.toLocaleString()}</p>
-                        ))}
-                        {!group.projectedJobs.length ? <p className="text-xs text-slate-500">No queued jobs.</p> : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-              </section>
-            </div>
-          </div>
+          <DashboardPage
+            deliveryAndUtilization={deliveryAndUtilization}
+            workshopDailyCapacityHours={WORKSHOP_DAILY_CAPACITY_HOURS}
+            scheduleHorizonDays={SCHEDULE_HORIZON_DAYS}
+            onPriceJob={() => {
+              setActiveTab("jobs");
+              openNewJobEditor();
+            }}
+            onAddCustomer={() => setActiveTab("customers")}
+            onEditJob={(jobId) => {
+              setActiveTab("jobs");
+              setExpandedJobId(jobId);
+              setSelectedJobId(jobId);
+              setJobEditorMode("edit");
+            }}
+            pendingJobs={pendingJobs}
+            jobs={jobs}
+            jobsWaitingPayment={jobsWaitingPayment}
+            jobsWaitingDispatch={jobsWaitingDispatch}
+            recentJobs={recentJobs}
+            formatCurrency={formatCurrency}
+            getInvoiceChargeBreakdown={getInvoiceChargeBreakdown}
+            calculateJobCost={calculateJobCost}
+            getCostButtonLabel={getCostButtonLabel}
+            machineQueueProjections={machineQueueProjections}
+            scheduleCalendarDays={scheduleCalendarDays}
+          />
         )}
 
         {activeTab === "reports" && (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Reporting page</h2>
-                <p className="mt-2 text-sm text-slate-400">Filter production jobs by date range, status, equipment, and customer, then export report-ready data.</p>
-              </div>
-              <button type="button" onClick={exportReportCsv} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Export CSV</button>
-            </div>
-
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <label className="flex items-center gap-4 text-sm text-slate-300">
-                <span className="w-40 shrink-0">Start date</span>
-                <input type="date" value={reportStartDate} onChange={(e) => setReportStartDate(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-              </label>
-              <label className="flex items-center gap-4 text-sm text-slate-300">
-                <span className="w-40 shrink-0">End date</span>
-                <input type="date" value={reportEndDate} onChange={(e) => setReportEndDate(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-              </label>
-              <label className="flex items-center gap-4 text-sm text-slate-300">
-                <span className="w-40 shrink-0">Status</span>
-                <select value={reportStatusFilter} onChange={(e) => setReportStatusFilter(e.target.value as (typeof jobWorkflowStatusOptions)[number])} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                  {jobWorkflowStatusOptions.map((statusOption) => (
-                    <option key={`report-status-${statusOption}`} value={statusOption}>{statusOption}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-4 text-sm text-slate-300">
-                <span className="w-40 shrink-0">Machine</span>
-                <select value={reportMachineFilter} onChange={(e) => setReportMachineFilter(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                  <option value="All">All</option>
-                  {machineOptions.map((option) => (
-                    <option key={`report-machine-${option}`} value={option}>{option}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-4 text-sm text-slate-300 lg:col-span-2">
-                <span className="w-40 shrink-0">Customer</span>
-                <select value={reportCustomerFilter} onChange={(e) => setReportCustomerFilter(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                  <option value="All">All customers</option>
-                  {reportCustomers.map((customerName) => (
-                    <option key={`report-customer-${customerName}`} value={customerName}>{customerName}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-4">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Jobs in scope</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{reportSummary.jobsCount}</p>
-                <p className="text-xs text-slate-400">{reportSummary.jobsWithCostCount} costed jobs</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Revenue</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(reportSummary.revenue)}</p>
-                <p className="text-xs text-slate-400">Customer-charge total</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Base cost</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(reportSummary.base)}</p>
-                <p className="text-xs text-slate-400">Internal production base</p>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Margin</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(reportSummary.margin)}</p>
-                <p className="text-xs text-slate-400">{reportSummary.marginPercent.toFixed(1)}% margin rate</p>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-              <h3 className="text-sm font-semibold text-white">Margin reporting</h3>
-              <p className="mt-1 text-xs text-slate-400">Internal margin analysis based on calculated customer charge and base total.</p>
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <h4 className="text-sm font-semibold text-white">By machine</h4>
-                  <div className="mt-2 space-y-2 text-xs">
-                    {marginByMachine.slice(0, 6).map((row) => (
-                      <div key={`machine-margin-report-${row.label}`} className="flex items-center justify-between">
-                        <span className="text-slate-300">{row.label}</span>
-                        <span className="text-slate-200">{formatCurrency(row.margin)} ({row.marginPercent.toFixed(1)}%)</span>
-                      </div>
-                    ))}
-                    {!marginByMachine.length ? <p className="text-slate-500">No costed jobs yet.</p> : null}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <h4 className="text-sm font-semibold text-white">By material type</h4>
-                  <div className="mt-2 space-y-2 text-xs">
-                    {marginByMaterialType.slice(0, 6).map((row) => (
-                      <div key={`material-margin-report-${row.label}`} className="flex items-center justify-between">
-                        <span className="text-slate-300">{row.label}</span>
-                        <span className="text-slate-200">{formatCurrency(row.allocatedMargin)} ({row.marginPercent.toFixed(1)}%)</span>
-                      </div>
-                    ))}
-                    {!marginByMaterialType.length ? <p className="text-slate-500">No material margin data yet.</p> : null}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <h4 className="text-sm font-semibold text-white">By customer</h4>
-                  <div className="mt-2 space-y-2 text-xs">
-                    {marginByCustomer.slice(0, 6).map((row) => (
-                      <div key={`customer-margin-report-${row.label}`} className="flex items-center justify-between">
-                        <span className="text-slate-300">{row.label}</span>
-                        <span className="text-slate-200">{formatCurrency(row.margin)} ({row.marginPercent.toFixed(1)}%)</span>
-                      </div>
-                    ))}
-                    {!marginByCustomer.length ? <p className="text-slate-500">No customer margin data yet.</p> : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Report rows</h3>
-                <span className="text-xs text-slate-400">Runtime {(reportSummary.runtimeMinutes / 60).toFixed(1)} h • Labour {(reportSummary.labourMinutes / 60).toFixed(1)} h</span>
-              </div>
-              <div className="space-y-2">
-                {reportJobs.map((job) => {
-                  const baseCost = Number(getBaseCostTotal(job) || 0);
-                  const customerCharge = Number(getInvoiceChargeBreakdown(job).customerCharge || 0);
-                  const margin = customerCharge - baseCost;
-                  return (
-                    <div key={`report-row-${job.id}`} className="grid gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr]">
-                      <span className="text-slate-200">{job.name} • {job.jobNumber || "No job number"}</span>
-                      <span className="text-slate-400">{job.customer || "Walk-in"}</span>
-                      <span className="text-slate-400">{job.machineType}</span>
-                      <span className="text-slate-400">{job.status}</span>
-                      <span className="text-slate-300">{formatCurrency(customerCharge)}</span>
-                      <span className={`${margin >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{formatCurrency(margin)}</span>
-                    </div>
-                  );
-                })}
-                {!reportJobs.length ? <p className="text-sm text-slate-400">No jobs match the selected report filters.</p> : null}
-              </div>
-            </div>
-          </section>
+          <ReportsPage
+            reportStartDate={reportStartDate}
+            setReportStartDate={setReportStartDate}
+            reportEndDate={reportEndDate}
+            setReportEndDate={setReportEndDate}
+            reportStatusFilter={reportStatusFilter}
+            setReportStatusFilter={(value) => setReportStatusFilter(value as (typeof jobWorkflowStatusOptions)[number])}
+            statusOptions={jobWorkflowStatusOptions}
+            reportMachineFilter={reportMachineFilter}
+            setReportMachineFilter={setReportMachineFilter}
+            machineOptions={machineOptions}
+            reportCustomerFilter={reportCustomerFilter}
+            setReportCustomerFilter={setReportCustomerFilter}
+            reportCustomers={reportCustomers}
+            reportSummary={reportSummary}
+            marginByMachine={marginByMachine}
+            marginByMaterialType={marginByMaterialType}
+            marginByCustomer={marginByCustomer}
+            reportJobs={reportJobs}
+            exportReportCsv={exportReportCsv}
+            getBaseCostTotal={getBaseCostTotal}
+            getCustomerCharge={(job) => Number(getInvoiceChargeBreakdown(job).customerCharge || 0)}
+            formatCurrency={formatCurrency}
+          />
         )}
 
         {activeTab === "jobs" && (
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Jobs</h2>
-                <p className="mt-2 text-sm text-slate-400">Click a job card to expand details, then choose Edit job or Create invoice.</p>
-              </div>
-              <button type="button" onClick={openNewJobEditor} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Price a job</button>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto]">
-              <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Search production jobs</span>
-                <input
-                  value={jobSearchTerm}
-                  onChange={(e) => setJobSearchTerm(e.target.value)}
-                  placeholder="Search by name, customer, or job number"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2"
-                />
-              </label>
-              <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Status filter</span>
-                <select value={jobStatusFilter} onChange={(e) => setJobStatusFilter(e.target.value as (typeof jobWorkflowStatusOptions)[number])} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                  {jobWorkflowStatusOptions.map((statusOption) => (
-                    <option key={statusOption} value={statusOption}>{statusOption}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm text-slate-300">
-                <span className="mb-2 block">Equipment filter</span>
-                <select value={jobMachineFilter} onChange={(e) => setJobMachineFilter(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                  <option value="All">All</option>
-                  {machineOptions.filter((machineName) => machineName !== "Other").map((machineName) => (
-                    <option key={machineName} value={machineName}>{machineName}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="self-end rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300">
-                {filteredJobs.length} of {jobs.length} shown
-              </div>
-            </div>
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Estimate catalogue</h3>
-                <span className="text-xs text-slate-400">{estimateTemplates.length} saved templates</span>
-              </div>
-              <p className="mb-3 text-xs text-slate-400">Set any job to status <strong>Estimate Template</strong> to save it in your reusable pricing catalogue.</p>
-              <div className="space-y-2">
-                {estimateTemplates.slice(0, 8).map((job) => (
-                  <div key={`estimate-template-${job.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
-                    <div>
-                      <p className="font-medium text-white">{job.name}</p>
-                      <p className="text-slate-400">{job.machineType} • Runtime {formatMinutesAsPrintTime(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0))} • Labour {job.labourTimeMinutes ?? job.estTimeMinutes ?? 0} mins</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => applyEstimateTemplate(job)}
-                      className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300"
-                    >
-                      Use template
-                    </button>
-                  </div>
-                ))}
-                {!estimateTemplates.length ? <p className="text-sm text-slate-400">No estimate templates yet. Open a job and set status to Estimate Template.</p> : null}
-              </div>
-            </div>
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Production schedule</h3>
-                <span className="text-xs text-slate-400">{queuedJobs.length} active queue items</span>
-              </div>
-              <div className="space-y-2">
-                {queuedJobs.map((job) => {
-                  const dueRisk = getDueRiskLabel(job);
-                  const riskTone = dueRisk === "Overdue"
-                    ? "bg-rose-600/20 text-rose-300"
-                    : dueRisk === "At risk"
-                      ? "bg-amber-600/20 text-amber-300"
-                      : dueRisk === "Watch"
-                        ? "bg-yellow-600/20 text-yellow-300"
-                        : "bg-emerald-600/20 text-emerald-300";
-
-                  return (
-                    <div key={`queue-${job.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
-                      <div>
-                        <p className="font-medium text-white">#{job.queuePosition || 0} • {job.name}</p>
-                        <p className="text-slate-400">{job.machineType} • Due {job.dueDate ? new Date(job.dueDate).toLocaleDateString() : "Not set"}</p>
-                      </div>
-                      <span className={`rounded-full px-2 py-1 text-xs ${riskTone}`}>{dueRisk}</span>
-                    </div>
-                  );
-                })}
-                {!queuedJobs.length ? <p className="text-sm text-slate-400">No pending or in-progress queue items yet.</p> : null}
-              </div>
-            </div>
+            <JobsToolbar
+              openNewJobEditor={openNewJobEditor}
+              jobSearchTerm={jobSearchTerm}
+              setJobSearchTerm={setJobSearchTerm}
+              jobStatusFilter={jobStatusFilter}
+              setJobStatusFilter={(value) => setJobStatusFilter(value as (typeof jobWorkflowStatusOptions)[number])}
+              statusOptions={jobWorkflowStatusOptions}
+              jobMachineFilter={jobMachineFilter}
+              setJobMachineFilter={setJobMachineFilter}
+              machineOptions={machineOptions}
+              filteredJobs={filteredJobs}
+              jobs={jobs}
+              estimateTemplates={estimateTemplates}
+              applyEstimateTemplate={applyEstimateTemplate}
+              queuedJobs={queuedJobs}
+              getDueRiskLabel={getDueRiskLabel}
+            />
             <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="space-y-3">
                 {filteredJobs.map((job) => (
-                  <div key={job.id} className={`w-full rounded-2xl border ${expandedJobId === job.id ? "border-cyan-500 bg-cyan-500/10" : "border-slate-800 bg-slate-950"}`}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExpandedJobId((current) => current === job.id ? null : job.id);
-                        setSelectedJobId(job.id);
-                      }}
-                      className="w-full p-4 text-left"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{job.name}</p>
-                          <p className="text-sm text-slate-400">{job.jobNumber || "No job number"} • {job.customer || "No customer"} • {job.machineType}</p>
-                        </div>
-                        <div className="text-right text-sm text-slate-400">
-                          <p>
-                            <span className={`rounded-full px-3 py-1 text-xs font-medium ${job.status === "Completed" || job.status === "Invoiced" ? "bg-emerald-600/20 text-emerald-300" : job.status === "In Progress" ? "bg-sky-600/20 text-sky-300" : "bg-slate-700 text-slate-200"}`}>
-                              {job.status}
-                            </span>
-                          </p>
-                          <p>{job.cost ? `Base (no markups) ${formatCurrency(getBaseCostTotal(job))}` : "No cost yet"}</p>
-                          {job.cost ? <p>{`Customer (with markups) ${formatCurrency(getInvoiceChargeBreakdown(job).customerCharge)}`}</p> : null}
-                          {job.cost ? <p>{`Profit ${formatCurrency(getProfitTotal(job))}`}</p> : null}
-                        </div>
-                      </div>
-                    </button>
-
-                    {expandedJobId === job.id ? (
-                      <div className="border-t border-slate-800 px-4 pb-4 pt-3">
-                        <div className="grid gap-2 text-sm text-slate-300 md:grid-cols-2">
-                          <p><span className="text-slate-500">Job:</span> {job.name}</p>
-                          <p><span className="text-slate-500">Customer:</span> {job.customer || "No customer"}</p>
-                          <p><span className="text-slate-500">Model URL:</span> {job.sourceUrl ? <a className="text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer">{job.sourceUrl}</a> : "None"}</p>
-                          <p><span className="text-slate-500">Equipment:</span> {job.machineType}</p>
-                          <p><span className="text-slate-500">Equipment runtime:</span> {formatMinutesAsPrintTime(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0))}</p>
-                          <p><span className="text-slate-500">Setup time:</span> {job.setupTimeMinutes ?? 0} mins</p>
-                          <p><span className="text-slate-500">Post-processing:</span> {job.postProcessingMinutes ?? 0} mins</p>
-                          <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
-                          <p><span className="text-slate-500">Status:</span> {job.status}</p>
-                          <p><span className="text-slate-500">Queue position:</span> {job.queuePosition ?? 0}</p>
-                          <p><span className="text-slate-500">Due date:</span> {job.dueDate ? new Date(job.dueDate).toLocaleDateString() : "Not set"}</p>
-                          <p><span className="text-slate-500">Payment:</span> {job.paymentStatus || "Unpaid"}</p>
-                          <p><span className="text-slate-500">Rush:</span> {job.isRush ? "Yes" : "No"}</p>
-                          <p><span className="text-slate-500">Setup fee:</span> {formatCurrency(Number(job.setupFee || 0))}</p>
-                          <p><span className="text-slate-500">Delivery charge:</span> {formatCurrency(Number(job.deliveryCharge || 0))}</p>
-                          <p><span className="text-slate-500">Deposit paid:</span> {formatCurrency(Number(job.depositPaidAmount || 0))}</p>
-                          <p><span className="text-slate-500">Materials:</span> {job.materials?.length || 0}</p>
-                          <p><span className="text-slate-500">QA passed:</span> {job.qaPassed ? "Yes" : "No"}</p>
-                          <p><span className="text-slate-500">Rework cost:</span> {formatCurrency(Number(job.reworkCost || 0))}</p>
-                          <p><span className="text-slate-500">Failure reason:</span> {job.failureReason || "None"}</p>
-                          <p><span className="text-slate-500">Failure waste:</span> {Number(job.failureWasteGrams || 0)} g</p>
-                          <p><span className="text-slate-500">Failure cost:</span> {formatCurrency(Number(job.failureCost || 0))}</p>
-                          <p className="md:col-span-2"><span className="text-slate-500">QA checklist:</span> {(job.qaChecklist || []).length ? (job.qaChecklist || []).join(", ") : "No checklist items"}</p>
-                          <p className="md:col-span-2"><span className="text-slate-500">Rework notes:</span> {job.reworkNotes || "None"}</p>
-                          <p className="md:col-span-2"><span className="text-slate-500">File:</span> {job.filePath || "No file uploaded"}</p>
-                        </div>
-
-                        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Job file preview</p>
-                            <label className="cursor-pointer rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">
-                              <span>{uploadingJobId === job.id ? "Uploading..." : "Upload SVG/STL/image"}</span>
-                              <input
-                                type="file"
-                                accept=".svg,.stl,.png,.jpg,.jpeg,.webp,.gif"
-                                disabled={uploadingJobId === job.id}
-                                className="hidden"
-                                onChange={(event) => uploadJobFile(job, event)}
-                              />
-                            </label>
-                          </div>
-                          {jobFileMessage[job.id] ? <p className="mt-2 text-xs text-cyan-300">{jobFileMessage[job.id]}</p> : null}
-                          {job.sourceUrl ? (
-                            <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
-                              <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Model image from source</p>
-                              {modelPreviewByJob[job.id]?.sourceUrl === job.sourceUrl && modelPreviewByJob[job.id]?.loading ? (
-                                <p className="mt-2 text-sm text-slate-400">Looking for a source image...</p>
-                              ) : modelPreviewByJob[job.id]?.sourceUrl === job.sourceUrl && modelPreviewByJob[job.id]?.imageUrl ? (
-                                <div className="mt-2">
-                                  <a href={modelPreviewByJob[job.id].imageUrl || undefined} target="_blank" rel="noreferrer" referrerPolicy="no-referrer" aria-label={`Open source image for ${job.name}`}>
-                                    <img
-                                      src={modelPreviewByJob[job.id].imageUrl || undefined}
-                                      loading="lazy"
-                                      alt={`${job.name} model image from source`}
-                                      referrerPolicy="no-referrer"
-                                      onError={() => setModelPreviewByJob((current) => ({ ...current, [job.id]: { sourceUrl: job.sourceUrl || "", imageUrl: null, loading: false } }))}
-                                      className="max-h-72 w-full rounded-lg bg-white object-contain"
-                                    />
-                                  </a>
-                                  <a className="mt-2 inline-block text-xs text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer" referrerPolicy="no-referrer">View model page</a>
-                                </div>
-                              ) : (
-                                <div className="mt-2 flex items-center gap-3">
-                                  <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-400">No image</div>
-                                  <div className="text-sm text-slate-400">
-                                    <p>No source image is available for this model.</p>
-                                    <a className="text-xs text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer" referrerPolicy="no-referrer">View model page</a>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ) : null}
-                          {job.filePath ? (
-                            <JobFilePreview filePath={job.filePath} jobName={job.name} previewType={getPreviewType(job.filePath)} />
-                          ) : (
-                            <p className="mt-3 text-sm text-slate-400">Upload an SVG, STL or image file to preview it here.</p>
-                          )}
-                        </div>
-                        {job.cost ? (
-                          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-                            <p className="mb-2 text-xs uppercase tracking-[0.25em] text-slate-400">Cost breakdown</p>
-                            <div className="space-y-1 text-sm">
-                              {(() => {
-                                const runtimeBreakdown = calculateRuntimeBreakdown(job);
-                                const runtimeOnly = formatMinutesAsPrintTime(runtimeBreakdown.machineRunTimeMinutes);
-                                const electricityMarkupMultiplier = 1 + (Number(billingSettings.electricityMarkupPercent || 0) / 100);
-                                const depreciationMarkupMultiplier = 1 + (Number(billingSettings.depreciationMarkupPercent || 0) / 100);
-                                const electricityWithMarkup = runtimeBreakdown.electricityCost * electricityMarkupMultiplier;
-                                const depreciationWithMarkup = runtimeBreakdown.depreciationCost * depreciationMarkupMultiplier;
-                                return (
-                                  <>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-slate-300">Materials ({runtimeBreakdown.materialWeightGrams.toFixed(0)} g)</span>
-                                      <span className="font-medium text-white">{formatCurrency(getInvoiceChargeBreakdown(job).materialCharge)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-slate-300">Electricity ({runtimeOnly})</span>
-                                      <span className="font-medium text-white">{formatCurrency(electricityWithMarkup)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-slate-300">Depreciation ({runtimeOnly})</span>
-                                      <span className="font-medium text-white">{formatCurrency(depreciationWithMarkup)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-slate-300">Workshop ({runtimeOnly})</span>
-                                      <span className="font-medium text-white">{formatCurrency(runtimeBreakdown.workshopCost)}</span>
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-300">Labour ({job.labourTimeMinutes ?? job.estTimeMinutes} mins)</span>
-                                <span className="font-medium text-white">{formatCurrency(job.cost.labourCost)}</span>
-                              </div>
-                              <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
-                                <span className="text-slate-300">Base total (no markups)</span>
-                                <span className="font-semibold text-white">{formatCurrency(getBaseCostTotal(job))}</span>
-                              </div>
-                              <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
-                                <span className="text-slate-300">Customer total (with markups)</span>
-                                <span className="font-semibold text-white">{formatCurrency(getInvoiceChargeBreakdown(job).customerCharge)}</span>
-                              </div>
-                              <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
-                                <span className="text-slate-300">Profit (internal)</span>
-                                <span className="font-semibold text-white">{formatCurrency(getProfitTotal(job))}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {getWorkflowActions(job).map((action) => (
-                            <button
-                              key={`${job.id}-${action.status}`}
-                              type="button"
-                              onClick={() => updateJobStatusQuick(job, action.status)}
-                              className="mf-btn"
-                            >
-                              {action.label}
-                            </button>
-                          ))}
-                          {(job.status === "Quote Draft" || job.status === "Quote Sent") ? (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Approved")} className="mf-btn">Approve quote</button>
-                          ) : null}
-                          {job.status === "Quote Draft" ? (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Quote Sent")} className="mf-btn">Send quote</button>
-                          ) : null}
-                          {job.status === "Quote Approved" ? (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="mf-btn">Convert to job</button>
-                          ) : null}
-                          {job.status !== "Estimate Template" ? (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Estimate Template")} className="mf-btn">Save as estimate template</button>
-                          ) : (
-                            <button type="button" onClick={() => updateJobStatusQuick(job, "Pending")} className="mf-btn">Convert estimate to pending</button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedJobId(job.id);
-                              setSelectedJobId(job.id);
-                              setJobEditorMode("edit");
-                            }}
-                            className="mf-btn"
-                          >
-                            Edit job
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedJobId(job.id);
-                              setSelectedJobId(job.id);
-                              setJobEditorMode("invoice");
-                            }}
-                            className="mf-btn"
-                          >
-                            Create invoice
-                          </button>
-                          <button type="button" onClick={() => calculateJobCost(job)} className="mf-btn">{getCostButtonLabel(job)}</button>
-                          <button type="button" onClick={() => deleteJob(job.id)} className="mf-btn mf-btn--danger">Delete job</button>
-                        </div>
-
-                        {jobEditorMode === "edit" && selectedJobId === job.id && selectedJob ? (
-                          <form onSubmit={saveSelectedJob} className="mt-4 space-y-4 rounded-2xl border border-cyan-700/40 bg-slate-900 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">Edit job</p>
-                                <h3 className="mt-1 text-lg font-semibold text-white">{selectedJob.name}</h3>
-                              </div>
-                              <div className="flex gap-2">
-                                <button type="button" onClick={() => selectedJob && calculateJobCost(selectedJob)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">{selectedJob ? getCostButtonLabel(selectedJob) : "Calculate cost"}</button>
-                                <button type="button" onClick={() => setJobEditorMode("none")} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Cancel</button>
-                                <button type="submit" className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Save job</button>
-                              </div>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Job name</span>
-                                <input value={selectedJobForm.name} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" required />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Customer</span>
-                                <input value={selectedJobForm.customer} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, customer: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Model URL</span>
-                                <input value={selectedJobForm.sourceUrl} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, sourceUrl: e.target.value })} placeholder="Paste a model page link" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Equipment</span>
-                                <select value={selectedJobForm.machineType} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, machineType: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                                  {machineOptions.map((option) => (
-                                    <option key={option} value={option}>{option}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Status</span>
-                                <select value={selectedJobForm.status} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, status: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                                  {jobStatusOptions.map((statusOption) => (
-                                    <option key={statusOption} value={statusOption}>{statusOption}</option>
-                                  ))}
-                                </select>
-                              </label>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <PrintTimeInput value={selectedJobForm.machineRunTimeMinutes} onChange={(minutes) => setSelectedJobForm({ ...selectedJobForm, machineRunTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Setup time (mins)</span>
-                                <input value={selectedJobForm.setupTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, setupTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Post-processing (mins)</span>
-                                <input value={selectedJobForm.postProcessingMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, postProcessingMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Labour time (mins)</span>
-                                <input value={selectedJobForm.labourTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, labourTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Queue position</span>
-                                <input type="number" min="0" value={selectedJobForm.queuePosition} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, queuePosition: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Due date</span>
-                                <input type="date" value={selectedJobForm.dueDate} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, dueDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Payment status</span>
-                                <select value={selectedJobForm.paymentStatus} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, paymentStatus: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                                  {paymentStatusOptions.map((paymentStatusOption) => (
-                                    <option key={paymentStatusOption} value={paymentStatusOption}>{paymentStatusOption}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Deposit paid (£)</span>
-                                <input type="number" step="0.01" value={selectedJobForm.depositPaidAmount} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Rework cost (£)</span>
-                                <input type="number" step="0.01" value={selectedJobForm.reworkCost} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, reworkCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                                <p className="mt-1 text-xs text-slate-500">Use a negative value (for example -5.00) to apply a manual pricing correction.</p>
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Failure waste (g)</span>
-                                <input type="number" step="0.01" value={selectedJobForm.failureWasteGrams} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, failureWasteGrams: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Failure cost (£)</span>
-                                <input type="number" step="0.01" value={selectedJobForm.failureCost} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, failureCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">QA passed</span>
-                                <select value={selectedJobForm.qaPassed ? "yes" : "no"} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, qaPassed: e.target.value === "yes" })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                                  <option value="no">No</option>
-                                  <option value="yes">Yes</option>
-                                </select>
-                              </label>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <label className="block text-sm text-slate-300 md:col-span-2">
-                                <span className="mb-2 block">QA checklist (one item per line)</span>
-                                <textarea value={selectedJobForm.qaChecklistText} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, qaChecklistText: e.target.value })} rows={3} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300 md:col-span-2">
-                                <span className="mb-2 block">Rework notes</span>
-                                <textarea value={selectedJobForm.reworkNotes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, reworkNotes: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300 md:col-span-2">
-                                <span className="mb-2 block">Failure reason</span>
-                                <input value={selectedJobForm.failureReason} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, failureReason: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                            </div>
-
-                            <label className="flex items-center gap-3 text-sm text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={selectedJobForm.isRush}
-                                onChange={(e) => setSelectedJobForm({ ...selectedJobForm, isRush: e.target.checked })}
-                                className="h-4 w-4 rounded border-slate-600 bg-slate-950"
-                              />
-                              Apply rush fee for this job
-                            </label>
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Setup fee for this job (£)</span>
-                                <input type="number" min="0" step="0.01" value={selectedJobForm.setupFee} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, setupFee: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                              <label className="block text-sm text-slate-300">
-                                <span className="mb-2 block">Delivery charge for this job (£)</span>
-                                <input type="number" min="0" step="0.01" value={selectedJobForm.deliveryCharge} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, deliveryCharge: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                              </label>
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                              <div className="mb-3 flex items-center justify-between">
-                                <h4 className="text-sm font-semibold text-white">Materials used</h4>
-                                <button type="button" onClick={addSelectedJobMaterialEntry} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Add material</button>
-                              </div>
-                              <div className="space-y-3">
-                                {selectedJobMaterialEntries.map((entry, index) => (
-                                  <div key={`${entry.materialId}-${index}`} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3 md:grid-cols-[1.6fr_1fr_auto]">
-                                    <label className="text-sm text-slate-300">
-                                      <span className="mb-2 block">Material</span>
-                                      <select value={entry.materialId} onChange={(e) => updateSelectedJobMaterialEntry(index, "materialId", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2">
-                                        {materials.map((material) => (
-                                          <option key={material.id} value={material.id}>{material.name} {material.color ? `• ${material.color}` : ""}</option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                    <label className="text-sm text-slate-300">
-                                      <span className="mb-2 block">Quantity (g)</span>
-                                      <input type="number" min="0" step="0.01" value={entry.usageQuantity} onChange={(e) => updateSelectedJobMaterialEntry(index, "usageQuantity", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                                    </label>
-                                    <button type="button" onClick={() => removeSelectedJobMaterialEntry(index)} className="self-end rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">Remove</button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </form>
-                        ) : null}
-
-                        {jobEditorMode === "invoice" && selectedJobId === job.id && selectedJob ? (
-                          <div className="mt-4 space-y-5 rounded-2xl border border-cyan-700/40 bg-slate-900 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm uppercase tracking-[0.3em] text-cyan-400">Invoice</p>
-                                <h3 className="mt-2 text-xl font-semibold">{selectedJob.name}</h3>
-                              </div>
-                              <div className="flex gap-2">
-                                <button type="button" onClick={() => selectedJob && calculateJobCost(selectedJob)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Refresh costs</button>
-                                <button type="button" onClick={() => printInvoice(selectedJob)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Print / Save PDF</button>
-                                <button type="button" onClick={() => setJobEditorMode("none")} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Close invoice</button>
-                              </div>
-                            </div>
-
-                            {selectedJob.cost ? (
-                              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-                                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-800 pb-4">
-                                  <div>
-                                    <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">Invoice</p>
-                                    <h5 className="mt-2 text-xl font-semibold text-white">{selectedJob.name}</h5>
-                                    <p className="mt-1 text-sm text-slate-400">{selectedJob.customer || "Walk-in customer"}</p>
-                                    {businessDisplayName ? <p className="mt-3 text-sm text-slate-400">From: <span className="text-slate-200">{businessDisplayName}</span></p> : null}
-                                    {billingSettings.businessAddress ? <p className="text-sm text-slate-400">{billingSettings.businessAddress}</p> : null}
-                                  </div>
-                                  <div className="text-sm text-slate-400">
-                                    {billingSettings.businessLogoUrl ? <img src={billingSettings.businessLogoUrl} alt="Business logo" className="mb-2 ml-auto h-12 w-12 rounded-full object-cover" /> : null}
-                                    <p className="font-medium text-white">#{selectedJob.jobNumber || "TBC"}</p>
-                                    <p>Issued {new Date().toLocaleDateString()}</p>
-                                    <p>{Number(billingSettings.paymentTermsDays || 0) > 0 ? `Due in ${Number(billingSettings.paymentTermsDays || 0)} days` : "Due on receipt"}</p>
-                                  </div>
-                                </div>
-
-                                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Bill to</p>
-                                    <p className="mt-2 font-medium text-white">{selectedJob.customer || "Walk-in customer"}</p>
-                                    {selectedCustomerProfile?.address ? <p className="text-sm text-slate-400">{selectedCustomerProfile.address}</p> : null}
-                                    {selectedCustomerProfile?.email ? <p className="text-sm text-slate-400">{selectedCustomerProfile.email}</p> : null}
-                                    {selectedCustomerProfile?.phone ? <p className="text-sm text-slate-400">{selectedCustomerProfile.phone}</p> : null}
-                                    <p className="text-sm text-slate-400">{selectedJob.machineType}</p>
-                                  </div>
-                                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                                    <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Job summary</p>
-                                    <p className="mt-2 font-medium text-white">{selectedJob.status}</p>
-                                    <p className="text-sm text-slate-400">Runtime {formatMinutesAsPrintTime(Number(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0))} • Setup {selectedJob.setupTimeMinutes ?? 0} mins • Post {selectedJob.postProcessingMinutes ?? 0} mins • Labour {selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins</p>
-                                    <p className="text-sm text-slate-400">Payment {selectedJob.paymentStatus || "Unpaid"}</p>
-                                  </div>
-                                </div>
-
-                                <div className="mt-5 overflow-hidden rounded-2xl border border-slate-800">
-                                  <div className="grid grid-cols-[2fr_1fr] bg-slate-950/90 px-4 py-3 text-sm font-medium text-slate-300">
-                                    <span>Description</span>
-                                    <span className="text-right">Amount</span>
-                                  </div>
-                                  <div className="divide-y divide-slate-800 bg-slate-950/50">
-                                    <div className="grid grid-cols-[2fr_1fr] px-4 py-3 text-sm">
-                                      <div>
-                                        <p className="font-medium text-white">Materials</p>
-                                      </div>
-                                      <span className="text-right font-medium text-white">{formatCurrency(getInvoiceChargeBreakdown(selectedJob).materialCharge)}</span>
-                                    </div>
-                                    <div className="grid grid-cols-[2fr_1fr] px-4 py-3 text-sm">
-                                      <div>
-                                        <p className="font-medium text-white">Production costs subtotal</p>
-                                      </div>
-                                      <span className="text-right font-medium text-white">{formatCurrency(getInvoiceChargeBreakdown(selectedJob).productionCharge)}</span>
-                                    </div>
-                                    <div className="grid grid-cols-[2fr_1fr] px-4 py-3 text-sm">
-                                      <div>
-                                        <p className="font-medium text-white">Labour ({selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins)</p>
-                                      </div>
-                                      <span className="text-right font-medium text-white">{formatCurrency(getInvoiceChargeBreakdown(selectedJob).labourCharge)}</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="mt-4 flex justify-end">
-                                  <div className="w-full max-w-xs space-y-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm">
-                                    {(() => {
-                                      const chargeBreakdown = getInvoiceChargeBreakdown(selectedJob);
-                                      const subTotal = Number(chargeBreakdown.customerCharge || 0);
-                                      const vatAmount = subTotal * (Number(billingSettings.vatPercent || 0) / 100);
-                                      const grandTotal = subTotal + vatAmount;
-                                      const suggestedDepositAmount = grandTotal * (Math.max(0, Number(billingSettings.depositPercent || 0)) / 100);
-                                      const depositPaidAmount = Number(selectedJob.depositPaidAmount || 0);
-                                      const balanceDue = Math.max(0, grandTotal - depositPaidAmount);
-
-                                      return (
-                                        <>
-                                          <div className="flex items-center justify-between text-slate-400">
-                                            <span>SubTotal</span>
-                                            <span>{formatCurrency(subTotal)}</span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-slate-400">
-                                            <span>VAT ({Number(billingSettings.vatPercent || 0).toFixed(0)}%)</span>
-                                            <span>{formatCurrency(vatAmount)}</span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-slate-400">
-                                            <span>Suggested deposit ({Number(billingSettings.depositPercent || 0).toFixed(0)}%)</span>
-                                            <span>{formatCurrency(suggestedDepositAmount)}</span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-slate-400">
-                                            <span>Deposit paid</span>
-                                            <span>{formatCurrency(depositPaidAmount)}</span>
-                                          </div>
-                                          <div className="flex items-center justify-between border-t border-slate-800 pt-2 text-base font-semibold text-white">
-                                            <span>Grand total</span>
-                                            <span>{formatCurrency(grandTotal)}</span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-base font-semibold text-cyan-200">
-                                            <span>Balance due</span>
-                                            <span>{formatCurrency(balanceDue)}</span>
-                                          </div>
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-
-                                {(billingSettings.businessAddress || billingSettings.businessEmail || billingSettings.businessPhone || billingSettings.businessWebsite) ? (
-                                  <div className="mt-5 border-t border-slate-800 pt-3 text-xs text-slate-400">
-                                    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
-                                      {billingSettings.businessAddress ? <span>{billingSettings.businessAddress}</span> : null}
-                                      {billingSettings.businessEmail ? <span>{billingSettings.businessEmail}</span> : null}
-                                      {billingSettings.businessPhone ? <span>{billingSettings.businessPhone}</span> : null}
-                                      {billingSettings.businessWebsite ? (
-                                        <a className="text-cyan-300 underline" href={billingSettings.businessWebsite} target="_blank" rel="noreferrer">
-                                          {billingSettings.businessWebsite}
-                                        </a>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                ) : null}
-                                <p className="mt-5 border-t border-slate-800 pt-3 text-center text-xs text-slate-500">Made with MakerFlow</p>
-                              </div>
-                            ) : (
-                              <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
-                                No cost has been calculated for this job yet. Use Refresh costs to generate the invoice totals.
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    expandedJobId={expandedJobId}
+                    setExpandedJobId={setExpandedJobId}
+                    selectedJobId={selectedJobId}
+                    setSelectedJobId={setSelectedJobId}
+                    jobEditorMode={jobEditorMode}
+                    setJobEditorMode={setJobEditorMode}
+                    selectedJob={selectedJob}
+                    selectedJobForm={selectedJobForm}
+                    setSelectedJobForm={setSelectedJobForm}
+                    selectedCustomerProfile={selectedCustomerProfile}
+                    billingSettings={billingSettings}
+                    businessDisplayName={businessDisplayName}
+                    machineOptions={machineOptions}
+                    materials={materials}
+                    selectedJobMaterialEntries={selectedJobMaterialEntries}
+                    addSelectedJobMaterialEntry={addSelectedJobMaterialEntry}
+                    updateSelectedJobMaterialEntry={updateSelectedJobMaterialEntry}
+                    removeSelectedJobMaterialEntry={removeSelectedJobMaterialEntry}
+                    jobStatusOptions={jobStatusOptions}
+                    paymentStatusOptions={paymentStatusOptions}
+                    formatCurrency={formatCurrency}
+                    getBaseCostTotal={getBaseCostTotal}
+                    getProfitTotal={getProfitTotal}
+                    getInvoiceChargeBreakdown={getInvoiceChargeBreakdown}
+                    calculateRuntimeBreakdown={calculateRuntimeBreakdown}
+                    getCostButtonLabel={getCostButtonLabel}
+                    calculateJobCost={calculateJobCost}
+                    getWorkflowActions={getWorkflowActions}
+                    updateJobStatusQuick={updateJobStatusQuick}
+                    saveSelectedJob={saveSelectedJob}
+                    deleteJob={deleteJob}
+                    printInvoice={printInvoice}
+                    uploadJobFile={uploadJobFile}
+                    uploadingJobId={uploadingJobId}
+                    jobFileMessage={jobFileMessage}
+                    modelPreviewByJob={modelPreviewByJob}
+                    setModelPreviewByJob={setModelPreviewByJob}
+                    getPreviewType={getPreviewType}
+                  />
                 ))}
                 {!filteredJobs.length ? (
                   <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
@@ -3378,237 +2255,33 @@ function App() {
                 ) : null}
               </div>
 
-              <div
-                className={jobEditorMode === "create" ? "fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 no-print sm:p-6" : "hidden"}
-                style={{ overflowY: "auto", overscrollBehavior: "contain" }}
-                onClick={() => setJobEditorMode("none")}
-              >
-                {jobEditorMode === "create" && (
-                  <form
-                    ref={addJobFormRef}
-                    onSubmit={createJobFromJobsTab}
-                    onClick={(event) => event.stopPropagation()}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="add-job-dialog-title"
-                    className="w-full max-w-5xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl sm:p-6"
-                    style={{ maxHeight: "92vh", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm uppercase tracking-[0.3em] text-cyan-400">New quote</p>
-                        <h3 id="add-job-dialog-title" className="mt-2 text-xl font-semibold">Start with the basics</h3>
-                        <p className="mt-1 text-sm text-slate-400">Add the key details for a quick price. You can fill in production tracking later.</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => setJobEditorMode("none")} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Cancel</button>
-                        <button type="submit" className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Save &amp; calculate price</button>
-                      </div>
-                    </div>
-
-                    <details className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                      <summary className="cursor-pointer text-sm font-semibold text-white">Use a saved estimate</summary>
-                      <div className="mt-4 space-y-4">
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h4 className="text-sm font-semibold text-white">Estimate catalogue</h4>
-                          <p className="mt-1 text-xs text-slate-400">Save model-based templates for quick pricing without customer details.</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => saveCurrentEstimateTemplate().catch((error) => setMakerWorldMessage(error instanceof Error ? error.message : "Failed to save estimate template"))}
-                          className="rounded-xl border border-cyan-700 px-3 py-2 text-xs text-cyan-300"
-                        >
-                          Save current as template
-                        </button>
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {savedEstimateTemplates.slice(0, 8).map((template) => (
-                          <div key={template.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs">
-                            <div>
-                              <p className="font-medium text-white">{template.name}</p>
-                              <p className="text-slate-400">{template.machineType} • Runtime {formatMinutesAsPrintTime(Number(template.machineRunTimeMinutes || 0))} • Labour {template.labourTimeMinutes}m</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <button type="button" onClick={() => applySavedEstimateTemplate(template).catch(() => undefined)} className="rounded-full border border-cyan-700 px-3 py-1 text-cyan-300">Use</button>
-                              <button type="button" onClick={() => deleteEstimateTemplate(template.id).catch(() => undefined)} className="mf-btn mf-btn--sm mf-btn--danger">Delete</button>
-                            </div>
-                          </div>
-                        ))}
-                        {!savedEstimateTemplates.length ? <p className="text-xs text-slate-500">No saved templates yet.</p> : null}
-                      </div>
-                    </div>
-                      </div>
-                    </details>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Job name</span>
-                        <input value={newJobForm.name} onChange={(e) => setNewJobForm({ ...newJobForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Customer (optional)</span>
-                        <input value={newJobForm.customer} onChange={(e) => setNewJobForm({ ...newJobForm, customer: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Equipment</span>
-                        <select value={newJobForm.machineType} onChange={(e) => setNewJobForm({ ...newJobForm, machineType: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-                          {machineOptions.map((option) => (
-                            <option key={option} value={option}>{option}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <PrintTimeInput value={newJobForm.machineRunTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, machineRunTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      <PrintTimeInput label="Labour time" value={newJobForm.labourTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, labourTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="md:col-span-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                        <label className="block text-sm text-slate-300">
-                          <span className="mb-2 block">Model URL (optional)</span>
-                          <input value={newJobForm.sourceUrl} onChange={(e) => { setNewJobForm({ ...newJobForm, sourceUrl: e.target.value }); setMakerWorldUrl(e.target.value); setModelUrlMessage(""); }} placeholder="Paste a 3D model page link" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                        </label>
-                        <button type="button" disabled={!newJobForm.sourceUrl.trim() || isLookingUpModelName} onClick={() => lookupModelTitle().catch(() => undefined)} className="rounded-xl border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">
-                          {isLookingUpModelName ? "Reading model page..." : "Fill job name"}
-                        </button>
-                        <p className="text-xs text-slate-500 sm:col-span-2">Try a link from 3Drop, Printables (Prusa), MakerWorld, Thingiverse or Cults3D. You can also enter the job name yourself.</p>
-                        {modelUrlMessage ? <p className="text-xs text-cyan-300 sm:col-span-2" role="status">{modelUrlMessage}</p> : null}
-                        {makerWorldImportPreview ? <img src={makerWorldImportPreview} alt="MakerWorld model preview" className="h-24 w-24 rounded-xl object-cover sm:col-span-2" /> : null}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div>
-                          <h4 className="text-sm font-semibold text-white">Materials for this job</h4>
-                          <p className="mt-1 text-xs text-slate-400">Enter the estimated amount for a more useful price. Remove the row if no tracked material applies.</p>
-                        </div>
-                        <button type="button" onClick={addNewJobMaterialEntry} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Add material</button>
-                      </div>
-                      <div className="space-y-3">
-                        {newJobMaterialEntries.map((entry, index) => (
-                          <div key={`${entry.materialId}-${index}`} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3 md:grid-cols-[1.6fr_1fr_auto]">
-                            <label className="text-sm text-slate-300">
-                              <span className="mb-2 block">Material</span>
-                              <select value={entry.materialId} onChange={(e) => updateNewJobMaterialEntry(index, "materialId", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-                                {materials.map((material) => (
-                                  <option key={material.id} value={material.id}>{material.name} {material.color ? `• ${material.color}` : ""}</option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="text-sm text-slate-300">
-                              <span className="mb-2 block">Estimated amount (g)</span>
-                              <input type="number" min="0" step="0.01" placeholder="e.g. 85" value={entry.usageQuantity} onChange={(e) => updateNewJobMaterialEntry(index, "usageQuantity", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                            </label>
-                            <button type="button" onClick={() => removeNewJobMaterialEntry(index)} className="self-end rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">Remove</button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <details className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                      <summary className="cursor-pointer text-sm font-semibold text-white">Optional pricing and production details</summary>
-                      <div className="mt-4 space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Quote / job status</span>
-                        <select value={newJobForm.status} onChange={(e) => setNewJobForm({ ...newJobForm, status: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-                          {jobStatusOptions.map((statusOption) => (
-                            <option key={statusOption} value={statusOption}>{statusOption}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Payment status</span>
-                        <select value={newJobForm.paymentStatus} onChange={(e) => setNewJobForm({ ...newJobForm, paymentStatus: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-                          {paymentStatusOptions.map((paymentStatusOption) => (
-                            <option key={paymentStatusOption} value={paymentStatusOption}>{paymentStatusOption}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <PrintTimeInput label="Setup time" value={newJobForm.setupTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, setupTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      <PrintTimeInput label="Post-processing" value={newJobForm.postProcessingMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, postProcessingMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Deposit paid (£)</span>
-                        <input type="number" step="0.01" value={newJobForm.depositPaidAmount} onChange={(e) => setNewJobForm({ ...newJobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Queue position</span>
-                        <input type="number" min="0" value={newJobForm.queuePosition} onChange={(e) => setNewJobForm({ ...newJobForm, queuePosition: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Due date</span>
-                        <input type="date" value={newJobForm.dueDate} onChange={(e) => setNewJobForm({ ...newJobForm, dueDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Rework cost (£)</span>
-                        <input type="number" step="0.01" value={newJobForm.reworkCost} onChange={(e) => setNewJobForm({ ...newJobForm, reworkCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                        <p className="mt-1 text-xs text-slate-500">Use a negative value (for example -5.00) to apply a manual pricing correction.</p>
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Failure waste (g)</span>
-                        <input type="number" step="0.01" value={newJobForm.failureWasteGrams} onChange={(e) => setNewJobForm({ ...newJobForm, failureWasteGrams: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Failure cost (£)</span>
-                        <input type="number" step="0.01" value={newJobForm.failureCost} onChange={(e) => setNewJobForm({ ...newJobForm, failureCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">QA passed</span>
-                        <select value={newJobForm.qaPassed ? "yes" : "no"} onChange={(e) => setNewJobForm({ ...newJobForm, qaPassed: e.target.value === "yes" })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-                          <option value="no">No</option>
-                          <option value="yes">Yes</option>
-                        </select>
-                      </label>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="block text-sm text-slate-300 md:col-span-2">
-                        <span className="mb-2 block">QA checklist (one item per line)</span>
-                        <textarea value={newJobForm.qaChecklistText} onChange={(e) => setNewJobForm({ ...newJobForm, qaChecklistText: e.target.value })} rows={3} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300 md:col-span-2">
-                        <span className="mb-2 block">Rework notes</span>
-                        <textarea value={newJobForm.reworkNotes} onChange={(e) => setNewJobForm({ ...newJobForm, reworkNotes: e.target.value })} rows={2} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300 md:col-span-2">
-                        <span className="mb-2 block">Failure reason</span>
-                        <input value={newJobForm.failureReason} onChange={(e) => setNewJobForm({ ...newJobForm, failureReason: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                    </div>
-
-                    <label className="flex items-center gap-3 text-sm text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={newJobForm.isRush}
-                        onChange={(e) => setNewJobForm({ ...newJobForm, isRush: e.target.checked })}
-                        className="h-4 w-4 rounded border-slate-600 bg-slate-900"
-                      />
-                      Apply rush fee for this job
-                    </label>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Setup fee for this job (£)</span>
-                        <input type="number" min="0" step="0.01" value={newJobForm.setupFee} onChange={(e) => setNewJobForm({ ...newJobForm, setupFee: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                      <label className="block text-sm text-slate-300">
-                        <span className="mb-2 block">Delivery charge for this job (£)</span>
-                        <input type="number" min="0" step="0.01" value={newJobForm.deliveryCharge} onChange={(e) => setNewJobForm({ ...newJobForm, deliveryCharge: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                      </label>
-                    </div>
-                      </div>
-                    </details>
-
-                    <div className="flex justify-end">
-                      <button type="submit" className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Save &amp; calculate price</button>
-                    </div>
-                  </form>
-                )}
-              </div>
+              <NewJobDialog
+                jobEditorMode={jobEditorMode}
+                setJobEditorMode={setJobEditorMode}
+                addJobFormRef={addJobFormRef}
+                createJobFromJobsTab={createJobFromJobsTab}
+                saveCurrentEstimateTemplate={saveCurrentEstimateTemplate}
+                setMakerWorldMessage={setMakerWorldMessage}
+                savedEstimateTemplates={savedEstimateTemplates}
+                applySavedEstimateTemplate={applySavedEstimateTemplate}
+                deleteEstimateTemplate={deleteEstimateTemplate}
+                newJobForm={newJobForm}
+                setNewJobForm={setNewJobForm}
+                machineOptions={machineOptions}
+                setMakerWorldUrl={setMakerWorldUrl}
+                setModelUrlMessage={setModelUrlMessage}
+                isLookingUpModelName={isLookingUpModelName}
+                lookupModelTitle={lookupModelTitle}
+                modelUrlMessage={modelUrlMessage}
+                makerWorldImportPreview={makerWorldImportPreview}
+                addNewJobMaterialEntry={addNewJobMaterialEntry}
+                newJobMaterialEntries={newJobMaterialEntries}
+                materials={materials}
+                updateNewJobMaterialEntry={updateNewJobMaterialEntry}
+                removeNewJobMaterialEntry={removeNewJobMaterialEntry}
+                jobStatusOptions={jobStatusOptions}
+                paymentStatusOptions={paymentStatusOptions}
+              />
             </div>
           </section>
         )}
@@ -3616,677 +2289,107 @@ function App() {
         {activeTab === "materials" && <MaterialsPage materials={materials} onChanged={loadData} />}
 
         {activeTab === "machines" && (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Equipment</h2>
-                <p className="mt-2 text-sm text-slate-400">Manage the equipment used in production jobs and cost calculations.</p>
-              </div>
-              <button type="button" onClick={openAddMachineForm} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add equipment</button>
-            </div>
-
-            {showMachineEditor ? (
-              <div className="mt-6 rounded-2xl border border-cyan-700/40 bg-slate-950 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">{editingMachineName ? "Edit equipment" : "Add equipment"}</h3>
-                    <p className="mt-1 text-sm text-slate-400">Set name and machine billing profile details.</p>
-                  </div>
-                  <button type="button" onClick={closeMachineForm} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Close</button>
-                </div>
-
-                <form onSubmit={saveMachine} className="space-y-3">
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Equipment name</span>
-                    <input value={machineForm.name} onChange={(e) => setMachineForm({ ...machineForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Wattage (W)</span>
-                    <input type="number" step="0.1" value={machineForm.wattage} onChange={(e) => setMachineForm({ ...machineForm, wattage: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Purchase date</span>
-                    <input type="date" value={machineForm.purchaseDate} onChange={(e) => setMachineForm({ ...machineForm, purchaseDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Purchase cost</span>
-                    <input type="number" step="0.01" value={machineForm.depreciationCost} onChange={(e) => setMachineForm({ ...machineForm, depreciationCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                  </label>
-                  <RuntimeDurationInput value={machineForm.replacementRunHours} onChange={(hours) => setMachineForm({ ...machineForm, replacementRunHours: hours })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                  <RuntimeDurationInput label="Runtime outside tracker (added to jobs logged here)" value={machineForm.manualRunHours} onChange={(hours) => setMachineForm({ ...machineForm, manualRunHours: hours })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-
-                  <div className="flex justify-end gap-3">
-                    <button type="button" onClick={closeMachineForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel</button>
-                    <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingMachineName ? "Save equipment" : "Add equipment"}</button>
-                  </div>
-                </form>
-              </div>
-            ) : null}
-
-            <div className="mt-6 space-y-3">
-              {machineProfiles.map(([machineName, machineSetting]) => (
-                <div key={machineName} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-white">{machineName}</p>
-                      <p className="text-sm text-slate-400">{machineSetting.wattage ?? 0}W • Purchase cost {formatCurrency(machineSetting.depreciationCost ?? 0)} • Replacement runtime {formatHoursAsDuration(Number(machineSetting.replacementRunHours ?? 0))}</p>
-                      {(() => {
-                        const lifecycle = calculateMachineLifecycle(machineName, machineSetting.purchaseDate, Number(machineSetting.replacementRunHours ?? 0), jobs, Number(machineSetting.manualRunHours ?? 0));
-                        return (
-                          <p className="text-sm text-slate-500">
-                            Purchased {machineSetting.purchaseDate || "not set"} • Run so far {formatHoursAsDuration(lifecycle.usedHours)} • Remaining {formatHoursAsDuration(lifecycle.remainingHours)} • Est. replacement{" "}
-                            {lifecycle.replacementDate ? lifecycle.replacementDate.toLocaleDateString() : machineSetting.purchaseDate ? "n/a (no runtime logged yet)" : "set a purchase date"}
-                          </p>
-                        );
-                      })()}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {machineName === linkedBambuMachineName ? <span className="rounded-full bg-cyan-600/20 px-3 py-1 text-xs text-cyan-300">Bambu linked</span> : null}
-                      <button type="button" onClick={() => startEditingMachine(machineName)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Edit</button>
-                      <button type="button" onClick={() => removeMachine(machineName)} className="rounded-full border border-rose-700 px-3 py-1 text-sm text-rose-300">Remove</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-              <h3 className="text-lg font-semibold text-white">Bambu telemetry (Equipment integration)</h3>
-              <div className="mt-3 rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-4">
-                <p className="font-medium text-cyan-200">Coming soon: a local telemetry connector to track the status of your Bambu printer.</p>
-                <p className="mt-2 text-sm text-slate-300">This feature is in alpha testing and will be available when the application is deployed locally.</p>
-              </div>
-            </section>
-
-            {machineMessage ? <p className="mt-4 text-sm text-cyan-300">{machineMessage}</p> : null}
-          </section>
+          <MachinesPage
+            openAddMachineForm={openAddMachineForm}
+            showMachineEditor={showMachineEditor}
+            editingMachineName={editingMachineName}
+            closeMachineForm={closeMachineForm}
+            saveMachine={saveMachine}
+            machineForm={machineForm}
+            setMachineForm={setMachineForm}
+            machineProfiles={machineProfiles}
+            jobs={jobs}
+            formatCurrency={formatCurrency}
+            startEditingMachine={startEditingMachine}
+            removeMachine={removeMachine}
+            machineMessage={machineMessage}
+          />
         )}
 
         {activeTab === "customers" && (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">CRM Lite customers</h2>
-                <p className="mt-2 text-sm text-slate-400">Manage customer records (name, address, email, phone, notes) and review recent order history.</p>
-              </div>
-              {editingCustomerId ? (
-                <button type="button" onClick={resetCustomerForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel edit</button>
-              ) : null}
-            </div>
-
-            <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
-              <form onSubmit={saveCustomer} className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-lg font-semibold text-white">{editingCustomerId ? "Edit customer" : "Add customer"}</h3>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Name</span>
-                  <input value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
-                </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Address</span>
-                  <input value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Email</span>
-                  <input value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Phone</span>
-                  <input value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Notes</span>
-                  <input value={customerForm.notes} onChange={(e) => setCustomerForm({ ...customerForm, notes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
-                <div className="flex justify-end">
-                  <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingCustomerId ? "Save customer" : "Add customer"}</button>
-                </div>
-              </form>
-
-              <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-lg font-semibold text-white">Customers</h3>
-                <div className="space-y-2">
-                  {customers.map((customer) => (
-                    <div key={customer.id} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-white">{customer.name}</p>
-                          <p className="text-xs text-slate-400">{customer.email || "No email"} • {customer.phone || "No phone"}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => loadCustomerOrders(customer.id)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Order history</button>
-                          <button type="button" onClick={() => startEditingCustomer(customer)} className="mf-btn mf-btn--sm">Edit</button>
-                          <button type="button" onClick={() => removeCustomer(customer.id)} className="mf-btn mf-btn--sm mf-btn--danger">Delete</button>
-                        </div>
-                      </div>
-                      {customer.address ? <p className="mt-2 text-xs text-slate-400">{customer.address}</p> : null}
-                      {customer.notes ? <p className="mt-2 text-xs text-slate-400">{customer.notes}</p> : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {selectedCustomerId ? (
-              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-lg font-semibold text-white">Recent order history</h3>
-                {customerHistory.length ? (
-                  <div className="mt-3 space-y-2">
-                    {customerHistory.map((job) => (
-                      <div key={job.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
-                        <span>{job.jobNumber || "No job number"} • {job.name}</span>
-                        <span className="text-slate-400">{job.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm text-slate-400">No jobs found for this customer yet.</p>
-                )}
-              </div>
-            ) : null}
-
-            {customerMessage ? <p className="mt-4 text-sm text-cyan-300">{customerMessage}</p> : null}
-          </section>
+          <CustomersPage
+            customers={customers}
+            customerForm={customerForm}
+            setCustomerForm={setCustomerForm}
+            editingCustomerId={editingCustomerId}
+            resetCustomerForm={resetCustomerForm}
+            saveCustomer={saveCustomer}
+            startEditingCustomer={startEditingCustomer}
+            removeCustomer={removeCustomer}
+            loadCustomerOrders={loadCustomerOrders}
+            selectedCustomerId={selectedCustomerId}
+            customerHistory={customerHistory}
+            customerMessage={customerMessage}
+          />
         )}
 
         {activeTab === "suppliers" && (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Suppliers and purchase history</h2>
-                <p className="mt-2 text-sm text-slate-400">Track supplier records and material purchases for procurement history.</p>
-              </div>
-              {editingSupplierId ? (
-                <button type="button" onClick={resetSupplierForm} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel edit</button>
-              ) : null}
-            </div>
-
-            <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
-              <form onSubmit={saveSupplier} className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-lg font-semibold text-white">{editingSupplierId ? "Edit supplier" : "Add supplier"}</h3>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Name</span>
-                  <input value={supplierForm.name} onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
-                </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Website URL</span>
-                  <input type="url" placeholder="https://example.com" value={supplierForm.websiteUrl} onChange={(e) => setSupplierForm({ ...supplierForm, websiteUrl: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Email</span>
-                  <input value={supplierForm.contactEmail} onChange={(e) => setSupplierForm({ ...supplierForm, contactEmail: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Phone</span>
-                  <input value={supplierForm.contactPhone} onChange={(e) => setSupplierForm({ ...supplierForm, contactPhone: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-40 shrink-0">Notes</span>
-                  <input value={supplierForm.notes} onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
-                <div className="flex justify-end">
-                  <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{editingSupplierId ? "Save supplier" : "Add supplier"}</button>
-                </div>
-              </form>
-
-              <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-lg font-semibold text-white">Suppliers</h3>
-                <div className="space-y-2">
-                  {suppliers.map((supplier) => {
-                    const websiteUrl = getSafeExternalUrl(supplier.websiteUrl);
-                    return (
-                      <div key={supplier.id} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium text-white">{supplier.name}</p>
-                            <p className="text-xs text-slate-400">{supplier.contactEmail || "No email"} • {supplier.contactPhone || "No phone"}</p>
-                            {supplier.websiteUrl ? (
-                              <p className="mt-1 break-all text-xs">
-                                {websiteUrl ? <a className="text-cyan-300 underline" href={websiteUrl} target="_blank" rel="noopener noreferrer">{supplier.websiteUrl}</a> : supplier.websiteUrl}
-                              </p>
-                            ) : null}
-                          </div>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => loadSupplierPurchases(supplier.id)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Purchases</button>
-                            <button type="button" onClick={() => startEditingSupplier(supplier)} className="mf-btn mf-btn--sm">Edit</button>
-                            <button type="button" onClick={() => removeSupplier(supplier.id)} className="mf-btn mf-btn--sm mf-btn--danger">Delete</button>
-                          </div>
-                        </div>
-                        {supplier.notes ? <p className="mt-2 text-xs text-slate-400">{supplier.notes}</p> : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {selectedSupplierId ? (
-              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                <h3 className="text-lg font-semibold text-white">Purchase history</h3>
-                <form onSubmit={saveSupplierPurchase} className="mt-3 grid gap-3 md:grid-cols-5">
-                  <input value={supplierPurchaseForm.materialName} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, materialName: e.target.value }))} placeholder="Material" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" required />
-                  <input type="number" step="0.01" min="0" value={supplierPurchaseForm.quantityKg} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, quantityKg: e.target.value }))} placeholder="Qty kg" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
-                  <input type="number" step="0.01" min="0" value={supplierPurchaseForm.totalCost} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, totalCost: e.target.value }))} placeholder="Total £" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
-                  <input type="date" aria-label="Purchase date" title="Purchase date" value={supplierPurchaseForm.purchasedAt} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, purchasedAt: e.target.value }))} className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
-                  <button className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add purchase</button>
-                  <input value={supplierPurchaseForm.notes} onChange={(e) => setSupplierPurchaseForm((current) => ({ ...current, notes: e.target.value }))} placeholder="Notes" className="md:col-span-5 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
-                </form>
-                <div className="mt-3 space-y-2">
-                  {supplierPurchases.map((purchase) => (
-                    <div key={purchase.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
-                      <span>{purchase.materialName} • {Number(purchase.quantityKg || 0).toFixed(2)} kg • {formatCurrency(Number(purchase.totalCost || 0))}</span>
-                      <span className="text-slate-400">{purchase.purchasedAt ? new Date(purchase.purchasedAt).toLocaleDateString() : "-"}</span>
-                    </div>
-                  ))}
-                  {!supplierPurchases.length ? <p className="text-sm text-slate-400">No purchases logged for this supplier.</p> : null}
-                </div>
-              </div>
-            ) : null}
-
-            {supplierMessage ? <p className="mt-4 text-sm text-cyan-300">{supplierMessage}</p> : null}
-          </section>
+          <SuppliersPage
+            suppliers={suppliers}
+            supplierForm={supplierForm}
+            setSupplierForm={setSupplierForm}
+            editingSupplierId={editingSupplierId}
+            resetSupplierForm={resetSupplierForm}
+            saveSupplier={saveSupplier}
+            startEditingSupplier={startEditingSupplier}
+            removeSupplier={removeSupplier}
+            getSafeExternalUrl={getSafeExternalUrl}
+            loadSupplierPurchases={loadSupplierPurchases}
+            selectedSupplierId={selectedSupplierId}
+            supplierPurchaseForm={supplierPurchaseForm}
+            setSupplierPurchaseForm={setSupplierPurchaseForm}
+            saveSupplierPurchase={saveSupplierPurchase}
+            supplierPurchases={supplierPurchases}
+            formatCurrency={formatCurrency}
+            supplierMessage={supplierMessage}
+          />
         )}
 
         {activeTab === "admin" && (
-          <div className="space-y-6" style={{ color: adminTextColor }}>
-            {currentUser.isSuperAdmin ? <UserAccessCard /> : null}
-            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6" style={adminSectionStyle}>
-              <h2 className="text-xl font-semibold">Admin backup & data tools</h2>
-              <p className="mt-2 text-sm text-slate-400" style={adminMutedTextStyle}>Export jobs, materials, and the full app data snapshot, then restore them later if needed.</p>
-
-              <div className="mt-6 rounded-2xl border border-slate-800 p-4" style={adminCardStyle}>
-                <h3 className="text-sm font-semibold" style={{ color: adminTextColor }}>Site theme colours</h3>
-                <p className="mt-2 text-xs" style={adminMutedTextStyle}>Set custom background and text colours for the whole app to match your business colour scheme.</p>
-                <div className="mt-4">
-                  <p className="text-xs" style={adminMutedTextStyle}>Quick presets</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {quickThemePresets.map((preset) => (
-                      <button
-                        key={preset.name}
-                        type="button"
-                        onClick={() => setBillingSettings((current) => ({
-                          ...current,
-                          adminBackgroundColor: preset.background,
-                          adminTextColor: preset.text,
-                          siteInputColor: preset.input,
-                          siteAccentColor: preset.accent,
-                          siteAccentTextColor: preset.accentText,
-                        }))}
-                        className="rounded-2xl border border-slate-700 px-3 py-2 text-left text-xs"
-                        title={`Apply ${preset.name} preset`}
-                      >
-                        <span className="block font-semibold" style={{ color: adminTextColor }}>{preset.name}</span>
-                        <span className="mt-1 flex items-center gap-1.5">
-                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.background }} title="Background" />
-                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.text }} title="Text" />
-                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.input }} title="Input" />
-                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.accent }} title="Accent" />
-                          <span className="h-3 w-3 rounded-full border border-slate-600" style={{ backgroundColor: preset.accentText }} title="Accent text" />
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
-                    <span className="shrink-0">Site background</span>
-                    <span className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={adminBackgroundColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, adminBackgroundColor: e.target.value }))}
-                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
-                    />
-                    <input
-                      value={adminBackgroundColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, adminBackgroundColor: e.target.value }))}
-                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
-                      placeholder="#0f172a"
-                    />
-                    </span>
-                  </label>
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
-                    <span className="shrink-0">Site text</span>
-                    <span className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={adminTextColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, adminTextColor: e.target.value }))}
-                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
-                    />
-                    <input
-                      value={adminTextColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, adminTextColor: e.target.value }))}
-                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
-                      placeholder="#e2e8f0"
-                    />
-                    </span>
-                  </label>
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
-                    <span className="shrink-0">Search and input</span>
-                    <span className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={siteInputColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteInputColor: e.target.value }))}
-                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
-                    />
-                    <input
-                      value={siteInputColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteInputColor: e.target.value }))}
-                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
-                      placeholder="#111827"
-                    />
-                    </span>
-                  </label>
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
-                    <span className="shrink-0">Accent button</span>
-                    <span className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={siteAccentColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentColor: e.target.value }))}
-                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
-                    />
-                    <input
-                      value={siteAccentColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentColor: e.target.value }))}
-                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
-                      placeholder="#22d3ee"
-                    />
-                    </span>
-                  </label>
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">
-                    <span className="shrink-0">Accent button text</span>
-                    <span className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={siteAccentTextColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentTextColor: e.target.value }))}
-                      className="h-10 w-14 cursor-pointer rounded-lg border border-slate-700 bg-transparent"
-                    />
-                    <input
-                      value={siteAccentTextColor}
-                      onChange={(e) => setBillingSettings((current) => ({ ...current, siteAccentTextColor: e.target.value }))}
-                      className="w-28 rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2"
-                      placeholder="#E5E5E7"
-                    />
-                    </span>
-                  </label>
-                  <div className="rounded-xl border border-slate-700 p-3" style={{ backgroundColor: siteInputColor }}>
-                    <p className="text-xs" style={adminMutedTextStyle}>Accent preview</p>
-                    <button type="button" className="mt-2 rounded-full px-4 py-2 text-sm" style={{ backgroundColor: siteAccentColor, color: siteAccentTextColor }}>Example action button</button>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBillingSettings((current) => ({
-                      ...current,
-                      adminBackgroundColor: DEFAULT_ADMIN_BACKGROUND_COLOR,
-                      adminTextColor: DEFAULT_ADMIN_TEXT_COLOR,
-                      siteInputColor: DEFAULT_SITE_INPUT_COLOR,
-                      siteAccentColor: DEFAULT_SITE_ACCENT_COLOR,
-                      siteAccentTextColor: DEFAULT_SITE_ACCENT_TEXT_COLOR,
-                    }))}
-                    className="rounded-full border border-slate-600 px-4 py-2 text-sm"
-                  >
-                    Reset colors
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)}
-                    className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300"
-                  >
-                    {savingBilling ? "Saving..." : "Save site theme"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4" style={adminCardStyle}>
-                <div>
-                  <h3 className="text-sm font-semibold" style={{ color: adminTextColor }}>Backup and restore</h3>
-                  <p className="mt-1 text-xs" style={adminMutedTextStyle}>Choose the sections to include in one backup file. Workshop jobs, materials and equipment stay together so their links can be restored safely.</p>
-                </div>
-
-                <fieldset className="mt-4">
-                  <legend className="mb-2 text-sm font-medium" style={{ color: adminTextColor }}>Include in backup</legend>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {[
-                      ["workshop", "Workshop jobs, materials and equipment"],
-                      ["customers", "Customers"],
-                      ["suppliers", "Suppliers and purchase history"],
-                      ["billing", "Billing and theme settings"],
-                    ].map(([key, label]) => (
-                      <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-200">
-                        <input type="checkbox" checked={selectedBackupSections.includes(key)} onChange={() => toggleBackupSection(key)} className="h-4 w-4 accent-blue-500" />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => setSelectedBackupSections(["workshop", "customers", "suppliers", "billing"])} className="rounded-full border border-slate-600 px-3 py-1.5 text-xs">Select all</button>
-                    <button type="button" onClick={() => setSelectedBackupSections([])} className="rounded-full border border-slate-600 px-3 py-1.5 text-xs">Clear selection</button>
-                  </div>
-                </fieldset>
-
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button type="button" onClick={downloadSelectedBackup} disabled={!selectedBackupSections.length} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">Download selected backup</button>
-                  <label className="cursor-pointer rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">
-                    <span>Restore from backup file</span>
-                    <input type="file" accept=".json,.csv,application/json,text/csv" className="hidden" onChange={restoreSelectedBackup} />
-                  </label>
-                </div>
-                <p className="mt-3 text-xs" style={adminMutedTextStyle}>A MakerFlow selected backup replaces only the sections saved in that file. Older full and individual JSON backups, plus jobs and materials CSV backups, are also supported. Full backup restores replace all current app data.</p>
-                {backupMessage ? <p role="status" className="mt-4 text-sm text-cyan-300">{backupMessage}</p> : null}
-              </div>
-            </section>
-          </div>
+          <AdminPage
+            isSuperAdmin={!!currentUser.isSuperAdmin}
+            adminTextColor={adminTextColor}
+            adminSectionStyle={adminSectionStyle}
+            adminCardStyle={adminCardStyle}
+            adminMutedTextStyle={adminMutedTextStyle}
+            quickThemePresets={quickThemePresets}
+            setBillingSettings={setBillingSettings}
+            adminBackgroundColor={adminBackgroundColor}
+            siteInputColor={siteInputColor}
+            siteAccentColor={siteAccentColor}
+            siteAccentTextColor={siteAccentTextColor}
+            defaultTheme={{
+              adminBackgroundColor: DEFAULT_ADMIN_BACKGROUND_COLOR,
+              adminTextColor: DEFAULT_ADMIN_TEXT_COLOR,
+              siteInputColor: DEFAULT_SITE_INPUT_COLOR,
+              siteAccentColor: DEFAULT_SITE_ACCENT_COLOR,
+              siteAccentTextColor: DEFAULT_SITE_ACCENT_TEXT_COLOR,
+            }}
+            saveBilling={saveBilling}
+            savingBilling={savingBilling}
+            selectedBackupSections={selectedBackupSections}
+            setSelectedBackupSections={setSelectedBackupSections}
+            toggleBackupSection={toggleBackupSection}
+            downloadSelectedBackup={downloadSelectedBackup}
+            restoreSelectedBackup={restoreSelectedBackup}
+            backupMessage={backupMessage}
+          />
         )}
 
         {activeTab === "billing" && (
-          <div className="space-y-6">
-            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Billing and personalization</h2>
-                  <p className="mt-2 text-sm text-slate-400">Configure business identity and billing rules in one dedicated area.</p>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-slate-400">Workspace ID: <span className="select-all font-mono text-slate-200">{currentUser.workspaceId}</span> (quote this ID when contacting support)</p>
-              {billingSaveMessage ? <p className="mt-3 text-sm text-cyan-300">{billingSaveMessage}</p> : null}
-
-              <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                <summary className="cursor-pointer list-none text-lg font-semibold text-white">Business personalization</summary>
-                <p className="mt-2 text-sm text-slate-400">Your business name and logo appear on customer invoices. MakerFlow stays separate as the software brand.</p>
-                <div className="mt-4 flex items-center justify-end">
-                  <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">
-                    {savingBilling ? "Saving..." : "Save business details"}
-                  </button>
-                </div>
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Business name</span>
-                    <input value={billingSettings.businessName || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessName: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="Your business name" />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Business logo URL</span>
-                    <input value={billingSettings.businessLogoUrl || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessLogoUrl: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="https://..." />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Business address</span>
-                    <input value={billingSettings.businessAddress || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessAddress: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="Address shown on invoice" />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Business email</span>
-                    <input value={billingSettings.businessEmail || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessEmail: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="hello@business.com" />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Business phone</span>
-                    <input value={billingSettings.businessPhone || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessPhone: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="+44 ..." />
-                  </label>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Business website</span>
-                    <input value={billingSettings.businessWebsite || ""} onChange={(e) => setBillingSettings((current) => ({ ...current, businessWebsite: e.target.value }))} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" placeholder="https://..." />
-                  </label>
-                </div>
-              </details>
-
-              <details open className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                <summary className="cursor-pointer list-none text-lg font-semibold text-white">Billing rules</summary>
-                <div className="mt-4 flex items-center justify-end">
-                  <button type="button" onClick={() => saveBilling({ preventDefault: () => undefined } as FormEvent)} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">
-                    {savingBilling ? "Saving..." : "Save rules"}
-                  </button>
-                </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="mt-4 text-xl font-semibold">Billing rules</h2>
-                  <p className="mt-2 text-sm text-slate-400">Industry-style setup with dedicated Electricity, Materials, and Labour sections.</p>
-                </div>
-              </div>
-              <form onSubmit={saveBilling} className="mt-6 space-y-6">
-                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Electricity</summary>
-                  <div className="mb-4">
-                    <p className="mt-1 text-sm text-slate-400">Set base energy pricing rules used by runtime cost calculations.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Electricity cost / kWh</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.electricityCostPerKwh} onValue={(v) => updateBilling("electricityCostPerKwh", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Electricity markup %</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.electricityMarkupPercent} onValue={(v) => updateBilling("electricityMarkupPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Depreciation markup %</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.depreciationMarkupPercent} onValue={(v) => updateBilling("depreciationMarkupPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                  </div>
-                </details>
-
-                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Materials</summary>
-                  <div className="mb-4">
-                    <p className="mt-1 text-sm text-slate-400">Set global markup and optional per-material-type pricing rules.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Global material markup %</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.materialMarkupPercent} onValue={(v) => updateBilling("materialMarkupPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                  </div>
-
-                  <div className="mt-5 overflow-hidden rounded-2xl border border-slate-800">
-                    <div className="grid grid-cols-[1.4fr_1fr] bg-slate-900 px-4 py-3 text-sm font-medium text-slate-300">
-                      <span>Material type</span>
-                      <span>Markup %</span>
-                    </div>
-                    <div className="divide-y divide-slate-800 bg-slate-900/70">
-                      {billingMaterialTypes.map((materialType) => (
-                        <div key={materialType} className="grid grid-cols-[1.4fr_1fr] items-center gap-3 px-4 py-3 text-sm">
-                          <div className="font-medium text-white">{materialType}</div>
-                          <NumberInput step="0.01" min="0" aria-label={`Markup percent for ${materialType}`} value={billingSettings.materialTypeMarkups?.[materialType]?.percent ?? 0} onValue={(v) => updateMaterialTypeMarkup(materialType, v)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </details>
-
-                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Labour</summary>
-                  <div className="mb-4">
-                    <p className="mt-1 text-sm text-slate-400">Set the base labour rate used in billing.</p>
-                  </div>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Labour rate / hour</span>
-                    <NumberInput step="0.01" min="0" value={billingSettings.labourRate} onValue={(v) => updateBilling("labourRate", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                  </label>
-                </details>
-
-                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Workshop costs</summary>
-                  <div className="mb-4">
-                    <p className="mt-1 text-sm text-slate-400">Set a base workshop hourly rate that is included in customer billing.</p>
-                  </div>
-                  <label className="flex items-center gap-4 text-sm text-slate-300">
-                    <span className="w-56 shrink-0">Workshop hourly rate</span>
-                    <NumberInput step="0.01" min="0" value={billingSettings.workshopHourlyRate} onValue={(v) => updateBilling("workshopHourlyRate", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                  </label>
-                  <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
-                    Workshop costs are calculated from machine runtime hours multiplied by this hourly rate.
-                  </div>
-                </details>
-
-                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Pricing guardrails</summary>
-                  <div className="mb-4">
-                    <p className="mt-1 text-sm text-slate-400">Apply minimum charge, rush multiplier, and waste factor controls.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Minimum charge (£)</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.minimumCharge} onValue={(v) => updateBilling("minimumCharge", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Rush fee %</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.rushFeePercent} onValue={(v) => updateBilling("rushFeePercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Waste factor %</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.wasteFactorPercent} onValue={(v) => updateBilling("wasteFactorPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                  </div>
-                </details>
-
-                <details open className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">Invoice add-ons</summary>
-                  <div className="mb-4">
-                    <p className="mt-1 text-sm text-slate-400">Set VAT, deposits, and payment terms shown in invoice totals.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">VAT %</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.vatPercent} onValue={(v) => updateBilling("vatPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Suggested deposit %</span>
-                      <NumberInput step="0.01" min="0" value={billingSettings.depositPercent} onValue={(v) => updateBilling("depositPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                    <label className="flex items-center gap-4 text-sm text-slate-300">
-                      <span className="w-56 shrink-0">Payment terms (days)</span>
-                      <NumberInput step="1" min="0" value={billingSettings.paymentTermsDays} onValue={(v) => updateBilling("paymentTermsDays", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                    </label>
-                  </div>
-                </details>
-              </form>
-
-              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white">Billing and invoice audit log</h3>
-                  <button
-                    type="button"
-                    onClick={() => api.getBillingAuditLogs(100).then(setBillingAuditLogs).catch(() => undefined)}
-                    className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300"
-                  >
-                    Refresh log
-                  </button>
-                </div>
-                <div className="mt-3 space-y-2 text-xs">
-                  {billingAuditLogs.slice(0, 15).map((entry) => (
-                    <div key={entry.id} className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
-                      <p className="font-medium text-white">{entry.summary || `${entry.entityType} ${entry.action}`}</p>
-                      <p className="text-slate-400">{new Date(entry.createdAt).toLocaleString()} • {entry.entityType}</p>
-                    </div>
-                  ))}
-                  {!billingAuditLogs.length ? <p className="text-slate-500">No audit entries yet.</p> : null}
-                </div>
-              </div>
-              </details>
-            </section>
-          </div>
+          <BillingPage
+            workspaceId={currentUser.workspaceId}
+            billingSettings={billingSettings}
+            setBillingSettings={setBillingSettings}
+            billingMaterialTypes={billingMaterialTypes}
+            savingBilling={savingBilling}
+            billingSaveMessage={billingSaveMessage}
+            saveBilling={saveBilling}
+            updateBilling={updateBilling}
+            updateMaterialTypeMarkup={updateMaterialTypeMarkup}
+            billingAuditLogs={billingAuditLogs}
+            setBillingAuditLogs={setBillingAuditLogs}
+          />
         )}
 
         {activeTab === "help" && <HelpPage versionInfo={versionInfo} versionError={versionError} />}

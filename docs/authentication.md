@@ -40,8 +40,8 @@ Focused checks cover accepted SVG/STL/image signatures, unsupported extensions, 
 
 ## Production
 
-- GitHub repository variables `ENTRA_CLIENT_ID` and `ENTRA_AUTHORITY` are passed to the Docker build as `VITE_ENTRA_*` (see `makerflow-deploy.yml`).
-- The Container App needs `ENTRA_CLIENT_ID`, `ENTRA_ISSUER`, `ENTRA_JWKS_URI`, `SUPER_ADMIN_EMAILS` and `CORS_ORIGIN`. `NODE_ENV=production` is already set, so `AUTH_DISABLED` is ignored.
+- Set GitHub repository variables `ENTRA_CLIENT_ID`, `ENTRA_AUTHORITY`, `ENTRA_ISSUER` and `ENTRA_JWKS_URI`. The deploy workflow passes the first two to the Docker build as `VITE_ENTRA_*`, and sets `ENTRA_CLIENT_ID`, `ENTRA_ISSUER` and `ENTRA_JWKS_URI` on the Container App. The issuer and JWKS URI must match the configured tenant's OpenID Connect metadata.
+- The Container App also needs `SUPER_ADMIN_EMAILS` and `CORS_ORIGIN` for production access management and cross-origin deployments. `NODE_ENV=production` is already set, so `AUTH_DISABLED` is ignored. The deploy workflow fails before updating the app if any backend token-verification variable is missing.
 - Register the production URL as a **Single-page application** redirect URI. Plain http is only accepted for `localhost`, so use `http://localhost:5173` locally, not `127.0.0.1`.
 
 ## Not done yet

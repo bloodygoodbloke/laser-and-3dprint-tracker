@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+- Fixed production sign-in configuration: deployments now apply the Entra client ID, issuer and JWKS URI to the Container App and stop with a clear error if required repository variables are missing.
 - Added a storage provider abstraction for uploaded files: local disk for development (`UPLOAD_PATH`) and Azure Blob Storage for Azure Container Apps (`STORAGE_PROVIDER`, `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER`). `/uploads/<file>` URLs are unchanged and are now streamed from the active provider, with storage and source-image diagnostic logging. See `docs/storage.md`.
 - Fixed Admin restore dropping job file references and cached source-image fields; restore now clears references to files that are missing from storage and returns them as `missingFiles`. Added `GET /api/admin/storage/check`.
 - Source-image lookup failures are now logged and no longer cached as "no image" for a day.

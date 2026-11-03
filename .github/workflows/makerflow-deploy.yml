@@ -69,16 +69,25 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # The image and the version env vars change; volumes, mounts, other env vars and the /data share are untouched.
+      # Update auth settings from repository variables; volumes, mounts and the /data share are untouched.
       - name: Update Container App image
+        env:
+          ENTRA_CLIENT_ID: ${{ vars.ENTRA_CLIENT_ID }}
+          ENTRA_ISSUER: ${{ vars.ENTRA_ISSUER }}
+          ENTRA_JWKS_URI: ${{ vars.ENTRA_JWKS_URI }}
         run: |
+          if [[ -z "$ENTRA_CLIENT_ID" || -z "$ENTRA_ISSUER" || -z "$ENTRA_JWKS_URI" ]]; then
+            echo "::error::Set the ENTRA_CLIENT_ID, ENTRA_ISSUER and ENTRA_JWKS_URI repository variables before deploying."
+            exit 1
+          fi
           az containerapp update \
             --name "$CONTAINER_APP" --resource-group "$RESOURCE_GROUP" \
             --image "$ACR_SERVER/$IMAGE_NAME:${{ github.sha }}" \
             --revision-suffix "g${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}" \
             --set-env-vars \
               "APP_VERSION=$APP_VERSION" "BUILD_NUMBER=$BUILD_NUMBER" "GIT_COMMIT=$GIT_COMMIT" \
-              "GIT_BRANCH=$GIT_BRANCH" "BUILD_DATE=$BUILD_DATE" "APP_ENVIRONMENT=Production"
+              "GIT_BRANCH=$GIT_BRANCH" "BUILD_DATE=$BUILD_DATE" "APP_ENVIRONMENT=Production" \
+              "ENTRA_CLIENT_ID=$ENTRA_CLIENT_ID" "ENTRA_ISSUER=$ENTRA_ISSUER" "ENTRA_JWKS_URI=$ENTRA_JWKS_URI"
 
       # Best effort: warns (does not fail the deploy) if /api/version does not report this commit.
       - name: Verify deployed version

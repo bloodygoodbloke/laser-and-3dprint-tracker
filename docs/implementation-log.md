@@ -26,6 +26,7 @@ Last updated: 2026-11-01
 | CHG-018 | Feature | P2 Medium | Implemented | Job file upload endpoint | Historic | Added backend endpoint for job file path upload. |
 | CHG-019 | Feature | P2 Medium | Implemented | Dashboard pending/low-stock summaries | Historic | Added dashboard summary cards for pending jobs and low stock. |
 | CHG-020 | Documentation | P2 Medium | Implemented | In-app help refresh | Historic | Help content updated to reflect current workflows and tooling. |
+| CHG-124 | Bug Fix | P1 High | Implemented | Production sign-in configuration | 2026-11-03 | Pass required Entra token-verification settings into the Container App during deployment and fail clearly when repository variables are missing. |
 | CHG-021 | Feature | P3 Low | Implemented | App rename to Fabrication Workshop Tracker | Historic | Updated app-facing labels/title and related UI naming. |
 | CHG-022 | Feature | P2 Medium | Implemented | Delete-job action | Historic | Added delete action in expanded job card controls. |
 | CHG-023 | Feature | P2 Medium | Implemented | Edit form under selected expanded card | Historic | Edit UI now opens directly under the chosen job card. |
