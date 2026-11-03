@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 concurrency:
   group: makerflow-deploy
   cancel-in-progress: false   # never interrupt a deploy that is mid-flight
