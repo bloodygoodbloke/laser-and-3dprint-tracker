@@ -35,7 +35,9 @@ test("DNS answers must contain only public addresses", async () => {
     assert.equal(isPublicAddress(address), true, address);
   }
   const resolve = (addresses) => async () => addresses.map((address) => ({ address, family: address.includes(":") ? 6 : 4 }));
-  assert.deepEqual(await resolvePublicMakerWorldHost("makerworld.com", resolve(["8.8.8.8"])), { address: "8.8.8.8", family: 4 });
+  assert.deepEqual(await resolvePublicMakerWorldHost("makerworld.com", resolve(["2606:4700:4700::1111", "8.8.8.8"])), [
+    { address: "8.8.8.8", family: 4 }, { address: "2606:4700:4700::1111", family: 6 },
+  ]);
   await assert.rejects(resolvePublicMakerWorldHost("makerworld.com", resolve(["8.8.8.8", "127.0.0.1"])));
   await assert.rejects(resolvePublicMakerWorldHost("makerworld.com", resolve([])));
   await assert.rejects(resolvePublicMakerWorldHost("localhost", resolve(["8.8.8.8"])));

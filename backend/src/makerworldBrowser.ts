@@ -40,13 +40,13 @@ export function parseMakerWorldBrowserUrl(value: string): URL | null {
 export async function resolvePublicMakerWorldHost(
   host: string,
   resolve: typeof lookup = lookup,
-): Promise<{ address: string; family: number }> {
+): Promise<Array<{ address: string; family: number }>> {
   if (!parseMakerWorldBrowserUrl(`https://${host}/`)) throw new Error("Untrusted destination");
   const addresses = await resolve(host, { all: true, verbatim: true });
   if (!addresses.length || addresses.some(({ address }) => !isPublicAddress(address))) {
     throw new Error("Untrusted destination");
   }
-  return addresses.find(({ family }) => family === 4) || addresses[0];
+  return addresses.sort((a, b) => a.family - b.family);
 }
 
 async function startProxy() {
@@ -62,18 +62,35 @@ async function startProxy() {
     const match = /^([a-z0-9.-]+):443$/i.exec(req.url || "");
     try {
       if (!match || head.length) throw new Error("Untrusted destination");
-      const { address, family } = await resolvePublicMakerWorldHost(match[1]);
+      const addresses = await resolvePublicMakerWorldHost(match[1]);
       if (client.destroyed) return;
-      const upstream = connect({ host: address, family, port: 443 });
-      sockets.add(upstream);
-      upstream.setTimeout(timeoutMs, () => upstream.destroy());
-      upstream.on("close", () => sockets.delete(upstream));
-      upstream.on("error", () => client.destroy());
-      client.on("close", () => upstream.destroy());
-      upstream.once("connect", () => {
-        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        client.pipe(upstream).pipe(client);
-      });
+      let upstream: Socket | undefined;
+      client.once("close", () => upstream?.destroy());
+      const tryAddress = (index: number) => {
+        if (client.destroyed) return;
+        if (index >= addresses.length) {
+          client.destroy();
+          return;
+        }
+        const { address, family } = addresses[index];
+        const socket = connect({ host: address, family, port: 443 });
+        upstream = socket;
+        sockets.add(socket);
+        socket.setTimeout(5000, () => socket.destroy(new Error("Connection timed out")));
+        socket.on("close", () => sockets.delete(socket));
+        let connected = false;
+        socket.once("error", () => {
+          if (connected) client.destroy();
+          else tryAddress(index + 1);
+        });
+        socket.once("connect", () => {
+          connected = true;
+          socket.setTimeout(timeoutMs, () => socket.destroy());
+          client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+          client.pipe(socket).pipe(client);
+        });
+      };
+      tryAddress(0);
     } catch {
       client.destroy();
     }

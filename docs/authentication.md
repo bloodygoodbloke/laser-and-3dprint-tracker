@@ -58,3 +58,11 @@ Focused checks cover accepted SVG/STL/image signatures, unsupported extensions, 
 - Per-workspace data (`workspaceId` on business tables), workspace-scoped uploads and backups.
 
 Tests: `npm run test:auth` from `backend/`.
+
+## MakerWorld browser requests
+
+The authenticated `/makerworld-test` and MakerWorld browser import/metadata endpoints only navigate to HTTPS `makerworld.com` or its subdomains on port 443, without URL credentials. Each HTTP redirect is checked again, with at most four redirects and a 30-second navigation timeout. Scripts, service workers and subresources are disabled; pages requiring client-side rendering or a JavaScript challenge may not work.
+
+Chromium uses a local forward proxy for these requests. The proxy resolves each destination itself, rejects empty, mixed public/private or non-public DNS answers, and connects to a validated public IP directly; Chromium still verifies the destination's TLS certificate. This prevents a second DNS lookup from changing the address after validation. Chromium's proxy bypass for loopback and direct DNS resolution are disabled. The policy assumes the local proxy and Chromium process are not modified or bypassed, and that the host's network does not transparently remap public IPs to internal services. Deployments should also restrict outbound network access independently.
+
+Focused checks: `npm run test:makerworld-browser` from `backend/`.
