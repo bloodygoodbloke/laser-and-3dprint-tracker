@@ -1,4 +1,5 @@
 import type { BillingSettings, Customer, Job } from "./types";
+import { formatCurrency, formatDate, formatNumber } from "./format";
 
 export interface RuntimeBreakdown {
   machineRunTimeMinutes: number;
@@ -27,7 +28,6 @@ export interface InvoicePrintContext {
   billingSettings: BillingSettings;
   businessDisplayName: string;
   selectedCustomerProfile: Customer | null;
-  formatCurrency: (value?: number | null) => string;
 }
 
 export const computeRuntimeBreakdown = (job: Job, billingSettings: BillingSettings): RuntimeBreakdown => {
@@ -111,7 +111,7 @@ export const computeInvoiceChargeBreakdown = (job: Job, billingSettings: Billing
   };
 };
 export const openInvoicePrintWindow = (job: Job, context: InvoicePrintContext) => {
-  const { billingSettings, businessDisplayName, selectedCustomerProfile, formatCurrency } = context;
+  const { billingSettings, businessDisplayName, selectedCustomerProfile } = context;
   const printWindow = window.open("", "_blank", "width=980,height=700");
   if (!printWindow) {
     window.alert("Could not open print window. Please allow pop-ups and try again.");
@@ -177,7 +177,7 @@ export const openInvoicePrintWindow = (job: Job, context: InvoicePrintContext) =
     <div style="text-align:right;">
       ${billingSettings.businessLogoUrl ? `<img src="${safe(billingSettings.businessLogoUrl)}" alt="${safe(businessDisplayName || "Business logo")}" style="max-width:72px;max-height:72px;object-fit:contain;margin-bottom:8px;" />` : ""}
       <p><strong>#${safe(job.jobNumber || "TBC")}</strong></p>
-      <p class="muted">Issued ${safe(new Date().toLocaleDateString())}</p>
+      <p class="muted">Issued ${safe(formatDate(new Date()))}</p>
       <p class="muted">${safe(dueLabel)}</p>
     </div>
   </div>
@@ -206,8 +206,8 @@ export const openInvoicePrintWindow = (job: Job, context: InvoicePrintContext) =
 
   <div class="totals">
     <div class="row"><span class="muted">SubTotal</span><span class="muted">${safe(formatCurrency(subTotal))}</span></div>
-    <div class="row"><span class="muted">VAT (${safe(vatPercent.toFixed(0))}%)</span><span class="muted">${safe(formatCurrency(vatAmount))}</span></div>
-    <div class="row"><span class="muted">Suggested deposit (${safe(Number(billingSettings.depositPercent || 0).toFixed(0))}%)</span><span class="muted">${safe(formatCurrency(suggestedDepositAmount))}</span></div>
+    <div class="row"><span class="muted">VAT (${safe(formatNumber(vatPercent, 0))}%)</span><span class="muted">${safe(formatCurrency(vatAmount))}</span></div>
+    <div class="row"><span class="muted">Suggested deposit (${safe(formatNumber(Number(billingSettings.depositPercent || 0), 0))}%)</span><span class="muted">${safe(formatCurrency(suggestedDepositAmount))}</span></div>
     <div class="row"><span class="muted">Deposit paid</span><span class="muted">${safe(formatCurrency(depositPaidAmount))}</span></div>
     <div class="row"><span>Grand total</span><span>${safe(formatCurrency(grandTotal))}</span></div>
     <div class="row"><span>Balance due</span><span>${safe(formatCurrency(balanceDue))}</span></div>

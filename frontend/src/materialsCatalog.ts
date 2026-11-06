@@ -19,6 +19,7 @@
 //   column rather than one column per category.
 // - Jobs keep a copy of usageUnitCost, so changing a material's price later never alters historical jobs or invoices.
 
+import { formatCurrency } from "./format";
 import type { Material } from "./types";
 
 export interface MaterialCategory {
@@ -156,5 +157,5 @@ export const formatStock = (material: Pick<Material, "stockLevel" | "unit">): st
 /** "£25.00 / kg" */
 export const formatCost = (material: Pick<Material, "costPerUnit" | "unit">): string => {
   const unit = resolveUnit(material.unit);
-  return `£${(Number(material.costPerUnit || 0) * unit.perEntryUnit).toFixed(2)} / ${unit.entryUnit}`;
-};
+  return `${formatCurrency(Number(material.costPerUnit || 0) * unit.perEntryUnit)} / ${unit.entryUnit}`;
+}

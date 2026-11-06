@@ -1,5 +1,6 @@
 import type { Job } from "./types";
 import { KpiCard, StatusChip, SummaryCard, UtilisationRow, onTimeTone, overdueTone, utilisationTone } from "./dashboardUi";
+import { formatCurrency, formatDate } from "./format";
 
 interface DeliveryAndUtilization {
   dueEligibleCount: number;
@@ -37,7 +38,6 @@ interface DashboardPageProps {
   jobsWaitingPayment: number;
   jobsWaitingDispatch: number;
   recentJobs: Job[];
-  formatCurrency: (value?: number | null) => string;
   getInvoiceChargeBreakdown: (job: Job) => { customerCharge: number };
   calculateJobCost: (job: Job) => Promise<void>;
   getCostButtonLabel: (job: Job) => string;
@@ -57,7 +57,6 @@ export default function DashboardPage({
   jobsWaitingPayment,
   jobsWaitingDispatch,
   recentJobs,
-  formatCurrency,
   getInvoiceChargeBreakdown,
   calculateJobCost,
   getCostButtonLabel,
@@ -182,7 +181,7 @@ export default function DashboardPage({
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {scheduleCalendarDays.map((day) => (
               <div key={day.date.toISOString()} className="rounded-2xl border border-slate-800 bg-slate-950 p-3">
-                <p className="text-sm font-medium text-white">{day.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</p>
+                <p className="text-sm font-medium text-white">{formatDate(day.date, { weekday: "short", month: "short", day: "numeric" })}</p>
                 <p className="mt-1 text-xs text-slate-400">Due jobs: {day.dueCount}</p>
                 <p className="text-xs text-slate-400">Projected completions: {day.projectedCount}</p>
                 <p className="text-xs text-slate-400">Queued runtime due: {(day.totalRuntimeMinutes / 60).toFixed(1)} h</p>

@@ -1,4 +1,5 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
+import { formatCurrency, formatDate, formatNumber } from "./format";
 import type { MaterialPurchase, Supplier } from "./types";
 
 interface SupplierForm {
@@ -33,7 +34,6 @@ interface SuppliersPageProps {
   setSupplierPurchaseForm: Dispatch<SetStateAction<SupplierPurchaseForm>>;
   saveSupplierPurchase: (event: FormEvent) => Promise<void>;
   supplierPurchases: MaterialPurchase[];
-  formatCurrency: (value?: number | null) => string;
   supplierMessage: string;
 }
 
@@ -53,7 +53,6 @@ export default function SuppliersPage({
   setSupplierPurchaseForm,
   saveSupplierPurchase,
   supplierPurchases,
-  formatCurrency,
   supplierMessage,
 }: SuppliersPageProps) {
   return (
@@ -141,8 +140,8 @@ export default function SuppliersPage({
           <div className="mt-3 space-y-2">
             {supplierPurchases.map((purchase) => (
               <div key={purchase.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
-                <span>{purchase.materialName} • {Number(purchase.quantityKg || 0).toFixed(2)} kg • {formatCurrency(Number(purchase.totalCost || 0))}</span>
-                <span className="text-slate-400">{purchase.purchasedAt ? new Date(purchase.purchasedAt).toLocaleDateString() : "-"}</span>
+                <span>{purchase.materialName} • {formatNumber(Number(purchase.quantityKg || 0))} kg • {formatCurrency(Number(purchase.totalCost || 0))}</span>
+                <span className="text-slate-400">{purchase.purchasedAt ? formatDate(purchase.purchasedAt) : "-"}</span>
               </div>
             ))}
             {!supplierPurchases.length ? <p className="text-sm text-slate-400">No purchases logged for this supplier.</p> : null}
