@@ -13,6 +13,14 @@ The backend requires a signed-in user for everything except `GET /api/health` an
 - If the Entra settings are missing the protected routes return `503` (fail closed). `AUTH_DISABLED=true` skips authentication and is ignored when `NODE_ENV=production`.
 - CORS is limited to `CORS_ORIGIN` (none in production). Bearer tokens are not sent automatically by browsers, so classic CSRF does not apply.
 
+## Permissions
+
+- **Staff** can use the regular workshop APIs, including jobs, customers, materials, uploads, equipment and billing settings.
+- **Owner** can also use all admin backup exports, restores and storage checks, import materials from CSV, and seed materials. These checks are enforced by the API, including the legacy materials restore endpoint.
+- **User access management** additionally requires the server-configured super-admin flag. A super admin with a Staff membership does not have Owner permissions.
+- Membership roles other than `Owner` and `Staff` are rejected. New privileged routes must apply an explicit permission check; placing a route behind authentication alone is not sufficient.
+- Workshop data is not yet isolated by workspace. Until #36 is implemented, backups and other workshop APIs operate on the shared data.
+
 ## Settings
 
 | Variable | Purpose |

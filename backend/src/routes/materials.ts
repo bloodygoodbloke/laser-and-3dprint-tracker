@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../prisma.js";
+import { requireOwner } from "../authMiddleware.js";
 
 const router = Router();
 
@@ -27,7 +28,7 @@ router.post("/", async (req, res) => {
   res.status(201).json(material);
 });
 
-router.post("/import-csv", async (req, res) => {
+router.post("/import-csv", requireOwner, async (req, res) => {
   const payload = req.body || {};
   const importedMaterials = Array.isArray(payload.materials) ? payload.materials : [];
 
@@ -125,7 +126,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.post("/backup", async (req, res) => {
+router.post("/backup", requireOwner, async (req, res) => {
   const { jobs = [], materials = [] } = req.body || {};
 
   await prisma.job.deleteMany();
@@ -161,7 +162,7 @@ router.post("/backup", async (req, res) => {
   res.json({ restored: true });
 });
 
-router.post("/seed", async (_req, res) => {
+router.post("/seed", requireOwner, async (_req, res) => {
   const starterMaterials = [
     { name: "PLA", type: "Filament", unit: "g", color: "Red", costPerUnit: 0.025, stockLevel: 1000, reorderThreshold: 200 },
     { name: "PLA", type: "Filament", unit: "g", color: "Blue", costPerUnit: 0.025, stockLevel: 1000, reorderThreshold: 200 },

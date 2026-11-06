@@ -356,7 +356,7 @@ function App() {
     ]);
     const normalizedJobs = normalizeJobsForUi(jobsData);
     let finalMaterials = materialsData;
-    if (!finalMaterials.length) {
+    if (!finalMaterials.length && currentUser.role === "Owner") {
       await api.seedMaterials();
       finalMaterials = await api.getMaterials();
     }

@@ -30,6 +30,7 @@ const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean)
   : process.env.NODE_ENV === "production" ? [] : ["http://localhost:5173", "http://127.0.0.1:5173"];
 const requireAuth = authGate(["/health", "/version"]);
+const requireAuthForFiles = authGate();
 
 // Unauthenticated, dependency-free probe endpoint for Azure Container Apps (registered before cors/auth/static).
 app.get("/health", (_req, res) => {
@@ -41,8 +42,8 @@ app.use(express.json());
 
 // Everything under /api (except health/version), uploads and the test page require sign-in.
 app.use("/api", requireAuth);
-app.use("/uploads", requireAuth);
-app.use("/makerworld-test", requireAuth);
+app.use("/uploads", requireAuthForFiles);
+app.use("/makerworld-test", requireAuthForFiles);
 
 app.use("/api", accessRouter);
 app.use("/api/jobs", jobsRouter);

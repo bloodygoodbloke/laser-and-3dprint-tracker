@@ -1,8 +1,10 @@
 import { Router } from "express";
 import prisma from "../prisma.js";
 import { findMissingStoredFiles } from "../storage/index.js";
+import { requireOwner } from "../authMiddleware.js";
 
 const router = Router();
+router.use(requireOwner);
 
 const BACKUP_SCHEMA_VERSION = "2026-07-24";
 
