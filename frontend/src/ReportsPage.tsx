@@ -1,4 +1,5 @@
 import type { Job } from "./types";
+import { formatCurrency } from "./format";
 
 interface ReportSummary {
   jobsCount: number;
@@ -45,7 +46,6 @@ interface ReportsPageProps {
   exportReportCsv: () => void;
   getBaseCostTotal: (job: Job) => number;
   getCustomerCharge: (job: Job) => number;
-  formatCurrency: (value?: number | null) => string;
 }
 
 export default function ReportsPage({
@@ -70,7 +70,6 @@ export default function ReportsPage({
   exportReportCsv,
   getBaseCostTotal,
   getCustomerCharge,
-  formatCurrency,
 }: ReportsPageProps) {
   return (
     <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">

@@ -31,6 +31,8 @@ import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchVersionInfo, formatVersionBadge, type VersionInfo } from "./version";
 import { useAuth } from "./AuthContext";
 import { parsePrintTimeToMinutes } from "./printTime";
+import { formatISODate, formatNumber } from "./format";
+import { handleError } from "./errorHandling";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
 
 const APP_NAME = "MakerFlow";
@@ -172,7 +174,7 @@ const getPreviewType = (filePath?: string | null) => {
   if (/\.(png|jpe?g|webp|gif)$/.test(normalized)) return "image";
   return "none";
 };
-const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
+const toIsoDate = formatISODate;
 const startOfDay = (value: Date) => {
   const next = new Date(value);
   next.setHours(0, 0, 0, 0);
@@ -390,7 +392,8 @@ function App() {
           setBillingSettings(normalized);
           saveBillingSettingsToLocalBackup(normalized);
           setBillingSaveMessage("Billing and equipment settings from your local browser backup were saved to the database.");
-        } catch (_error) {
+        } catch (error) {
+          handleError(error, "Could not save billing settings from the local browser backup.", "Save local billing settings");
           setBillingSaveMessage("Backend returned no billing settings. Loaded your local browser backup, but saving it to the database failed.");
         }
         return;
@@ -398,7 +401,8 @@ function App() {
 
       setBillingSettings(blankBillingSettings());
       setBillingSaveMessage("No saved billing settings found yet. Save billing once to persist it.");
-    } catch (_error) {
+    } catch (error) {
+      handleError(error, "Could not load billing settings from backend.", "Load billing settings");
       const localBackup = readBillingSettingsFromLocalBackup();
       if (localBackup) {
         setBillingSettings(localBackup);
@@ -411,9 +415,9 @@ function App() {
   };
 
   useEffect(() => {
-    loadData().catch(() => undefined);
-    loadBillingSettings().catch(() => undefined);
-    api.getBambuDashboard().then(setBambuDashboard).catch(() => undefined);
+    loadData().catch((error) => { handleError(error, "Could not load application data.", "Load application data"); });
+    loadBillingSettings().catch((error) => { handleError(error, "Could not load billing settings.", "Load billing settings"); });
+    api.getBambuDashboard().then(setBambuDashboard).catch((error) => { handleError(error, "Could not load equipment status.", "Load equipment status"); });
   }, []);
 
   const applyBambuDashboardUpdate = (payload: BambuDashboardPayload, force = false) => {
@@ -455,7 +459,7 @@ function App() {
 
     const refreshIfVisible = () => {
       if (document.visibilityState !== "visible") return;
-      refreshBambuDashboard().catch(() => undefined);
+      refreshBambuDashboard().catch((error) => { handleError(error, "Could not refresh equipment status.", "Refresh equipment status"); });
     };
 
     refreshIfVisible();
@@ -491,7 +495,8 @@ function App() {
       .then(({ imageUrl }) => {
         if (!cancelled) setModelPreviewByJob((current) => ({ ...current, [id]: { sourceUrl, imageUrl, loading: false } }));
       })
-      .catch(() => {
+      .catch((error) => {
+        handleError(error, "Could not refresh the model preview.", "Refresh job source image");
         if (!cancelled) setModelPreviewByJob((current) => ({ ...current, [id]: { sourceUrl, imageUrl: cachedUrl, loading: false } }));
       });
 
@@ -518,7 +523,7 @@ function App() {
       setupTimeMinutes: String(selectedJob.setupTimeMinutes ?? 0),
       postProcessingMinutes: String(selectedJob.postProcessingMinutes ?? 0),
       labourTimeMinutes: String(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
-      dueDate: selectedJob.dueDate ? String(selectedJob.dueDate).slice(0, 10) : "",
+      dueDate: selectedJob.dueDate ? formatISODate(selectedJob.dueDate) : "",
       queuePosition: String(selectedJob.queuePosition ?? 0),
       qaChecklistText: checklistLines,
       qaPassed: Boolean(selectedJob.qaPassed),
@@ -655,7 +660,7 @@ function App() {
     for (let offset = 0; offset < SCHEDULE_HORIZON_DAYS; offset += 1) {
       const date = new Date(start);
       date.setDate(start.getDate() + offset);
-      dayMap.set(date.toISOString().slice(0, 10), {
+      dayMap.set(formatISODate(date), {
         date,
         dueCount: 0,
         projectedCount: 0,
@@ -665,7 +670,7 @@ function App() {
 
     queuedJobs.forEach((job) => {
       if (!job.dueDate) return;
-      const dueKey = new Date(job.dueDate).toISOString().slice(0, 10);
+      const dueKey = formatISODate(new Date(job.dueDate));
       const day = dayMap.get(dueKey);
       if (!day) return;
       day.dueCount += 1;
@@ -674,7 +679,7 @@ function App() {
 
     machineQueueProjections.forEach((group) => {
       group.projectedJobs.forEach(({ projectedCompletion }) => {
-        const projectedKey = projectedCompletion.toISOString().slice(0, 10);
+        const projectedKey = formatISODate(projectedCompletion);
         const day = dayMap.get(projectedKey);
         if (!day) return;
         day.projectedCount += 1;
@@ -817,7 +822,8 @@ function App() {
 
       try {
         await loadData();
-      } catch {
+      } catch (error) {
+        handleError(error, "Could not refresh job data after creation.", "Reload jobs after create");
         const jobsData = await api.getJobs();
         setJobs(normalizeJobsForUi(jobsData));
       }
@@ -829,8 +835,7 @@ function App() {
         setShowCustomerCaptureModal(true);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create job";
-      setDashboardJobMessage(message);
+      setDashboardJobMessage(handleError(error, "Failed to create job.", "Create dashboard job"));
     } finally {
       setIsCreatingDashboardJob(false);
     }
@@ -985,7 +990,7 @@ function App() {
       postProcessingMinutes = parsePrintTimeToMinutes(newJobForm.postProcessingMinutes);
       labourTimeMinutes = parsePrintTimeToMinutes(newJobForm.labourTimeMinutes);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Invalid time");
+      window.alert(handleError(error, "Invalid time.", "Parse job runtime"));
       return;
     }
     const rawCustomerName = String(newJobForm.customer || "").trim();
@@ -1023,7 +1028,7 @@ function App() {
 
       });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Failed to create job");
+      window.alert(handleError(error, "Failed to create job.", "Create job"));
       return;
     }
     setSelectedJobId(created.id);
@@ -1053,7 +1058,8 @@ function App() {
         setJobEditorMode("none");
       }
       await loadData();
-    } catch (_error) {
+    } catch (error) {
+      handleError(error, "Could not delete job. Please try again.", "Delete job");
       window.alert("Could not delete job. Please try again.");
     }
   };
@@ -1108,7 +1114,8 @@ function App() {
         isDelivery: Number(job.deliveryCharge || 0) > 0,
       });
       await loadData();
-    } catch (_error) {
+    } catch (error) {
+      handleError(error, "Could not calculate cost. Please check backend status and try again.", "Calculate job cost");
       window.alert("Could not calculate cost. Please check backend status and try again.");
     }
   };
@@ -1184,7 +1191,7 @@ function App() {
     } catch (error) {
       setJobFileMessage((current) => ({
         ...current,
-        [job.id]: error instanceof Error ? error.message : "Upload failed. Please try again.",
+        [job.id]: handleError(error, "Upload failed. Please try again.", "Upload job file"),
       }));
     } finally {
       setUploadingJobId(null);
@@ -1244,8 +1251,7 @@ function App() {
       }
       setJobEditorMode("none");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to save job";
-      window.alert(message);
+      window.alert(handleError(error, "Failed to save job.", "Save job"));
     }
   };
 
@@ -1284,7 +1290,7 @@ function App() {
       setBillingSaveMessage("Billing settings saved.");
     } catch (error) {
       saveBillingSettingsToLocalBackup(billingSettings);
-      const message = error instanceof Error ? error.message : "Could not save billing settings.";
+      const message = handleError(error, "Could not save billing settings.", "Save billing settings");
       setBillingSaveMessage(`${message} Local browser backup was updated.`);
     } finally {
       setSavingBilling(false);
@@ -1345,7 +1351,6 @@ function App() {
     setJobMaterialEntries((current) => current.filter((_, entryIndex) => entryIndex !== index));
   };
 
-  const formatCurrency = (value?: number | null) => `£${(value ?? 0).toFixed(2)}`;
   const calculateRuntimeBreakdown = (job: Job) => computeRuntimeBreakdown(job, billingSettings);
   const getInvoiceChargeBreakdown = (job: Job) => computeInvoiceChargeBreakdown(job, billingSettings);
   const getBaseCostTotal = (job: Job) => Number(job.cost?.totalCost ?? 0);
@@ -1536,13 +1541,13 @@ function App() {
         job.customer || "",
         job.machineType,
         job.status,
-        job.createdAt ? String(job.createdAt).slice(0, 10) : "",
-        job.dueDate ? String(job.dueDate).slice(0, 10) : "",
+        job.createdAt ? formatISODate(job.createdAt) : "",
+        job.dueDate ? formatISODate(job.dueDate) : "",
         String(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0)),
         String(Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0)),
-        String(baseCost.toFixed(2)),
-        String(customerCharge.toFixed(2)),
-        String(profit.toFixed(2)),
+        formatNumber(baseCost),
+        formatNumber(customerCharge),
+        formatNumber(profit),
       ].join(",");
     });
 
@@ -1615,7 +1620,8 @@ function App() {
           data.filamentColours.length ? data.filamentColours.join(", ") : "",
         ].filter(Boolean);
         setModelUrlMessage(`Imported "${data.title}"${parts.length ? ` — ${parts.join(" · ")}` : ""}.${data.missing.length ? ` Not available: ${data.missing.join(", ")}.` : ""}`);
-      } catch {
+      } catch (error) {
+        handleError(error, "MakerWorld details are unavailable.", "Import MakerWorld model details");
         try {
           const { jobName, modelUrl } = parseMakerWorldUrl(url);
           setNewJobForm((current) => ({ ...current, name: jobName, sourceUrl: modelUrl }));
@@ -1623,7 +1629,7 @@ function App() {
           setMakerWorldImportPreview(null);
           setModelUrlMessage(`Imported "${jobName}" from URL (MakerWorld details unavailable).`);
         } catch (error) {
-          setModelUrlMessage(error instanceof Error ? error.message : "MakerWorld import failed");
+          setModelUrlMessage(handleError(error, "MakerWorld import failed.", "Parse MakerWorld URL"));
         }
       } finally {
         setIsLookingUpModelName(false);
@@ -1638,7 +1644,7 @@ function App() {
       setMakerWorldUrl(result.url);
       setModelUrlMessage(`Found “${result.title}” on ${result.source}. Check the name before saving.`);
     } catch (error) {
-      setModelUrlMessage(error instanceof Error ? error.message : "Could not read the model page. Enter the name manually and keep the link.");
+      setModelUrlMessage(handleError(error, "Could not read the model page. Enter the name manually and keep the link.", "Look up model title"));
     } finally {
       setIsLookingUpModelName(false);
     }
@@ -1646,7 +1652,7 @@ function App() {
   useEffect(() => {
     fetchVersionInfo()
       .then((info) => { setVersionInfo(info); setVersionError(""); })
-      .catch((error) => setVersionError(error instanceof Error ? error.message : "Failed to load version information"));
+      .catch((error) => setVersionError(handleError(error, "Failed to load version information.", "Load version information")));
   }, []);
   const importMakerWorldAutofill = async () => {
     const payload = await api.autofillMakerWorldJob(makerWorldUrl);
@@ -1812,7 +1818,7 @@ function App() {
     await loadData();
   };
 
-  const printInvoice = (job: Job) => openInvoicePrintWindow(job, { billingSettings, businessDisplayName, selectedCustomerProfile, formatCurrency });
+  const printInvoice = (job: Job) => openInvoicePrintWindow(job, { billingSettings, businessDisplayName, selectedCustomerProfile });
 
   const startEditingCustomer = (customer: Customer) => {
     setActiveTab("customers");
@@ -1959,7 +1965,7 @@ function App() {
       window.URL.revokeObjectURL(url);
       setBackupMessage(`Backup downloaded with ${selectedBackupSections.length} section${selectedBackupSections.length === 1 ? "" : "s"}.`);
     } catch (error) {
-      setBackupMessage(error instanceof Error ? error.message : "Failed to download backup.");
+      setBackupMessage(handleError(error, "Failed to download backup.", "Download backup"));
     }
   };
 
@@ -2076,7 +2082,7 @@ function App() {
         throw new Error("This file is not a supported MakerFlow backup.");
       }
     } catch (error) {
-      setBackupMessage(error instanceof Error ? error.message : "Failed to restore backup.");
+      setBackupMessage(handleError(error, "Failed to restore backup.", "Restore backup"));
     }
   };
 
@@ -2156,7 +2162,6 @@ function App() {
             jobsWaitingPayment={jobsWaitingPayment}
             jobsWaitingDispatch={jobsWaitingDispatch}
             recentJobs={recentJobs}
-            formatCurrency={formatCurrency}
             getInvoiceChargeBreakdown={getInvoiceChargeBreakdown}
             calculateJobCost={calculateJobCost}
             getCostButtonLabel={getCostButtonLabel}
@@ -2188,7 +2193,6 @@ function App() {
             exportReportCsv={exportReportCsv}
             getBaseCostTotal={getBaseCostTotal}
             getCustomerCharge={(job) => Number(getInvoiceChargeBreakdown(job).customerCharge || 0)}
-            formatCurrency={formatCurrency}
           />
         )}
 
@@ -2237,7 +2241,6 @@ function App() {
                     removeSelectedJobMaterialEntry={removeSelectedJobMaterialEntry}
                     jobStatusOptions={jobStatusOptions}
                     paymentStatusOptions={paymentStatusOptions}
-                    formatCurrency={formatCurrency}
                     getBaseCostTotal={getBaseCostTotal}
                     getProfitTotal={getProfitTotal}
                     getInvoiceChargeBreakdown={getInvoiceChargeBreakdown}
@@ -2308,7 +2311,6 @@ function App() {
             setMachineForm={setMachineForm}
             machineProfiles={machineProfiles}
             jobs={jobs}
-            formatCurrency={formatCurrency}
             startEditingMachine={startEditingMachine}
             removeMachine={removeMachine}
             machineMessage={machineMessage}
@@ -2349,7 +2351,6 @@ function App() {
             setSupplierPurchaseForm={setSupplierPurchaseForm}
             saveSupplierPurchase={saveSupplierPurchase}
             supplierPurchases={supplierPurchases}
-            formatCurrency={formatCurrency}
             supplierMessage={supplierMessage}
           />
         )}

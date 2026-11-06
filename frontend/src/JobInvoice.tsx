@@ -1,13 +1,13 @@
 import type { BillingSettings, Customer, Job } from "./types";
 import type { InvoiceChargeBreakdown } from "./invoicing";
 import { formatMinutesAsPrintTime } from "./printTime";
+import { formatCurrency, formatDate } from "./format";
 
 interface JobInvoiceProps {
   selectedJob: Job;
   selectedCustomerProfile: Customer | null;
   billingSettings: BillingSettings;
   businessDisplayName: string;
-  formatCurrency: (value?: number | null) => string;
   getInvoiceChargeBreakdown: (job: Job) => InvoiceChargeBreakdown;
   calculateJobCost: (job: Job) => Promise<void> | void;
   printInvoice: (job: Job) => void;
@@ -19,7 +19,6 @@ export default function JobInvoice({
   selectedCustomerProfile,
   billingSettings,
   businessDisplayName,
-  formatCurrency,
   getInvoiceChargeBreakdown,
   calculateJobCost,
   printInvoice,
@@ -52,7 +51,7 @@ export default function JobInvoice({
             <div className="text-sm text-slate-400">
               {billingSettings.businessLogoUrl ? <img src={billingSettings.businessLogoUrl} alt="Business logo" className="mb-2 ml-auto h-12 w-12 rounded-full object-cover" /> : null}
               <p className="font-medium text-white">#{selectedJob.jobNumber || "TBC"}</p>
-              <p>Issued {new Date().toLocaleDateString()}</p>
+              <p>Issued {formatDate(new Date())}</p>
               <p>{Number(billingSettings.paymentTermsDays || 0) > 0 ? `Due in ${Number(billingSettings.paymentTermsDays || 0)} days` : "Due on receipt"}</p>
             </div>
           </div>

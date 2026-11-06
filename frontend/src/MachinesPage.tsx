@@ -1,6 +1,7 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import RuntimeDurationInput, { formatHoursAsDuration } from "./RuntimeDurationInput";
 import { calculateMachineLifecycle } from "./machineLifecycle";
+import { formatCurrency, formatDate } from "./format";
 import type { Job, MachineElectricitySetting } from "./types";
 
 interface MachineForm {
@@ -22,7 +23,6 @@ interface MachinesPageProps {
   setMachineForm: Dispatch<SetStateAction<MachineForm>>;
   machineProfiles: [string, MachineElectricitySetting][];
   jobs: Job[];
-  formatCurrency: (value?: number | null) => string;
   startEditingMachine: (machineName: string) => void;
   removeMachine: (machineName: string) => Promise<void>;
   machineMessage: string;
@@ -38,7 +38,6 @@ export default function MachinesPage({
   setMachineForm,
   machineProfiles,
   jobs,
-  formatCurrency,
   startEditingMachine,
   removeMachine,
   machineMessage,
@@ -103,7 +102,7 @@ export default function MachinesPage({
                   return (
                     <p className="text-sm text-slate-500">
                       Purchased {machineSetting.purchaseDate || "not set"} • Run so far {formatHoursAsDuration(lifecycle.usedHours)} • Remaining {formatHoursAsDuration(lifecycle.remainingHours)} • Est. replacement{" "}
-                      {lifecycle.replacementDate ? lifecycle.replacementDate.toLocaleDateString() : machineSetting.purchaseDate ? "n/a (no runtime logged yet)" : "set a purchase date"}
+                      {lifecycle.replacementDate ? formatDate(lifecycle.replacementDate) : machineSetting.purchaseDate ? "n/a (no runtime logged yet)" : "set a purchase date"}
                     </p>
                   );
                 })()}

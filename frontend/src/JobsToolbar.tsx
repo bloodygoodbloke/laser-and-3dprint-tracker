@@ -1,5 +1,6 @@
 import type { Job } from "./types";
 import { formatMinutesAsPrintTime } from "./printTime";
+import { formatDate } from "./format";
 
 interface JobsToolbarProps {
   openNewJobEditor: () => void;
@@ -121,7 +122,7 @@ export default function JobsToolbar({
             <div key={`queue-${job.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
               <div>
                 <p className="font-medium text-white">#{job.queuePosition || 0} • {job.name}</p>
-                <p className="text-slate-400">{job.machineType} • Due {job.dueDate ? new Date(job.dueDate).toLocaleDateString() : "Not set"}</p>
+                <p className="text-slate-400">{job.machineType} • Due {job.dueDate ? formatDate(job.dueDate) : "Not set"}</p>
               </div>
               <span className={`rounded-full px-2 py-1 text-xs ${riskTone}`}>{dueRisk}</span>
             </div>

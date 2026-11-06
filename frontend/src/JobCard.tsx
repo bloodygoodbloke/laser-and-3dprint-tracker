@@ -4,6 +4,7 @@ import JobInvoice from "./JobInvoice";
 import type { InvoiceChargeBreakdown, RuntimeBreakdown } from "./invoicing";
 import PrintTimeInput from "./PrintTimeInput";
 import { formatMinutesAsPrintTime } from "./printTime";
+import { formatCurrency, formatDate } from "./format";
 import type { BillingSettings, Customer, Job, Material } from "./types";
 
 interface JobForm {
@@ -67,7 +68,6 @@ interface JobCardProps {
   removeSelectedJobMaterialEntry: (index: number) => void;
   jobStatusOptions: string[];
   paymentStatusOptions: string[];
-  formatCurrency: (value?: number | null) => string;
   getBaseCostTotal: (job: Job) => number;
   getProfitTotal: (job: Job) => number;
   getInvoiceChargeBreakdown: (job: Job) => InvoiceChargeBreakdown;
@@ -109,7 +109,6 @@ export default function JobCard({
   removeSelectedJobMaterialEntry,
   jobStatusOptions,
   paymentStatusOptions,
-  formatCurrency,
   getBaseCostTotal,
   getProfitTotal,
   getInvoiceChargeBreakdown,
@@ -169,7 +168,7 @@ export default function JobCard({
             <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
             <p><span className="text-slate-500">Status:</span> {job.status}</p>
             <p><span className="text-slate-500">Queue position:</span> {job.queuePosition ?? 0}</p>
-            <p><span className="text-slate-500">Due date:</span> {job.dueDate ? new Date(job.dueDate).toLocaleDateString() : "Not set"}</p>
+            <p><span className="text-slate-500">Due date:</span> {job.dueDate ? formatDate(job.dueDate) : "Not set"}</p>
             <p><span className="text-slate-500">Payment:</span> {job.paymentStatus || "Unpaid"}</p>
             <p><span className="text-slate-500">Rush:</span> {job.isRush ? "Yes" : "No"}</p>
             <p><span className="text-slate-500">Setup fee:</span> {formatCurrency(Number(job.setupFee || 0))}</p>
@@ -509,7 +508,6 @@ export default function JobCard({
               selectedCustomerProfile={selectedCustomerProfile}
               billingSettings={billingSettings}
               businessDisplayName={businessDisplayName}
-              formatCurrency={formatCurrency}
               getInvoiceChargeBreakdown={getInvoiceChargeBreakdown}
               calculateJobCost={calculateJobCost}
               printInvoice={printInvoice}
