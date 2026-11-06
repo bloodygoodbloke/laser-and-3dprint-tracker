@@ -1,5 +1,5 @@
-import { chromium } from "playwright";
 import { extractDurationMinutes } from "./printTime.js";
+import { parseMakerWorldBrowserUrl, withMakerWorldPage } from "./makerworldBrowser.js";
 
 export const MAKERWORLD_DESIGN_ENDPOINT = "https://makerworld.com/api/v1/design-service/design";
 
@@ -42,14 +42,8 @@ export type RawDesign = {
 };
 
 export function parseMakerWorldUrlRef(rawUrl: string): { designId: string; url: URL } | null {
-  let url: URL;
-  try {
-    url = new URL(String(rawUrl || "").trim());
-  } catch {
-    return null;
-  }
-  const host = url.hostname.toLowerCase();
-  if (url.protocol !== "https:" || (host !== "makerworld.com" && !host.endsWith(".makerworld.com"))) return null;
+  const url = parseMakerWorldBrowserUrl(String(rawUrl || ""));
+  if (!url) return null;
   const match = url.pathname.match(/\/models\/(\d+)/);
   if (!match) return null;
   return { designId: match[1], url };
@@ -146,22 +140,14 @@ export function buildImportResult(design: RawDesign, designId: string, modelUrl:
   };
 }
 
-// Cloudflare rejects Node's TLS fingerprint (403), so fall back to the Chromium already used by fetchHtml.
 export const fetchDesignJson = async (endpoint: string): Promise<RawDesign> => {
   try {
-    const response = await fetch(endpoint, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(10000) });
-    if (response.ok && /json/i.test(response.headers.get("content-type") || "")) return (await response.json()) as RawDesign;
+    return await withMakerWorldPage(endpoint, async (page, response) => {
+      const status = response?.status() ?? 0;
+      if (status < 200 || status >= 300) throw new Error("MakerWorld API request failed.");
+      return JSON.parse(await page.locator("body").innerText()) as RawDesign;
+    });
   } catch {
-    // fall through to browser
-  }
-  const browser = await chromium.launch({ headless: true });
-  try {
-    const page = await (await browser.newContext()).newPage();
-    const response = await page.goto(endpoint, { waitUntil: "domcontentloaded", timeout: 45000 });
-    const status = response?.status() ?? 0;
-    if (status >= 400) throw new Error(`MakerWorld API returned ${status}.`);
-    return JSON.parse(await page.locator("body").innerText()) as RawDesign;
-  } finally {
-    await browser.close().catch(() => undefined);
+    throw new Error("MakerWorld API request failed.");
   }
 };

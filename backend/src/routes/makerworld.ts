@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { URL } from "url";
 import { load } from "cheerio";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { extractDurationMinutes } from "../printTime.js";
 import { MAKERWORLD_DESIGN_ENDPOINT, buildImportResult, fetchDesignJson, parseMakerWorldUrlRef } from "../makerworldImport.js";
+import { parseMakerWorldBrowserUrl, withMakerWorldPage } from "../makerworldBrowser.js";
 
 const router = Router();
 
@@ -70,18 +70,7 @@ const buildMockProfile = (): MakerWorldProfile => ({
 });
 
 const fetchHtml = async (targetUrl: string, _redirectDepth = 0, bodyLogLength = 500): Promise<string> => {
-  console.log("[MakerWorld] Requested URL:", targetUrl);
-  let browser: Browser | undefined;
-  let context: BrowserContext | undefined;
-  let page: Page | undefined;
-
-  try {
-    browser = await chromium.launch({ headless: true });
-    context = await browser.newContext({
-      userAgent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${browser.version()} Safari/537.36`,
-    });
-    page = await context.newPage();
-    const response = await page.goto(targetUrl, { waitUntil: "networkidle", timeout: 60000 });
+  return withMakerWorldPage(targetUrl, async (page, response) => {
     const statusCode = response?.status() ?? 0;
     const responseHeaders = response ? await response.allHeaders() : {};
     const html = await page.content();
@@ -94,7 +83,7 @@ const fetchHtml = async (targetUrl: string, _redirectDepth = 0, bodyLogLength = 
     const isCloudflareChallenge = responseHeaders["cf-mitigated"] === "challenge"
       || /just a moment|checking your browser|verify you are human|cf-challenge/i.test(`${await page.title()} ${bodyText.slice(0, 2000)}`);
     if (isCloudflareChallenge) {
-      console.error("[MakerWorld] Cloudflare challenge page detected:", targetUrl);
+      console.error("[MakerWorld] Cloudflare challenge page detected.");
     }
 
     if (statusCode >= 400) {
@@ -102,14 +91,7 @@ const fetchHtml = async (targetUrl: string, _redirectDepth = 0, bodyLogLength = 
     }
 
     return html;
-  } catch (error) {
-    console.error("[MakerWorld] Playwright navigation failed:", error instanceof Error ? error.stack : error);
-    throw error;
-  } finally {
-    if (page) await page.close().catch(() => undefined);
-    if (context) await context.close().catch(() => undefined);
-    if (browser) await browser.close().catch(() => undefined);
-  }
+  });
 };
 
 const decodeHtml = (value: string) => value
@@ -199,13 +181,7 @@ const buildPrintProfile = (metadata: MakerWorldMetadata, html: string): MakerWor
 };
 
 const ensureMakerWorldUrl = (targetUrl: string) => {
-  const normalized = String(targetUrl || "").trim();
-  if (!normalized) return "";
-  if (!/^https?:\/\//i.test(normalized)) return "";
-
-  const parsed = new URL(normalized);
-  if (!parsed.hostname.toLowerCase().includes("makerworld")) return "";
-  return parsed.toString();
+  return parseMakerWorldBrowserUrl(targetUrl)?.toString() || "";
 };
 
 // Import v2: reads MakerWorld's public JSON design endpoint (the HTML page is behind a Cloudflare challenge).
@@ -218,8 +194,8 @@ router.post("/import", async (req, res) => {
   try {
     const design = await fetchDesignJson(endpoint);
     res.json(buildImportResult(design, ref.designId, ref.url.origin + ref.url.pathname));
-  } catch (error) {
-    res.status(502).json({ error: error instanceof Error ? error.message : "MakerWorld API request failed", endpoint });
+  } catch {
+    res.status(502).json({ error: "MakerWorld API request failed.", endpoint });
   }
 });
 
@@ -238,7 +214,7 @@ router.post("/metadata", async (req, res) => {
     const metadata = buildMetadata(targetUrl, html);
     res.json(metadata);
   } catch (error) {
-    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to import MakerWorld metadata" });
+    res.status(502).json({ error: "Failed to import MakerWorld metadata." });
   }
 });
 
@@ -288,7 +264,7 @@ router.post("/autofill", async (req, res) => {
     res.json({ metadata, jobDraft });
   } catch (error) {
     console.error("[MakerWorld autofill] Exception stack:", error instanceof Error ? error.stack : error);
-    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to build MakerWorld job autofill" });
+    res.status(502).json({ error: "Failed to build MakerWorld job autofill." });
   }
 });
 
@@ -309,7 +285,7 @@ router.post("/print-profile", async (req, res) => {
     const profile = buildPrintProfile(metadata, html);
     res.json({ metadata, profile });
   } catch (error) {
-    res.status(502).json({ error: error instanceof Error ? error.message : "Failed to import MakerWorld print profile" });
+    res.status(502).json({ error: "Failed to import MakerWorld print profile." });
   }
 });
 
