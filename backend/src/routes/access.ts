@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import prisma from "../prisma.js";
 import { isSuperAdminEmail } from "../auth.js";
+import { requireOwner } from "../authMiddleware.js";
 
 const router = Router();
 const ROLES = new Set(["Owner", "Staff"]);
@@ -22,7 +23,9 @@ router.get("/me", async (req, res) => {
   });
 });
 
-router.get("/access", requireSuperAdmin, async (req, res) => {
+router.use("/access", requireOwner, requireSuperAdmin);
+
+router.get("/access", async (req, res) => {
   const workspaceId = req.auth!.workspaceId;
   const [users, invites] = await Promise.all([
     prisma.user.findMany({ include: { memberships: true }, orderBy: { createdAt: "asc" } }),
@@ -49,7 +52,7 @@ router.get("/access", requireSuperAdmin, async (req, res) => {
 
 const readRole = (value: unknown) => (typeof value === "string" && ROLES.has(value) ? value : "Staff");
 
-router.post("/access/invites", requireSuperAdmin, async (req, res) => {
+router.post("/access/invites", async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
 
@@ -66,12 +69,12 @@ router.post("/access/invites", requireSuperAdmin, async (req, res) => {
   return res.status(201).json(invite);
 });
 
-router.delete("/access/invites/:id", requireSuperAdmin, async (req, res) => {
+router.delete("/access/invites/:id", async (req, res) => {
   await prisma.invite.deleteMany({ where: { id: String(req.params.id), workspaceId: req.auth!.workspaceId } });
   res.status(204).end();
 });
 
-router.post("/access/users/:id/approve", requireSuperAdmin, async (req, res) => {
+router.post("/access/users/:id/approve", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: String(req.params.id) } });
   if (!user) return res.status(404).json({ error: "User not found." });
 
@@ -85,7 +88,7 @@ router.post("/access/users/:id/approve", requireSuperAdmin, async (req, res) => 
   return res.json(membership);
 });
 
-router.delete("/access/users/:id/membership", requireSuperAdmin, async (req, res) => {
+router.delete("/access/users/:id/membership", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: String(req.params.id) } });
   if (!user) return res.status(404).json({ error: "User not found." });
   if (user.id === req.auth!.userId || isSuperAdminEmail(user.email)) {

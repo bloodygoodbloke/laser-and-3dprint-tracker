@@ -32,7 +32,7 @@ interface AuthOptions {
 
 export const createAuthMiddleware = ({ verify, resolveMember, publicPaths = [] }: AuthOptions): RequestHandler => {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (req.method === "OPTIONS" || publicPaths.includes(req.path)) return next();
+    if (req.method === "OPTIONS" || (req.method === "GET" && publicPaths.includes(req.path))) return next();
 
     if (!verify) {
       return res.status(503).json({ error: "Authentication is not configured on this server." });
@@ -53,6 +53,9 @@ export const createAuthMiddleware = ({ verify, resolveMember, publicPaths = [] }
     try {
       const context = await resolveMember(claims);
       if (!context) return res.status(403).json({ error: "Your account is awaiting approval or an invitation." });
+      if (context.role !== "Owner" && context.role !== "Staff") {
+        return res.status(403).json({ error: "A valid workspace role is required." });
+      }
       req.auth = context;
       return next();
     } catch (error) {
@@ -62,3 +65,7 @@ export const createAuthMiddleware = ({ verify, resolveMember, publicPaths = [] }
   };
 };
 
+export const requireOwner: RequestHandler = (req, res, next) => {
+  if (req.auth?.role !== "Owner") return res.status(403).json({ error: "Owner access required." });
+  return next();
+};
