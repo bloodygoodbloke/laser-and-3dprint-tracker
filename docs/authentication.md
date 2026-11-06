@@ -18,6 +18,7 @@ The backend requires a signed-in user for everything except `GET /api/health` an
 - **Staff** can use the regular workshop APIs, including jobs, customers, materials, uploads, equipment and billing settings.
 - **Owner** can also use all admin backup exports, restores and storage checks, import materials from CSV, and seed materials. These checks are enforced by the API, including the legacy materials restore endpoint.
 - **User access management** additionally requires the server-configured super-admin flag. A super admin with a Staff membership does not have Owner permissions.
+- Keep at least one configured super admin with an Owner membership. If all super admins are Staff, an operator with database access must restore an Owner membership before access management can be used again.
 - Membership roles other than `Owner` and `Staff` are rejected. New privileged routes must apply an explicit permission check; placing a route behind authentication alone is not sufficient.
 - Workshop data is not yet isolated by workspace. Until #36 is implemented, backups and other workshop APIs operate on the shared data.
 

@@ -9,7 +9,6 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const fs = require("node:fs");
 const os = require("node:os");
-const { execFileSync } = require("node:child_process");
 
 const backend = path.resolve(__dirname, "..", "backend");
 const load = async (name) => import(pathToFileURL(path.join(backend, "src", name)).href);
@@ -65,9 +64,16 @@ test("privileged routes enforce effective membership roles", async (t) => {
     else process.env.DATABASE_URL = oldDatabaseUrl;
     fs.rmSync(dir, { recursive: true, force: true });
   });
-  execFileSync(process.execPath, [path.join(backend, "node_modules/prisma/build/index.js"), "migrate", "deploy"], {
-    cwd: backend, env: process.env, stdio: "pipe",
-  });
+  const Database = require(require.resolve("better-sqlite3", { paths: [backend] }));
+  const db = new Database(path.join(dir, "test.db"));
+  try {
+    const migrations = path.join(backend, "prisma/migrations");
+    for (const entry of fs.readdirSync(migrations, { withFileTypes: true }).filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+      db.exec(fs.readFileSync(path.join(migrations, entry.name, "migration.sql"), "utf8"));
+    }
+  } finally {
+    db.close();
+  }
 
   const express = (await loadDep("express")).default;
   const { createAuthMiddleware } = await load("authMiddleware.ts");
