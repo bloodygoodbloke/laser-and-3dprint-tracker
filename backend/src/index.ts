@@ -3,7 +3,7 @@ import express from "express";
 import cors from "cors";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { parseMakerWorldBrowserUrl, withMakerWorldPage } from "./makerworldBrowser.js";
 import jobsRouter from "./routes/jobs.js";
 import materialsRouter from "./routes/materials.js";
 import billingRouter from "./routes/billing.js";
@@ -98,41 +98,19 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/makerworld-test", async (req, res) => {
   const rawUrl = String(req.query.url || "").trim();
-  let targetUrl: URL;
-  try {
-    targetUrl = new URL(rawUrl);
-  } catch {
+  const targetUrl = parseMakerWorldBrowserUrl(rawUrl);
+  if (!targetUrl) {
     return res.status(400).json({ error: "A valid MakerWorld URL is required." });
   }
 
-  const hostname = targetUrl.hostname.toLowerCase();
-  if (targetUrl.protocol !== "https:" || (hostname !== "makerworld.com" && !hostname.endsWith(".makerworld.com"))) {
-    return res.status(400).json({ error: "A valid MakerWorld URL is required." });
-  }
-
-  let browser: Browser | undefined;
-  let context: BrowserContext | undefined;
-  let page: Page | undefined;
   try {
-    browser = await chromium.launch({ headless: true });
-    context = await browser.newContext({
-      userAgent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${browser.version()} Safari/537.36`,
+    const result = await withMakerWorldPage(targetUrl.toString(), async (page) => {
+      const html = await page.content();
+      return { title: await page.title(), finalUrl: page.url(), htmlLength: html.length };
     });
-    page = await context.newPage();
-    try {
-      await page.goto(targetUrl.toString(), { waitUntil: "networkidle", timeout: 60000 });
-    } catch (error) {
-      if (!(error instanceof Error) || error.name !== "TimeoutError") throw error;
-      console.warn("[MakerWorld test] Timed out waiting for networkidle; returning current page details.");
-    }
-    const html = await page.content();
-    return res.json({ title: await page.title(), finalUrl: page.url(), htmlLength: html.length });
-  } catch (error) {
-    return res.status(502).json({ error: error instanceof Error ? error.message : "MakerWorld page test failed" });
-  } finally {
-    if (page) await page.close().catch(() => undefined);
-    if (context) await context.close().catch(() => undefined);
-    if (browser) await browser.close().catch(() => undefined);
+    return res.json(result);
+  } catch {
+    return res.status(502).json({ error: "MakerWorld page test failed." });
   }
 });
 
