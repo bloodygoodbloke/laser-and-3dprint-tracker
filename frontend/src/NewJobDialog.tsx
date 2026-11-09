@@ -1,7 +1,9 @@
+import { useState } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
+import JobCombobox from "./JobCombobox";
 import PrintTimeInput from "./PrintTimeInput";
 import { formatMinutesAsPrintTime } from "./printTime";
-import type { EstimateTemplate, Material } from "./types";
+import type { Customer, EstimateTemplate, Material } from "./types";
 
 interface NewJobForm {
   name: string;
@@ -10,8 +12,8 @@ interface NewJobForm {
   machineType: string;
   machineRunTimeMinutes: string;
   setupTimeMinutes: string;
-  postProcessingMinutes: string;
   labourTimeMinutes: string;
+  itemCount: string;
   dueDate: string;
   queuePosition: string;
   qaChecklistText: string;
@@ -47,15 +49,18 @@ interface NewJobDialogProps {
   newJobForm: NewJobForm;
   setNewJobForm: Dispatch<SetStateAction<NewJobForm>>;
   machineOptions: string[];
+  customers: Customer[];
   setMakerWorldUrl: (value: string) => void;
   setModelUrlMessage: (value: string) => void;
   isLookingUpModelName: boolean;
   lookupModelTitle: () => Promise<void>;
   modelUrlMessage: string;
   makerWorldImportPreview: string | null;
+  setMakerWorldImportPreview: (value: string | null) => void;
   addNewJobMaterialEntry: () => void;
   newJobMaterialEntries: NewJobMaterialEntry[];
   materials: Material[];
+  createMaterialForJob: (payload: Partial<Material>) => Promise<Material>;
   updateNewJobMaterialEntry: (index: number, field: "materialId" | "usageQuantity", value: string) => void;
   removeNewJobMaterialEntry: (index: number) => void;
   jobStatusOptions: string[];
@@ -75,20 +80,57 @@ export default function NewJobDialog({
   newJobForm,
   setNewJobForm,
   machineOptions,
+  customers,
   setMakerWorldUrl,
   setModelUrlMessage,
   isLookingUpModelName,
   lookupModelTitle,
   modelUrlMessage,
   makerWorldImportPreview,
+  setMakerWorldImportPreview,
   addNewJobMaterialEntry,
   newJobMaterialEntries,
   materials,
+  createMaterialForJob,
   updateNewJobMaterialEntry,
   removeNewJobMaterialEntry,
   jobStatusOptions,
   paymentStatusOptions,
 }: NewJobDialogProps) {
+  const [materialBeingAdded, setMaterialBeingAdded] = useState<{ index: number; name: string } | null>(null);
+  const [materialDraft, setMaterialDraft] = useState({ name: "", type: "Other", unit: "g", color: "", costPerUnit: "0" });
+  const [materialError, setMaterialError] = useState("");
+  const [savingMaterial, setSavingMaterial] = useState(false);
+
+  const startAddingMaterial = (index: number, name: string) => {
+    setMaterialBeingAdded({ index, name });
+    setMaterialDraft((current) => ({ ...current, name }));
+    setMaterialError("");
+  };
+
+  const saveMaterial = async () => {
+    if (!materialBeingAdded || !materialDraft.name.trim()) return;
+    setSavingMaterial(true);
+    setMaterialError("");
+    try {
+      const material = await createMaterialForJob({
+        name: materialDraft.name.trim(),
+        type: materialDraft.type.trim() || "Other",
+        unit: materialDraft.unit.trim() || "g",
+        color: materialDraft.color.trim(),
+        costPerUnit: Number(materialDraft.costPerUnit || 0),
+        stockLevel: 0,
+        reorderThreshold: 0,
+      });
+      updateNewJobMaterialEntry(materialBeingAdded.index, "materialId", material.id);
+      setMaterialBeingAdded(null);
+    } catch (error) {
+      setMaterialError(error instanceof Error ? error.message : "Failed to add material");
+    } finally {
+      setSavingMaterial(false);
+    }
+  };
+
   return (
     <div
       className={jobEditorMode === "create" ? "fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 no-print sm:p-6" : "hidden"}
@@ -159,10 +201,16 @@ export default function NewJobDialog({
               <span className="mb-2 block">Job name</span>
               <input value={newJobForm.name} onChange={(e) => setNewJobForm({ ...newJobForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" required />
             </label>
-            <label className="block text-sm text-slate-300">
-              <span className="mb-2 block">Customer (optional)</span>
-              <input value={newJobForm.customer} onChange={(e) => setNewJobForm({ ...newJobForm, customer: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-            </label>
+            <div className="block text-sm text-slate-300">
+              <JobCombobox
+                label="Customer (optional)"
+                value={newJobForm.customer}
+                options={customers.map((customer) => ({ value: customer.name, label: customer.name }))}
+                onChange={(customer) => setNewJobForm({ ...newJobForm, customer })}
+                onType={(customer) => setNewJobForm({ ...newJobForm, customer })}
+                addLabel="customer"
+              />
+            </div>
             <label className="block text-sm text-slate-300">
               <span className="mb-2 block">Equipment</span>
               <select value={newJobForm.machineType} onChange={(e) => setNewJobForm({ ...newJobForm, machineType: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
@@ -175,21 +223,25 @@ export default function NewJobDialog({
 
           <div className="grid gap-4 md:grid-cols-2">
             <PrintTimeInput value={newJobForm.machineRunTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, machineRunTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-            <PrintTimeInput label="Labour time" value={newJobForm.labourTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, labourTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+            <PrintTimeInput label="Labour and processing time" value={newJobForm.labourTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, labourTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+            <label className="block text-sm text-slate-300">
+              <span className="mb-2 block">Number of items</span>
+              <input type="number" min="1" step="1" value={newJobForm.itemCount} onChange={(e) => setNewJobForm({ ...newJobForm, itemCount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+            </label>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
               <label className="block text-sm text-slate-300">
                 <span className="mb-2 block">Model URL (optional)</span>
-                <input value={newJobForm.sourceUrl} onChange={(e) => { setNewJobForm({ ...newJobForm, sourceUrl: e.target.value }); setMakerWorldUrl(e.target.value); setModelUrlMessage(""); }} placeholder="Paste a 3D model page link" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                <input value={newJobForm.sourceUrl} onChange={(e) => { setNewJobForm({ ...newJobForm, sourceUrl: e.target.value }); setMakerWorldUrl(e.target.value); setMakerWorldImportPreview(null); setModelUrlMessage(""); }} placeholder="Paste a 3D model page link" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
               </label>
               <button type="button" disabled={!newJobForm.sourceUrl.trim() || isLookingUpModelName} onClick={() => lookupModelTitle().catch(() => undefined)} className="rounded-xl border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50">
                 {isLookingUpModelName ? "Reading model page..." : "Fill job name"}
               </button>
               <p className="text-xs text-slate-500 sm:col-span-2">Try a link from 3Drop, Printables (Prusa), MakerWorld, Thingiverse or Cults3D. You can also enter the job name yourself.</p>
               {modelUrlMessage ? <p className="text-xs text-cyan-300 sm:col-span-2" role="status">{modelUrlMessage}</p> : null}
-              {makerWorldImportPreview ? <img src={makerWorldImportPreview} alt="MakerWorld model preview" className="h-24 w-24 rounded-xl object-cover sm:col-span-2" /> : null}
+              <img src={makerWorldImportPreview || "/branding/makerflow-app-icon.svg"} onError={(event) => { event.currentTarget.src = "/branding/makerflow-favicon.svg"; }} alt={makerWorldImportPreview ? "Model preview" : "MakerFlow preview placeholder"} className="h-24 w-24 rounded-xl bg-white object-contain p-1 sm:col-span-2" />
             </div>
           </div>
 
@@ -204,14 +256,16 @@ export default function NewJobDialog({
             <div className="space-y-3">
               {newJobMaterialEntries.map((entry, index) => (
                 <div key={`${entry.materialId}-${index}`} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3 md:grid-cols-[1.6fr_1fr_auto]">
-                  <label className="text-sm text-slate-300">
-                    <span className="mb-2 block">Material</span>
-                    <select value={entry.materialId} onChange={(e) => updateNewJobMaterialEntry(index, "materialId", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2">
-                      {materials.map((material) => (
-                        <option key={material.id} value={material.id}>{material.name} {material.color ? `• ${material.color}` : ""}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="text-sm text-slate-300">
+                    <JobCombobox
+                      label="Material"
+                      value={entry.materialId}
+                      options={materials.map((material) => ({ value: material.id, label: `${material.name}${material.color ? ` • ${material.color}` : ""} (${material.type})` }))}
+                      onChange={(materialId) => updateNewJobMaterialEntry(index, "materialId", materialId)}
+                      onAdd={(name) => startAddingMaterial(index, name)}
+                      addLabel="material"
+                    />
+                  </div>
                   <label className="text-sm text-slate-300">
                     <span className="mb-2 block">Estimated amount (g)</span>
                     <input type="number" min="0" step="0.01" placeholder="e.g. 85" value={entry.usageQuantity} onChange={(e) => updateNewJobMaterialEntry(index, "usageQuantity", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
@@ -243,7 +297,6 @@ export default function NewJobDialog({
               </select>
             </label>
             <PrintTimeInput label="Setup time" value={newJobForm.setupTimeMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, setupTimeMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-            <PrintTimeInput label="Post-processing" value={newJobForm.postProcessingMinutes} onChange={(minutes) => setNewJobForm({ ...newJobForm, postProcessingMinutes: minutes })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
             <label className="block text-sm text-slate-300">
               <span className="mb-2 block">Deposit paid (£)</span>
               <input type="number" step="0.01" value={newJobForm.depositPaidAmount} onChange={(e) => setNewJobForm({ ...newJobForm, depositPaidAmount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
@@ -320,6 +373,36 @@ export default function NewJobDialog({
           </div>
         </form>
       )}
+      {materialBeingAdded ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4" onClick={(event) => { event.stopPropagation(); setMaterialBeingAdded(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="job-material-dialog-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-lg rounded-2xl border border-cyan-700/40 bg-slate-900 p-5">
+            <h3 id="job-material-dialog-title" className="text-lg font-semibold text-white">Add material</h3>
+            <p className="mt-1 text-sm text-slate-400">Add this material to your catalog and attach it to the job.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-sm text-slate-300 sm:col-span-2">Name
+                <input autoFocus value={materialDraft.name} onChange={(event) => setMaterialDraft({ ...materialDraft, name: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" required />
+              </label>
+              <label className="text-sm text-slate-300">Type
+                <input value={materialDraft.type} onChange={(event) => setMaterialDraft({ ...materialDraft, type: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" required />
+              </label>
+              <label className="text-sm text-slate-300">Unit
+                <input value={materialDraft.unit} onChange={(event) => setMaterialDraft({ ...materialDraft, unit: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" required />
+              </label>
+              <label className="text-sm text-slate-300">Colour
+                <input value={materialDraft.color} onChange={(event) => setMaterialDraft({ ...materialDraft, color: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+              </label>
+              <label className="text-sm text-slate-300">Cost per unit (£)
+                <input type="number" min="0" step="any" value={materialDraft.costPerUnit} onChange={(event) => setMaterialDraft({ ...materialDraft, costPerUnit: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+              </label>
+            </div>
+            {materialError ? <p role="alert" className="mt-3 text-sm text-rose-300">{materialError}</p> : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setMaterialBeingAdded(null)} className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel</button>
+              <button type="button" disabled={savingMaterial || !materialDraft.name.trim()} onClick={() => saveMaterial().catch(() => undefined)} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300 disabled:opacity-50">{savingMaterial ? "Saving…" : "Add material"}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

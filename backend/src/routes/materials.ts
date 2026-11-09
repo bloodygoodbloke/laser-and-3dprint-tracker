@@ -154,6 +154,7 @@ router.post("/backup", requireOwner, async (req, res) => {
         customer: job.customer,
         machineType: job.machineType,
         estTimeMinutes: Number(job.estTimeMinutes || 0),
+        itemCount: Math.max(1, Math.floor(Number(job.itemCount) || 1)),
         status: job.status,
       },
     });

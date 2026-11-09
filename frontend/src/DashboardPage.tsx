@@ -152,7 +152,7 @@ export default function DashboardPage({
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="text-right">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Customer total</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Minimum price</p>
                     <p className="text-lg font-semibold text-white">{job.cost ? formatCurrency(getInvoiceChargeBreakdown(job).customerCharge) : "Not costed"}</p>
                   </div>
                   <button

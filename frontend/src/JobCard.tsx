@@ -1,6 +1,7 @@
 import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from "react";
 import JobFilePreview from "./JobFilePreview";
 import JobInvoice from "./JobInvoice";
+import JobCombobox from "./JobCombobox";
 import type { InvoiceChargeBreakdown, RuntimeBreakdown } from "./invoicing";
 import PrintTimeInput from "./PrintTimeInput";
 import { formatMinutesAsPrintTime } from "./printTime";
@@ -14,8 +15,8 @@ interface JobForm {
   machineType: string;
   machineRunTimeMinutes: string;
   setupTimeMinutes: string;
-  postProcessingMinutes: string;
   labourTimeMinutes: string;
+  itemCount: string;
   dueDate: string;
   queuePosition: string;
   qaChecklistText: string;
@@ -58,6 +59,7 @@ interface JobCardProps {
   selectedJobForm: JobForm;
   setSelectedJobForm: Dispatch<SetStateAction<JobForm>>;
   selectedCustomerProfile: Customer | null;
+  customers: Customer[];
   billingSettings: BillingSettings;
   businessDisplayName: string;
   machineOptions: string[];
@@ -99,6 +101,7 @@ export default function JobCard({
   selectedJobForm,
   setSelectedJobForm,
   selectedCustomerProfile,
+  customers,
   billingSettings,
   businessDisplayName,
   machineOptions,
@@ -138,9 +141,19 @@ export default function JobCard({
         className="w-full p-4 text-left"
       >
         <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">{job.name}</p>
-            <p className="text-sm text-slate-400">{job.jobNumber || "No job number"} • {job.customer || "No customer"} • {job.machineType}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <img
+              src={job.sourceUrl && job.sourceImageForUrl === job.sourceUrl && job.sourceImageUrl ? job.sourceImageUrl : "/branding/makerflow-favicon.svg"}
+              alt=""
+              onError={(event) => {
+                if (!event.currentTarget.src.endsWith("/branding/makerflow-favicon.svg")) event.currentTarget.src = "/branding/makerflow-favicon.svg";
+              }}
+              className="h-[75px] w-[75px] shrink-0 rounded-lg border border-slate-800 bg-slate-900 object-contain p-1"
+            />
+            <div className="min-w-0">
+              <p className="font-medium">{job.name}</p>
+              <p className="text-sm text-slate-400">{job.jobNumber || "No job number"} • {job.customer || "No customer"} • {job.machineType} • {job.itemCount ?? 1} item{Number(job.itemCount ?? 1) === 1 ? "" : "s"}</p>
+            </div>
           </div>
           <div className="text-right text-sm text-slate-400">
             <p>
@@ -149,7 +162,7 @@ export default function JobCard({
               </span>
             </p>
             <p>{job.cost ? `Base (no markups) ${formatCurrency(getBaseCostTotal(job))}` : "No cost yet"}</p>
-            {job.cost ? <p>{`Customer (with markups) ${formatCurrency(getInvoiceChargeBreakdown(job).customerCharge)}`}</p> : null}
+            {job.cost ? <p>{`Minimum price ${formatCurrency(getInvoiceChargeBreakdown(job).customerCharge)}`}</p> : null}
             {job.cost ? <p>{`Profit ${formatCurrency(getProfitTotal(job))}`}</p> : null}
           </div>
         </div>
@@ -164,8 +177,8 @@ export default function JobCard({
             <p><span className="text-slate-500">Equipment:</span> {job.machineType}</p>
             <p><span className="text-slate-500">Equipment runtime:</span> {formatMinutesAsPrintTime(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0))}</p>
             <p><span className="text-slate-500">Setup time:</span> {job.setupTimeMinutes ?? 0} mins</p>
-            <p><span className="text-slate-500">Post-processing:</span> {job.postProcessingMinutes ?? 0} mins</p>
-            <p><span className="text-slate-500">Labour time:</span> {job.labourTimeMinutes ?? job.estTimeMinutes} mins</p>
+            <p><span className="text-slate-500">Labour and processing time:</span> {(job.labourTimeMinutes ?? job.estTimeMinutes) + Number(job.postProcessingMinutes ?? 0)} mins</p>
+            <p><span className="text-slate-500">Number of items:</span> {job.itemCount ?? 1}</p>
             <p><span className="text-slate-500">Status:</span> {job.status}</p>
             <p><span className="text-slate-500">Queue position:</span> {job.queuePosition ?? 0}</p>
             <p><span className="text-slate-500">Due date:</span> {job.dueDate ? formatDate(job.dueDate) : "Not set"}</p>
@@ -221,7 +234,7 @@ export default function JobCard({
                   </div>
                 ) : (
                   <div className="mt-2 flex items-center gap-3">
-                    <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-400">No image</div>
+                    <img src="/branding/makerflow-app-icon.svg" alt="MakerFlow" className="h-16 w-16 shrink-0 rounded-lg bg-white object-contain p-1" />
                     <div className="text-sm text-slate-400">
                       <p>No source image is available for this model.</p>
                       <a className="text-xs text-cyan-300 underline" href={job.sourceUrl} target="_blank" rel="noreferrer" referrerPolicy="no-referrer">View model page</a>
@@ -269,7 +282,7 @@ export default function JobCard({
                   );
                 })()}
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-300">Labour ({job.labourTimeMinutes ?? job.estTimeMinutes} mins)</span>
+                  <span className="text-slate-300">Labour and processing ({Number(job.labourTimeMinutes ?? job.estTimeMinutes) + Number(job.postProcessingMinutes ?? 0)} mins)</span>
                   <span className="font-medium text-white">{formatCurrency(job.cost.labourCost)}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
@@ -277,12 +290,12 @@ export default function JobCard({
                   <span className="font-semibold text-white">{formatCurrency(getBaseCostTotal(job))}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
-                  <span className="text-slate-300">Customer total (with markups)</span>
-                  <span className="font-semibold text-white">{formatCurrency(getInvoiceChargeBreakdown(job).customerCharge)}</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
                   <span className="text-slate-300">Profit (internal)</span>
                   <span className="font-semibold text-white">{formatCurrency(getProfitTotal(job))}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2 text-base font-bold text-white">
+                  <span>Minimum price</span>
+                  <span>{formatCurrency(getInvoiceChargeBreakdown(job).customerCharge)}</span>
                 </div>
               </div>
             </div>
@@ -346,7 +359,6 @@ export default function JobCard({
                   <h3 className="mt-1 text-lg font-semibold text-white">{selectedJob.name}</h3>
                 </div>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => selectedJob && calculateJobCost(selectedJob)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">{selectedJob ? getCostButtonLabel(selectedJob) : "Calculate cost"}</button>
                   <button type="button" onClick={() => setJobEditorMode("none")} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Cancel</button>
                   <button type="submit" className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Save job</button>
                 </div>
@@ -357,10 +369,9 @@ export default function JobCard({
                   <span className="mb-2 block">Job name</span>
                   <input value={selectedJobForm.name} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" required />
                 </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-2 block">Customer</span>
-                  <input value={selectedJobForm.customer} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, customer: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                </label>
+                <div className="block text-sm text-slate-300">
+                  <JobCombobox label="Customer" value={selectedJobForm.customer} options={customers.map((customer) => ({ value: customer.name, label: customer.name }))} onChange={(customer) => setSelectedJobForm({ ...selectedJobForm, customer })} onType={(customer) => setSelectedJobForm({ ...selectedJobForm, customer })} addLabel="customer" />
+                </div>
                 <label className="block text-sm text-slate-300">
                   <span className="mb-2 block">Model URL</span>
                   <input value={selectedJobForm.sourceUrl} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, sourceUrl: e.target.value })} placeholder="Paste a model page link" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
@@ -381,6 +392,10 @@ export default function JobCard({
                     ))}
                   </select>
                 </label>
+                <label className="block text-sm text-slate-300">
+                  <span className="mb-2 block">Number of items</span>
+                  <input type="number" min="1" step="1" value={selectedJobForm.itemCount} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, itemCount: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
+                </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -390,11 +405,7 @@ export default function JobCard({
                   <input value={selectedJobForm.setupTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, setupTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                 </label>
                 <label className="block text-sm text-slate-300">
-                  <span className="mb-2 block">Post-processing (mins)</span>
-                  <input value={selectedJobForm.postProcessingMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, postProcessingMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
-                </label>
-                <label className="block text-sm text-slate-300">
-                  <span className="mb-2 block">Labour time (mins)</span>
+                  <span className="mb-2 block">Labour and processing time (mins)</span>
                   <input value={selectedJobForm.labourTimeMinutes} onChange={(e) => setSelectedJobForm({ ...selectedJobForm, labourTimeMinutes: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                 </label>
                 <label className="block text-sm text-slate-300">
