@@ -8,6 +8,10 @@ import { normalizeStoredMinutes } from "../printTime.js";
 import { parseSupportedModelUrl, resolveSourceImageUrl } from "./model-metadata.js";
 
 const router = Router();
+const normalizeItemCount = (value: unknown) => {
+  const count = Number(value);
+  return Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+};
 
 const toRecord = (value: unknown): Record<string, any> => {
   if (!value) return {};
@@ -65,7 +69,7 @@ router.get("/", async (_req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, setupTimeMinutes, postProcessingMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
+  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, setupTimeMinutes, postProcessingMinutes, labourTimeMinutes, itemCount, status, jobNumber, materials = [] } = req.body;
   const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, failureReason, failureWasteGrams, failureCost, sourceUrl } = req.body;
 
   let normalizedEstTime: number;
@@ -81,7 +85,7 @@ router.post("/", async (req, res) => {
 
   const normalizedSetup = Number(setupTimeMinutes ?? 0);
   const normalizedPost = Number(postProcessingMinutes ?? 0);
-  const normalizedLabour = Number(labourTimeMinutes ?? (normalizedSetup + normalizedPost));
+  const normalizedLabour = Number(labourTimeMinutes ?? normalizedSetup) + normalizedPost;
 
   const buildBaseData = (generatedNumber: string) => ({
     jobNumber: generatedNumber,
@@ -94,6 +98,7 @@ router.post("/", async (req, res) => {
     setupTimeMinutes: normalizedSetup,
     postProcessingMinutes: normalizedPost,
     labourTimeMinutes: normalizedLabour,
+    itemCount: normalizeItemCount(itemCount),
     dueDate: dueDate ? new Date(String(dueDate)) : null,
     queuePosition: Number(queuePosition || 0),
     qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
@@ -259,7 +264,7 @@ router.get("/:id", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, setupTimeMinutes, postProcessingMinutes, labourTimeMinutes, status, jobNumber, materials = [] } = req.body;
+  const { name, customer, machineType, estTimeMinutes, machineRunTimeMinutes, setupTimeMinutes, postProcessingMinutes, labourTimeMinutes, itemCount, status, jobNumber, materials = [] } = req.body;
   const { isRush, isSetupFee, isDelivery, setupFee, deliveryCharge, paymentStatus, depositPaidAmount, dueDate, queuePosition, qaChecklist, qaPassed, reworkCost, reworkNotes, failureReason, failureWasteGrams, failureCost, sourceUrl } = req.body;
 
   let normalizedEstTime: number;
@@ -281,7 +286,7 @@ router.put("/:id", async (req, res) => {
 
     const normalizedSetup = Number(setupTimeMinutes ?? 0);
     const normalizedPost = Number(postProcessingMinutes ?? 0);
-    const normalizedLabour = Number(labourTimeMinutes ?? (normalizedSetup + normalizedPost));
+    const normalizedLabour = Number(labourTimeMinutes ?? normalizedSetup) + normalizedPost;
 
     const baseData = {
       jobNumber: jobNumber || undefined,
@@ -294,6 +299,7 @@ router.put("/:id", async (req, res) => {
       setupTimeMinutes: normalizedSetup,
       postProcessingMinutes: normalizedPost,
       labourTimeMinutes: normalizedLabour,
+      itemCount: normalizeItemCount(itemCount ?? previousJob.itemCount),
       dueDate: dueDate ? new Date(String(dueDate)) : null,
       queuePosition: Number(queuePosition || 0),
       qaChecklist: JSON.stringify(Array.isArray(qaChecklist) ? qaChecklist : []),
@@ -458,7 +464,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const machineRunTimeMinutes = Number(payload.machineRunTimeMinutes ?? payload.printTimeMinutes ?? payload.laserMinutes ?? job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
     const setupTimeMinutes = Number(payload.setupTimeMinutes ?? job.setupTimeMinutes ?? 0);
     const postProcessingMinutes = Number(payload.postProcessingMinutes ?? job.postProcessingMinutes ?? 0);
-    const labourTimeMinutes = Number(payload.labourTimeMinutes ?? (setupTimeMinutes + postProcessingMinutes));
+    const labourTimeMinutes = Number(payload.labourTimeMinutes ?? setupTimeMinutes) + postProcessingMinutes;
     const isRushJob = Boolean(payload.isRush ?? job.isRush);
     const jobSetupFee = Math.max(0, Number(payload.setupFee ?? job.setupFee ?? 0));
     const jobDeliveryCharge = Math.max(0, Number(payload.deliveryCharge ?? job.deliveryCharge ?? 0));
@@ -568,7 +574,6 @@ router.post('/:id/calculate-cost', async (req, res) => {
       wasteFactorPercent: Math.max(0, WASTE_FACTOR_PERCENT),
       machineRunTimeMinutes,
       setupTimeMinutes,
-      postProcessingMinutes,
       labourTimeMinutes,
       isRush: isRushJob,
       isSetupFee: isSetupFeeJob,

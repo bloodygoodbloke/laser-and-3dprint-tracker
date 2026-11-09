@@ -294,13 +294,13 @@ export default function HelpPage({ versionInfo, versionError }: HelpPageProps) {
             <ul className="mt-1 list-disc space-y-1 pl-5">
               <li>Optional pricing and production details and saved estimates are available on the form.</li>
               <li>Open <strong>Edit job</strong> for the full set of production, payment, QA, rework and failure fields.</li>
-              <li>After saving edits, choose <strong>Refresh costs</strong> to update the estimate.</li>
+              <li>Save job edits first, then use the job card’s cost button to refresh the estimate.</li>
             </ul>
           </div>
         </Accordion>
 
         <Accordion id="help-calculating-costs" title="Calculating Costs" open={openIds.has("help-calculating-costs")} onToggle={handleToggle}>
-          <p>Saving a new job calculates its price automatically. After editing an existing job, choose <strong>Refresh costs</strong> to recalculate.</p>
+          <p>Saving a new job calculates its price automatically. After editing an existing job, save it first, then use the cost button on its job card to recalculate.</p>
           <div>
             <h4 className="font-semibold text-white">What goes into the price</h4>
             <ul className="mt-1 list-disc space-y-1 pl-5">

@@ -30,7 +30,7 @@ import HelpPage from "./HelpPage";
 import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchVersionInfo, formatVersionBadge, type VersionInfo } from "./version";
 import { useAuth } from "./AuthContext";
-import { parsePrintTimeToMinutes } from "./printTime";
+import { formatMinutesAsPrintTime, parsePrintTimeToMinutes } from "./printTime";
 import { formatISODate, formatNumber } from "./format";
 import { handleError } from "./errorHandling";
 import { BambuDashboardPayload, BillingAuditLog, BillingSettings, Customer, EstimateTemplate, Job, MakerWorldMetadata, MakerWorldPrintProfile, Material, MaterialPurchase, Supplier } from "./types";
@@ -164,8 +164,8 @@ const ensureContrast = (colour: string, background: string, target = 4.8) => {
 
 
 const parseNumberInput = (value: string) => (value.trim() === "" ? 0 : Number(value));
-const jobStatusOptions = ["Quote Draft", "Quote Sent", "Quote Approved", "Estimate Template", "Pending", "In Progress", "Completed", "Invoiced"];
-const paymentStatusOptions = ["Unpaid", "Partially Paid", "Paid", "Overdue"];
+const jobStatusOptions = ["Quote Draft", "Quote Sent", "Quote Approved", "Estimate Template", "Pending", "In Progress", "Completed", "Invoiced", "Stock Item"];
+const paymentStatusOptions = ["Unpaid", "Partially Paid", "Paid", "Overdue", "Not applicable"];
 const jobWorkflowStatusOptions = ["All", ...jobStatusOptions] as const;
 const getPreviewType = (filePath?: string | null) => {
   const normalized = String(filePath || "").toLowerCase();
@@ -251,15 +251,15 @@ function App() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeTab, setActiveTab] = useState<"dashboard" | "jobs" | "reports" | "materials" | "machines" | "customers" | "suppliers" | "billing" | "admin" | "help">("dashboard");
-  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [jobForm, setJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [jobMaterialEntries, setJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [billingSettings, setBillingSettings] = useState<BillingSettings>(blankBillingSettings());
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
-  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", postProcessingMinutes: "", labourTimeMinutes: "", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
-  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
+  const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", labourTimeMinutes: "", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+  const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", labourTimeMinutes: "0", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
   const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [editingMachineName, setEditingMachineName] = useState<string | null>(null);
   const [showMachineEditor, setShowMachineEditor] = useState(false);
@@ -286,6 +286,7 @@ function App() {
   const [jobSearchTerm, setJobSearchTerm] = useState("");
   const [jobStatusFilter, setJobStatusFilter] = useState<(typeof jobWorkflowStatusOptions)[number]>("All");
   const [jobMachineFilter, setJobMachineFilter] = useState("All");
+  const [jobGroupState, setJobGroupState] = useState<Record<string, boolean>>({ Pending: true });
   const [reportStartDate, setReportStartDate] = useState(initialReportStartDate);
   const [reportEndDate, setReportEndDate] = useState(initialReportEndDate);
   const [reportStatusFilter, setReportStatusFilter] = useState<(typeof jobWorkflowStatusOptions)[number]>("All");
@@ -371,6 +372,11 @@ function App() {
     }
   };
 
+  const createMaterialForJob = async (payload: Partial<Material>) => {
+    const material = await api.createMaterial(payload) as Material;
+    setMaterials((current) => [...current.filter((entry) => entry.id !== material.id), material]);
+    return material;
+  };
 
   const loadBillingSettings = async () => {
     try {
@@ -521,8 +527,8 @@ function App() {
       machineType: selectedJob.machineType || machineOptions[0],
       machineRunTimeMinutes: String(Number(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0)),
       setupTimeMinutes: String(selectedJob.setupTimeMinutes ?? 0),
-      postProcessingMinutes: String(selectedJob.postProcessingMinutes ?? 0),
-      labourTimeMinutes: String(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0),
+      labourTimeMinutes: String(Number(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes ?? 0) + Number(selectedJob.postProcessingMinutes ?? 0)),
+      itemCount: String(selectedJob.itemCount ?? 1),
       dueDate: selectedJob.dueDate ? formatISODate(selectedJob.dueDate) : "",
       queuePosition: String(selectedJob.queuePosition ?? 0),
       qaChecklistText: checklistLines,
@@ -543,7 +549,7 @@ function App() {
       materialId: entry.materialId,
       usageQuantity: String(entry.usageQuantity || 0),
     })));
-  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.sourceUrl, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.setupTimeMinutes, selectedJob?.postProcessingMinutes, selectedJob?.labourTimeMinutes, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.failureReason, selectedJob?.failureWasteGrams, selectedJob?.failureCost, selectedJob?.isRush, selectedJob?.setupFee, selectedJob?.deliveryCharge, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
+  }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.sourceUrl, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.setupTimeMinutes, selectedJob?.postProcessingMinutes, selectedJob?.labourTimeMinutes, selectedJob?.itemCount, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.failureReason, selectedJob?.failureWasteGrams, selectedJob?.failureCost, selectedJob?.isRush, selectedJob?.setupFee, selectedJob?.deliveryCharge, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
 
   useEffect(() => {
     if (!newJobMaterialEntries.length && materials.length) {
@@ -570,7 +576,7 @@ function App() {
         || String(job.customer || "").toLowerCase().includes(normalizedSearch)
         || String(job.jobNumber || "").toLowerCase().includes(normalizedSearch);
       return matchesStatus && matchesMachine && matchesSearch;
-    });
+    }).sort((left, right) => new Date(String(right.createdAt || 0)).getTime() - new Date(String(left.createdAt || 0)).getTime());
   }, [jobs, jobMachineFilter, jobSearchTerm, jobStatusFilter]);
   const estimateTemplates = useMemo(
     () => jobs
@@ -578,6 +584,13 @@ function App() {
       .sort((left, right) => new Date(String(right.updatedAt || right.createdAt || 0)).getTime() - new Date(String(left.updatedAt || left.createdAt || 0)).getTime()),
     [jobs],
   );
+  const filteredJobGroups = useMemo(() => {
+    const groups = new Map<string, Job[]>();
+    filteredJobs.forEach((job) => groups.set(job.status, [...(groups.get(job.status) || []), job]));
+    return Array.from(groups.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([status, statusJobs]) => [status, statusJobs] as const);
+  }, [filteredJobs]);
   const adminBackgroundColor = normalizeHexColor(billingSettings.adminBackgroundColor, DEFAULT_ADMIN_BACKGROUND_COLOR);
   const adminTextColor = normalizeHexColor(billingSettings.adminTextColor, DEFAULT_ADMIN_TEXT_COLOR);
   const siteInputColor = normalizeHexColor(billingSettings.siteInputColor, DEFAULT_SITE_INPUT_COLOR);
@@ -792,8 +805,9 @@ function App() {
         estTimeMinutes: parsePrintTimeToMinutes(jobForm.machineRunTimeMinutes),
         machineRunTimeMinutes: parsePrintTimeToMinutes(jobForm.machineRunTimeMinutes),
         setupTimeMinutes: Number(jobForm.setupTimeMinutes || 0),
-        postProcessingMinutes: Number(jobForm.postProcessingMinutes || 0),
+        postProcessingMinutes: 0,
         labourTimeMinutes: Number(jobForm.labourTimeMinutes || 0),
+        itemCount: 1,
         dueDate: jobForm.dueDate || null,
         queuePosition: Number(jobForm.queuePosition || 0),
         qaChecklist: toChecklistArray(jobForm.qaChecklistText),
@@ -817,7 +831,7 @@ function App() {
       const createdForUi = normalizeJobsForUi([created])[0];
       setJobs((current) => [createdForUi, ...current.filter((job) => job.id !== createdForUi.id)]);
 
-      setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
+      setJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "0", setupTimeMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
       setJobMaterialEntries([]);
 
       try {
@@ -843,7 +857,7 @@ function App() {
 
   const openNewJobEditor = () => {
     setJobEditorMode("create");
-    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "0", setupTimeMinutes: "0", postProcessingMinutes: "0", labourTimeMinutes: "0", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
+    setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "0", setupTimeMinutes: "0", labourTimeMinutes: "0", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
     setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "" }] : []);
     setMakerWorldUrl("");
     setMakerWorldMessage("");
@@ -863,8 +877,8 @@ function App() {
       machineType: template.machineType || machineOptions[0] || "Other",
       machineRunTimeMinutes: String(template.machineRunTimeMinutes ?? template.estTimeMinutes ?? 0),
       setupTimeMinutes: String(template.setupTimeMinutes ?? 0),
-      postProcessingMinutes: String(template.postProcessingMinutes ?? 0),
-      labourTimeMinutes: String(template.labourTimeMinutes ?? template.estTimeMinutes ?? 0),
+      labourTimeMinutes: String(Number(template.labourTimeMinutes ?? template.estTimeMinutes ?? 0) + Number(template.postProcessingMinutes ?? 0)),
+      itemCount: "1",
       dueDate: "",
       queuePosition: "0",
       qaChecklistText: (template.qaChecklist || []).join("\n"),
@@ -982,12 +996,10 @@ function App() {
     e.preventDefault();
     let printTimeMinutes: number;
     let setupTimeMinutes: number;
-    let postProcessingMinutes: number;
     let labourTimeMinutes: number;
     try {
       printTimeMinutes = parsePrintTimeToMinutes(newJobForm.machineRunTimeMinutes);
       setupTimeMinutes = parsePrintTimeToMinutes(newJobForm.setupTimeMinutes);
-      postProcessingMinutes = parsePrintTimeToMinutes(newJobForm.postProcessingMinutes);
       labourTimeMinutes = parsePrintTimeToMinutes(newJobForm.labourTimeMinutes);
     } catch (error) {
       window.alert(handleError(error, "Invalid time.", "Parse job runtime"));
@@ -1005,8 +1017,9 @@ function App() {
         estTimeMinutes: printTimeMinutes,
         machineRunTimeMinutes: printTimeMinutes,
         setupTimeMinutes,
-        postProcessingMinutes,
+        postProcessingMinutes: 0,
         labourTimeMinutes,
+        itemCount: Math.max(1, Math.floor(Number(newJobForm.itemCount) || 1)),
         dueDate: newJobForm.dueDate || null,
         queuePosition: Number(newJobForm.queuePosition || 0),
         qaChecklist: toChecklistArray(newJobForm.qaChecklistText),
@@ -1091,8 +1104,7 @@ function App() {
   const calculateJobCost = async (job: Job) => {
     const machineRunTimeMinutes = Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
     const setupTimeMinutes = Number(job.setupTimeMinutes ?? 0);
-    const postProcessingMinutes = Number(job.postProcessingMinutes ?? 0);
-    const labourTimeMinutes = Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0);
+    const labourTimeMinutes = Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0);
     try {
       await api.calculateCost(job.id, {
         mode: getJobMode(job.machineType),
@@ -1100,7 +1112,7 @@ function App() {
         isRush: Boolean(job.isRush),
         machineRunTimeMinutes,
         setupTimeMinutes,
-        postProcessingMinutes,
+        postProcessingMinutes: 0,
         labourTimeMinutes,
         materials: (job.materials || []).map((entry) => ({
           materialId: entry.materialId,
@@ -1129,8 +1141,9 @@ function App() {
       estTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
       machineRunTimeMinutes: Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0),
       setupTimeMinutes: Number(job.setupTimeMinutes ?? 0),
-      postProcessingMinutes: Number(job.postProcessingMinutes ?? 0),
-      labourTimeMinutes: Number(job.labourTimeMinutes ?? (Number(job.setupTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0))),
+      postProcessingMinutes: 0,
+      labourTimeMinutes: Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0),
+      itemCount: Math.max(1, Math.floor(Number(job.itemCount) || 1)),
       dueDate: job.dueDate || null,
       queuePosition: Number(job.queuePosition || 0),
       qaChecklist: job.qaChecklist || [],
@@ -1212,8 +1225,9 @@ function App() {
         estTimeMinutes: parsePrintTimeToMinutes(selectedJobForm.machineRunTimeMinutes),
         machineRunTimeMinutes: parsePrintTimeToMinutes(selectedJobForm.machineRunTimeMinutes),
         setupTimeMinutes: Number(selectedJobForm.setupTimeMinutes || 0),
-        postProcessingMinutes: Number(selectedJobForm.postProcessingMinutes || 0),
+        postProcessingMinutes: 0,
         labourTimeMinutes: Number(selectedJobForm.labourTimeMinutes || 0),
+        itemCount: Math.max(1, Math.floor(Number(selectedJobForm.itemCount) || 1)),
         dueDate: selectedJobForm.dueDate || null,
         queuePosition: Number(selectedJobForm.queuePosition || 0),
         qaChecklist: toChecklistArray(selectedJobForm.qaChecklistText),
@@ -1668,8 +1682,7 @@ function App() {
         machineType: payload.jobDraft.machineType,
         machineRunTimeMinutes: String(payload.jobDraft.machineRunTimeMinutes),
         setupTimeMinutes: String(nextSetup),
-        postProcessingMinutes: String(nextPost),
-        labourTimeMinutes: String(nextLabour),
+        labourTimeMinutes: String(nextLabour + nextPost),
         status: payload.jobDraft.status,
         reworkNotes: [current.reworkNotes, payload.jobDraft.notes].filter(Boolean).join("\n"),
       };
@@ -1699,8 +1712,7 @@ function App() {
         sourceUrl: payload.metadata.url || current.sourceUrl,
         machineRunTimeMinutes: String(estimatedRuntime),
         setupTimeMinutes: String(estimatedSetup),
-        postProcessingMinutes: String(estimatedPost),
-        labourTimeMinutes: String(estimatedLabour),
+        labourTimeMinutes: String(estimatedLabour + estimatedPost),
         reworkNotes: [
           current.reworkNotes,
           `Print profile: ${payload.profile.profileName}`,
@@ -1734,7 +1746,7 @@ function App() {
       machineType: newJobForm.machineType,
       machineRunTimeMinutes: parsePrintTimeToMinutes(newJobForm.machineRunTimeMinutes),
       setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
-      postProcessingMinutes: Number(newJobForm.postProcessingMinutes || 0),
+      postProcessingMinutes: 0,
       labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
       suggestedMaterialGrams: Number(newJobMaterialEntries[0]?.usageQuantity || 0),
       notes: String(newJobForm.reworkNotes || ""),
@@ -1756,8 +1768,7 @@ function App() {
       machineType: template.machineType,
       machineRunTimeMinutes: String(template.machineRunTimeMinutes || 0),
       setupTimeMinutes: String(template.setupTimeMinutes || 0),
-      postProcessingMinutes: String(template.postProcessingMinutes || 0),
-      labourTimeMinutes: String(template.labourTimeMinutes || 0),
+      labourTimeMinutes: String(Number(template.labourTimeMinutes || 0) + Number(template.postProcessingMinutes || 0)),
     }));
 
     if (template.suggestedMaterialGrams > 0) {
@@ -2132,13 +2143,13 @@ function App() {
 
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
           <nav className="flex flex-wrap gap-3">
-            {(["dashboard", "jobs", "reports", "materials", "machines", "customers", "suppliers", "billing", "admin", "help"] as const).map((tab) => (
+            {(["dashboard", "jobs", "materials", "machines", "customers", "suppliers", "billing", "reports", "admin", "help"] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
-                {tab === "jobs" ? "Production Jobs" : tab === "machines" ? "Equipment" : tab}
+                {tab === "machines" ? "Equipment" : tab}
               </button>
             ))}
           </nav>
-          <div className="rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-300 inline-flex">{jobs.length} production jobs</div>
+          <div className="rounded-full border border-slate-800 bg-slate-900 px-4 py-2 text-sm text-slate-300 inline-flex">{jobs.length} jobs</div>
         </div>
 
         {activeTab === "dashboard" && (
@@ -2210,64 +2221,93 @@ function App() {
               machineOptions={machineOptions}
               filteredJobs={filteredJobs}
               jobs={jobs}
-              estimateTemplates={estimateTemplates}
-              applyEstimateTemplate={applyEstimateTemplate}
-              queuedJobs={queuedJobs}
-              getDueRiskLabel={getDueRiskLabel}
-            />
-            <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-3">
-                {filteredJobs.map((job) => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    expandedJobId={expandedJobId}
-                    setExpandedJobId={setExpandedJobId}
-                    selectedJobId={selectedJobId}
-                    setSelectedJobId={setSelectedJobId}
-                    jobEditorMode={jobEditorMode}
-                    setJobEditorMode={setJobEditorMode}
-                    selectedJob={selectedJob}
-                    selectedJobForm={selectedJobForm}
-                    setSelectedJobForm={setSelectedJobForm}
-                    selectedCustomerProfile={selectedCustomerProfile}
-                    billingSettings={billingSettings}
-                    businessDisplayName={businessDisplayName}
-                    machineOptions={machineOptions}
-                    materials={materials}
-                    selectedJobMaterialEntries={selectedJobMaterialEntries}
-                    addSelectedJobMaterialEntry={addSelectedJobMaterialEntry}
-                    updateSelectedJobMaterialEntry={updateSelectedJobMaterialEntry}
-                    removeSelectedJobMaterialEntry={removeSelectedJobMaterialEntry}
-                    jobStatusOptions={jobStatusOptions}
-                    paymentStatusOptions={paymentStatusOptions}
-                    getBaseCostTotal={getBaseCostTotal}
-                    getProfitTotal={getProfitTotal}
-                    getInvoiceChargeBreakdown={getInvoiceChargeBreakdown}
-                    calculateRuntimeBreakdown={calculateRuntimeBreakdown}
-                    getCostButtonLabel={getCostButtonLabel}
-                    calculateJobCost={calculateJobCost}
-                    getWorkflowActions={getWorkflowActions}
-                    updateJobStatusQuick={updateJobStatusQuick}
-                    saveSelectedJob={saveSelectedJob}
-                    deleteJob={deleteJob}
-                    printInvoice={printInvoice}
-                    uploadJobFile={uploadJobFile}
-                    uploadingJobId={uploadingJobId}
-                    jobFileMessage={jobFileMessage}
-                    modelPreviewByJob={modelPreviewByJob}
-                    setModelPreviewByJob={setModelPreviewByJob}
-                    getPreviewType={getPreviewType}
-                  />
-                ))}
+                queuedJobs={queuedJobs}
+                getDueRiskLabel={getDueRiskLabel}
+              />
+              <div className="mt-6 space-y-3">
+                {filteredJobGroups.map(([status, statusJobs]) => {
+                  const isOpen = jobGroupState[status] ?? status === "Pending";
+                  return (
+                    <section key={status} className="rounded-2xl border border-slate-800 bg-slate-950">
+                      <button type="button" aria-expanded={isOpen} onClick={() => setJobGroupState((current) => ({ ...current, [status]: !isOpen }))} className="flex w-full items-center justify-between p-4 text-left">
+                        <span className="font-semibold text-white">{status} <span className="ml-2 text-sm font-normal text-slate-400">{statusJobs.length}</span></span>
+                        <span aria-hidden="true" className="text-slate-400">{isOpen ? "−" : "+"}</span>
+                      </button>
+                      {isOpen ? (
+                        <div className="space-y-3 px-4 pb-4">
+                          {statusJobs.map((job) => (
+                            <JobCard
+                              key={job.id}
+                              job={job}
+                              expandedJobId={expandedJobId}
+                              setExpandedJobId={setExpandedJobId}
+                              selectedJobId={selectedJobId}
+                              setSelectedJobId={setSelectedJobId}
+                              jobEditorMode={jobEditorMode}
+                              setJobEditorMode={setJobEditorMode}
+                              selectedJob={selectedJob}
+                              selectedJobForm={selectedJobForm}
+                              setSelectedJobForm={setSelectedJobForm}
+                              selectedCustomerProfile={selectedCustomerProfile}
+                              customers={customers}
+                              billingSettings={billingSettings}
+                              businessDisplayName={businessDisplayName}
+                              machineOptions={machineOptions}
+                              materials={materials}
+                              selectedJobMaterialEntries={selectedJobMaterialEntries}
+                              addSelectedJobMaterialEntry={addSelectedJobMaterialEntry}
+                              updateSelectedJobMaterialEntry={updateSelectedJobMaterialEntry}
+                              removeSelectedJobMaterialEntry={removeSelectedJobMaterialEntry}
+                              jobStatusOptions={jobStatusOptions}
+                              paymentStatusOptions={paymentStatusOptions}
+                              getBaseCostTotal={getBaseCostTotal}
+                              getProfitTotal={getProfitTotal}
+                              getInvoiceChargeBreakdown={getInvoiceChargeBreakdown}
+                              calculateRuntimeBreakdown={calculateRuntimeBreakdown}
+                              getCostButtonLabel={getCostButtonLabel}
+                              calculateJobCost={calculateJobCost}
+                              getWorkflowActions={getWorkflowActions}
+                              updateJobStatusQuick={updateJobStatusQuick}
+                              saveSelectedJob={saveSelectedJob}
+                              deleteJob={deleteJob}
+                              printInvoice={printInvoice}
+                              uploadJobFile={uploadJobFile}
+                              uploadingJobId={uploadingJobId}
+                              jobFileMessage={jobFileMessage}
+                              modelPreviewByJob={modelPreviewByJob}
+                              setModelPreviewByJob={setModelPreviewByJob}
+                              getPreviewType={getPreviewType}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                    </section>
+                  );
+                })}
                 {!filteredJobs.length ? (
                   <div className="rounded-2xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">
                     No jobs match the current filters.
                   </div>
                 ) : null}
               </div>
+              <details className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-white">Estimate catalogue <span className="ml-2 font-normal text-slate-400">{estimateTemplates.length} saved templates</span></summary>
+                <p className="mb-3 mt-3 text-xs text-slate-400">Set any job to status <strong>Estimate Template</strong> to save it in your reusable pricing catalogue.</p>
+                <div className="space-y-2">
+                  {estimateTemplates.slice(0, 8).map((job) => (
+                    <div key={`estimate-template-${job.id}`} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm">
+                      <div>
+                        <p className="font-medium text-white">{job.name}</p>
+                        <p className="text-slate-400">{job.machineType} • Runtime {formatMinutesAsPrintTime(Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0))} • Labour and processing {Number(job.labourTimeMinutes ?? job.estTimeMinutes ?? 0) + Number(job.postProcessingMinutes ?? 0)} mins</p>
+                      </div>
+                      <button type="button" onClick={() => applyEstimateTemplate(job)} className="rounded-full border border-cyan-700 px-3 py-1 text-xs text-cyan-300">Use template</button>
+                    </div>
+                  ))}
+                  {!estimateTemplates.length ? <p className="text-sm text-slate-400">No estimate templates yet. Open a job and set status to Estimate Template.</p> : null}
+                </div>
+              </details>
 
-              <NewJobDialog
+                <NewJobDialog
                 jobEditorMode={jobEditorMode}
                 setJobEditorMode={setJobEditorMode}
                 addJobFormRef={addJobFormRef}
@@ -2280,21 +2320,23 @@ function App() {
                 newJobForm={newJobForm}
                 setNewJobForm={setNewJobForm}
                 machineOptions={machineOptions}
+                customers={customers}
                 setMakerWorldUrl={setMakerWorldUrl}
                 setModelUrlMessage={setModelUrlMessage}
                 isLookingUpModelName={isLookingUpModelName}
                 lookupModelTitle={lookupModelTitle}
                 modelUrlMessage={modelUrlMessage}
                 makerWorldImportPreview={makerWorldImportPreview}
+                setMakerWorldImportPreview={setMakerWorldImportPreview}
                 addNewJobMaterialEntry={addNewJobMaterialEntry}
                 newJobMaterialEntries={newJobMaterialEntries}
                 materials={materials}
+                createMaterialForJob={createMaterialForJob}
                 updateNewJobMaterialEntry={updateNewJobMaterialEntry}
                 removeNewJobMaterialEntry={removeNewJobMaterialEntry}
                 jobStatusOptions={jobStatusOptions}
                 paymentStatusOptions={paymentStatusOptions}
               />
-            </div>
           </section>
         )}
 

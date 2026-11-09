@@ -111,6 +111,7 @@ export interface Job {
   setupTimeMinutes?: number;
   postProcessingMinutes?: number;
   labourTimeMinutes?: number;
+  itemCount?: number;
   dueDate?: string | null;
   queuePosition?: number;
   qaChecklist?: string[];

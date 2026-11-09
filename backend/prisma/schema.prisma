@@ -76,6 +76,7 @@ model Job {
   setupTimeMinutes      Int                 @default(0)
   postProcessingMinutes Int                 @default(0)
   labourTimeMinutes     Int                 @default(0)
+  itemCount             Int                 @default(1)
   dueDate               DateTime?
   queuePosition         Int                 @default(0)
   qaChecklist           String              @default("[]")

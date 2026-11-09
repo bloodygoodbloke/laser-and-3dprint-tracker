@@ -68,7 +68,7 @@ export default function JobInvoice({
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
               <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Job summary</p>
               <p className="mt-2 font-medium text-white">{selectedJob.status}</p>
-              <p className="text-sm text-slate-400">Runtime {formatMinutesAsPrintTime(Number(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0))} • Setup {selectedJob.setupTimeMinutes ?? 0} mins • Post {selectedJob.postProcessingMinutes ?? 0} mins • Labour {selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins</p>
+              <p className="text-sm text-slate-400">Runtime {formatMinutesAsPrintTime(Number(selectedJob.machineRunTimeMinutes ?? selectedJob.estTimeMinutes ?? 0))} • Setup {selectedJob.setupTimeMinutes ?? 0} mins • Labour and processing {Number(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes) + Number(selectedJob.postProcessingMinutes ?? 0)} mins • {selectedJob.itemCount ?? 1} item{Number(selectedJob.itemCount ?? 1) === 1 ? "" : "s"}</p>
               <p className="text-sm text-slate-400">Payment {selectedJob.paymentStatus || "Unpaid"}</p>
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function JobInvoice({
               </div>
               <div className="grid grid-cols-[2fr_1fr] px-4 py-3 text-sm">
                 <div>
-                  <p className="font-medium text-white">Labour ({selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes} mins)</p>
+                  <p className="font-medium text-white">Labour and processing ({Number(selectedJob.labourTimeMinutes ?? selectedJob.estTimeMinutes) + Number(selectedJob.postProcessingMinutes ?? 0)} mins)</p>
                 </div>
                 <span className="text-right font-medium text-white">{formatCurrency(getInvoiceChargeBreakdown(selectedJob).labourCharge)}</span>
               </div>
