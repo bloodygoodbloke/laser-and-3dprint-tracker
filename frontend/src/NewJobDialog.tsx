@@ -63,7 +63,7 @@ interface NewJobDialogProps {
   newJobMaterialEntries: NewJobMaterialEntry[];
   materials: Material[];
   createMaterialForJob: (payload: Partial<Material>) => Promise<Material>;
-  updateNewJobMaterialEntry: (index: number, field: "materialId" | "usageQuantity", value: string) => void;
+  updateNewJobMaterialEntry: (index: number, field: "materialId" | "usageQuantity", value: string, usageUnit?: string) => void;
   removeNewJobMaterialEntry: (index: number) => void;
   jobStatusOptions: string[];
   paymentStatusOptions: string[];
@@ -124,7 +124,7 @@ export default function NewJobDialog({
         stockLevel: 0,
         reorderThreshold: 0,
       });
-      updateNewJobMaterialEntry(materialBeingAdded.index, "materialId", material.id);
+      updateNewJobMaterialEntry(materialBeingAdded.index, "materialId", material.id, getBaseUnit(material.unit));
       setMaterialBeingAdded(null);
     } catch (error) {
       setMaterialError(error instanceof Error ? error.message : "Failed to add material");

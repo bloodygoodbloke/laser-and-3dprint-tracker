@@ -1093,12 +1093,12 @@ function App() {
     });
   };
 
-  const updateNewJobMaterialEntry = (index: number, field: "materialId" | "usageQuantity", value: string) => {
+  const updateNewJobMaterialEntry = (index: number, field: "materialId" | "usageQuantity", value: string, usageUnit?: string) => {
     setNewJobMaterialEntries((current) => current.map((entry, entryIndex) => {
       if (entryIndex !== index) return entry;
       if (field === "materialId") {
         const selectedMaterial = materials.find((material) => material.id === value);
-        const nextUnit = getBaseUnit(selectedMaterial?.unit || "unit");
+        const nextUnit = getBaseUnit(usageUnit || selectedMaterial?.unit || "unit");
         const currentUnit = getBaseUnit(entry.usageUnit || materials.find((material) => material.id === entry.materialId)?.unit || "unit");
         return {
           ...entry,
