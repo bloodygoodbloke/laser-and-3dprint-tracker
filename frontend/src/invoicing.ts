@@ -1,9 +1,10 @@
 import type { BillingSettings, Customer, Job } from "./types";
 import { formatCurrency, formatDate, formatNumber } from "./format";
+import { formatJobMaterialUsage } from "./materialsCatalog";
 
 export interface RuntimeBreakdown {
   machineRunTimeMinutes: number;
-  materialWeightGrams: number;
+  materialUsage: string;
   depreciationCost: number;
   electricityCost: number;
   workshopCost: number;
@@ -20,6 +21,7 @@ export interface InvoiceChargeBreakdown {
   deliveryCharge: number;
   qaReworkCharge: number;
   minimumChargeApplied: number;
+  quoteRoundingAmount: number;
   productionCharge: number;
   customerCharge: number;
 }
@@ -32,7 +34,7 @@ export interface InvoicePrintContext {
 
 export const computeRuntimeBreakdown = (job: Job, billingSettings: BillingSettings): RuntimeBreakdown => {
   const machineRunTimeMinutes = Number(job.machineRunTimeMinutes ?? job.estTimeMinutes ?? 0);
-  const materialWeightGrams = (job.materials || []).reduce((sum, entry) => sum + Number(entry.usageQuantity || 0), 0);
+  const materialUsage = formatJobMaterialUsage(job.materials || []);
   const machineSettings = billingSettings.machineElectricitySettings || {};
   const normalizeMachineName = (value: string) => value.trim().toLowerCase();
   const normalizedMachineName = normalizeMachineName(String(job.machineType || ""));
@@ -47,7 +49,7 @@ export const computeRuntimeBreakdown = (job: Job, billingSettings: BillingSettin
 
   return {
     machineRunTimeMinutes,
-    materialWeightGrams,
+    materialUsage,
     depreciationCost,
     electricityCost,
     workshopCost: Number(job.cost?.overheadCost ?? 0),
@@ -92,8 +94,13 @@ export const computeInvoiceChargeBreakdown = (job: Job, billingSettings: Billing
   const qaReworkCharge = Math.max(0, Number(job.reworkCost || 0));
   const customerSubtotalBeforeMinimum = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount + deliveryCharge + qaReworkCharge;
   const minimumChargeApplied = Math.max(0, Math.max(0, Number(billingSettings.minimumCharge || 0)) - customerSubtotalBeforeMinimum);
-  const productionCharge = electricityCharge + depreciationCharge + overheadCharge + setupFeeAmount + rushFeeAmount + deliveryCharge + qaReworkCharge + minimumChargeApplied;
-  const customerCharge = customerSubtotalBeforeMinimum + minimumChargeApplied;
+  const customerSubtotal = customerSubtotalBeforeMinimum + minimumChargeApplied;
+  const roundingIncrement = Math.max(0, Number(billingSettings.quoteRoundingIncrement || 0));
+  const quoteRoundingAmount = roundingIncrement > 0
+    ? Math.max(0, (Math.ceil((customerSubtotal - 1e-9) / roundingIncrement) * roundingIncrement) - customerSubtotal)
+    : 0;
+  const productionCharge = electricityCharge + depreciationCharge + overheadCharge + setupFeeAmount + rushFeeAmount + deliveryCharge + qaReworkCharge + minimumChargeApplied + quoteRoundingAmount;
+  const customerCharge = customerSubtotal + quoteRoundingAmount;
 
   return {
     materialCharge,
@@ -106,6 +113,7 @@ export const computeInvoiceChargeBreakdown = (job: Job, billingSettings: Billing
     deliveryCharge,
     qaReworkCharge,
     minimumChargeApplied,
+    quoteRoundingAmount,
     productionCharge,
     customerCharge,
   };

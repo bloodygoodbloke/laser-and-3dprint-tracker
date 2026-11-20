@@ -2,6 +2,7 @@ import type { Dispatch, FormEvent, SetStateAction } from "react";
 import RuntimeDurationInput, { formatHoursAsDuration } from "./RuntimeDurationInput";
 import { calculateMachineLifecycle } from "./machineLifecycle";
 import { formatCurrency, formatDate } from "./format";
+import { NumberInput } from "./NumberInput";
 import type { Job, MachineElectricitySetting } from "./types";
 
 interface MachineForm {
@@ -26,6 +27,11 @@ interface MachinesPageProps {
   startEditingMachine: (machineName: string) => void;
   removeMachine: (machineName: string) => Promise<void>;
   machineMessage: string;
+  equipmentDepreciationMarkupPercent: number;
+  updateEquipmentDepreciationMarkup: (value: number) => void;
+  saveEquipmentSettings: (event: FormEvent) => Promise<void>;
+  savingEquipmentSettings: boolean;
+  equipmentSettingsSaveMessage: string;
 }
 
 export default function MachinesPage({
@@ -41,6 +47,11 @@ export default function MachinesPage({
   startEditingMachine,
   removeMachine,
   machineMessage,
+  equipmentDepreciationMarkupPercent,
+  updateEquipmentDepreciationMarkup,
+  saveEquipmentSettings,
+  savingEquipmentSettings,
+  equipmentSettingsSaveMessage,
 }: MachinesPageProps) {
   return (
     <section className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
@@ -50,6 +61,18 @@ export default function MachinesPage({
           <p className="mt-2 text-sm text-slate-400">Manage the equipment used in production jobs and cost calculations.</p>
         </div>
         <button type="button" onClick={openAddMachineForm} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">Add equipment</button>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <label className="flex flex-1 items-center gap-4 text-sm text-slate-300">
+            <span className="w-56 shrink-0">Equipment depreciation markup %</span>
+            <NumberInput step="0.01" min="0" value={equipmentDepreciationMarkupPercent} onValue={updateEquipmentDepreciationMarkup} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+          </label>
+          <button type="button" onClick={() => saveEquipmentSettings({ preventDefault: () => undefined } as FormEvent)} className="rounded-full border border-cyan-700 px-4 py-2 text-sm text-cyan-300">{savingEquipmentSettings ? "Saving..." : "Save equipment settings"}</button>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">Applied to equipment depreciation when calculating quote and invoice prices.</p>
+        {equipmentSettingsSaveMessage ? <p className="mt-2 text-sm text-cyan-300">{equipmentSettingsSaveMessage}</p> : null}
       </div>
 
       {showMachineEditor ? (
@@ -76,7 +99,7 @@ export default function MachinesPage({
               <input type="date" value={machineForm.purchaseDate} onChange={(e) => setMachineForm({ ...machineForm, purchaseDate: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
             </label>
             <label className="flex items-center gap-4 text-sm text-slate-300">
-              <span className="w-56 shrink-0">Purchase cost</span>
+              <span className="w-56 shrink-0">Equipment depreciation cost</span>
               <input type="number" step="0.01" value={machineForm.depreciationCost} onChange={(e) => setMachineForm({ ...machineForm, depreciationCost: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
             </label>
             <RuntimeDurationInput value={machineForm.replacementRunHours} onChange={(hours) => setMachineForm({ ...machineForm, replacementRunHours: hours })} inputClassName="mt-1 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
@@ -96,7 +119,7 @@ export default function MachinesPage({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="font-medium text-white">{machineName}</p>
-                <p className="text-sm text-slate-400">{machineSetting.wattage ?? 0}W • Purchase cost {formatCurrency(machineSetting.depreciationCost ?? 0)} • Replacement runtime {formatHoursAsDuration(Number(machineSetting.replacementRunHours ?? 0))}</p>
+                <p className="text-sm text-slate-400">{machineSetting.wattage ?? 0}W • Equipment depreciation cost {formatCurrency(machineSetting.depreciationCost ?? 0)} • Replacement runtime {formatHoursAsDuration(Number(machineSetting.replacementRunHours ?? 0))}</p>
                 {(() => {
                   const lifecycle = calculateMachineLifecycle(machineName, machineSetting.purchaseDate, Number(machineSetting.replacementRunHours ?? 0), jobs, Number(machineSetting.manualRunHours ?? 0));
                   return (

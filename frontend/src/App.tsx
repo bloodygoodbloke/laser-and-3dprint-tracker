@@ -26,6 +26,7 @@ import {
   saveBillingSettingsToLocalBackup,
 } from "./billingSettings";
 import { computeInvoiceChargeBreakdown, computeRuntimeBreakdown, openInvoicePrintWindow } from "./invoicing";
+import { getBaseUnit } from "./materialsCatalog";
 import HelpPage from "./HelpPage";
 import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchVersionInfo, formatVersionBadge, type VersionInfo } from "./version";
@@ -368,7 +369,7 @@ function App() {
     setSavedEstimateTemplates(templatesData);
     setBillingAuditLogs(auditData);
     if (!jobMaterialEntries.length && finalMaterials.length) {
-      setJobMaterialEntries([{ materialId: finalMaterials[0].id, usageQuantity: "100" }]);
+      setJobMaterialEntries([{ materialId: finalMaterials[0].id, usageQuantity: "" }]);
     }
   };
 
@@ -778,7 +779,7 @@ function App() {
       return {
         materialId: entry.materialId,
         usageQuantity: Number(entry.usageQuantity || 0),
-        usageUnit: "g",
+        usageUnit: getBaseUnit(selectedMaterial?.unit),
         usageUnitCost: Number(selectedMaterial?.costPerUnit || 0),
       };
     });
@@ -1276,7 +1277,7 @@ function App() {
         ...current,
         {
           materialId: selectedMaterial?.id || "",
-          usageQuantity: "100",
+          usageQuantity: "",
         },
       ];
     });
@@ -1348,7 +1349,7 @@ function App() {
         ...current,
         {
           materialId: selectedMaterial?.id || "",
-          usageQuantity: "100",
+          usageQuantity: "",
         },
       ];
     });
@@ -2356,6 +2357,11 @@ function App() {
             startEditingMachine={startEditingMachine}
             removeMachine={removeMachine}
             machineMessage={machineMessage}
+            equipmentDepreciationMarkupPercent={billingSettings.depreciationMarkupPercent}
+            updateEquipmentDepreciationMarkup={(value) => updateBilling("depreciationMarkupPercent", value)}
+            saveEquipmentSettings={saveBilling}
+            savingEquipmentSettings={savingBilling}
+            equipmentSettingsSaveMessage={billingSaveMessage}
           />
         )}
 

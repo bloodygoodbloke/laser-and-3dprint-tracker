@@ -305,13 +305,13 @@ export default function HelpPage({ versionInfo, versionError }: HelpPageProps) {
             <h4 className="font-semibold text-white">What goes into the price</h4>
             <ul className="mt-1 list-disc space-y-1 pl-5">
               <li>Material usage</li>
-              <li>Machine runtime electricity and depreciation (machine cost / runtime hours)</li>
+              <li>Machine runtime electricity and equipment depreciation (purchase cost / replacement runtime)</li>
               <li>Labour time and your workshop costs as an hourly rate</li>
               <li>Guardrails from Billing Rules: minimum charge, rush fee % and waste factor %</li>
               <li>Optional per-job setup fee and delivery charge</li>
             </ul>
           </div>
-          <p>Job cards show the internal breakdown; invoices show customer-facing totals.</p>
+          <p>Job cards show the internal breakdown; invoices show customer-facing totals. Quote rounding creates cleaner customer totals: for example, with a £5 increment, a £12.40 quote rounds up to £15. The difference is included in production costs before VAT.</p>
         </Accordion>
 
         <Accordion id="help-quote-workflow" title="Quote to Job Workflow" open={openIds.has("help-quote-workflow")} onToggle={handleToggle}>
@@ -326,7 +326,7 @@ export default function HelpPage({ versionInfo, versionError }: HelpPageProps) {
         <Accordion id="help-equipment-billing" title="Equipment and Billing Rules" open={openIds.has("help-equipment-billing")} onToggle={handleToggle}>
           <div>
             <h4 className="font-semibold text-white">Equipment</h4>
-            <p className="mt-1">Manage equipment profiles in <strong>Equipment</strong>: add, edit or remove wattage, depreciation and replacement runtime.</p>
+            <p className="mt-1">Manage equipment profiles in <strong>Equipment</strong>: add, edit or remove wattage, equipment depreciation cost and replacement runtime. The equipment depreciation markup is also configured here.</p>
           </div>
           <div>
             <h4 className="font-semibold text-white">Billing</h4>
@@ -335,7 +335,7 @@ export default function HelpPage({ versionInfo, versionError }: HelpPageProps) {
               <li>Labour rate which is what you class as your hourly rate </li>
               <li> Workshop hourly costs if you have costs for your workshop such as rent.</li>
               <li>Pricing guardrails: minimum charge, rush fee % and waste factor %</li>
-              <li>Invoice finance settings: VAT, suggested deposit % and payment terms (days)</li>
+              <li>Invoice settings: quote rounding increment, VAT, suggested deposit % and payment terms (days)</li>
             </ul>
             <p className="mt-2">Setup fee and delivery charge are job-level fields in the job forms and cards. Billing and personalisation sections are collapsible for easier navigation.</p>
           </div>
