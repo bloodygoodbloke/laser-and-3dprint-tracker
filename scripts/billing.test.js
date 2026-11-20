@@ -55,8 +55,14 @@ test("material usage summaries keep each material's unit separate", () => {
   ]), "150 g, 2 sheet");
 });
 
-test("material usage summaries prefer the material usage unit over a legacy gram value", () => {
+test("material usage summaries preserve the unit recorded on a historical job", () => {
   assert.equal(formatJobMaterialUsage([
     { usageQuantity: 2, usageUnit: "g", material: { unit: "sheet" } },
+  ]), "2 g");
+});
+
+test("material usage summaries fall back to the material unit when no job unit is recorded", () => {
+  assert.equal(formatJobMaterialUsage([
+    { usageQuantity: 2, material: { unit: "sheet" } },
   ]), "2 sheet");
 });

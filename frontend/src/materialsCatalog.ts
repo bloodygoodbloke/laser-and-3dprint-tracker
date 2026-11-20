@@ -116,7 +116,7 @@ export const getBaseUnit = (unit: string | undefined | null) => resolveUnit(unit
 export const formatJobMaterialUsage = (materials: Array<{ usageQuantity: number; usageUnit?: string; material?: { unit?: string } }>) => {
   const usageByUnit = new Map<string, number>();
   materials.forEach((entry) => {
-    const unit = getBaseUnit(entry.material?.unit || entry.usageUnit);
+    const unit = getBaseUnit(entry.usageUnit || entry.material?.unit);
     usageByUnit.set(unit, (usageByUnit.get(unit) || 0) + Number(entry.usageQuantity || 0));
   });
   if (!usageByUnit.size) return "0";

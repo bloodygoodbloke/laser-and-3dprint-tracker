@@ -38,6 +38,7 @@ interface JobForm {
 interface MaterialEntry {
   materialId: string;
   usageQuantity: string;
+  usageUnit?: string;
 }
 
 type JobEditorMode = "none" | "edit" | "create" | "invoice";
@@ -503,7 +504,7 @@ export default function JobCard({
                         </select>
                       </label>
                       <label className="text-sm text-slate-300">
-                        <span className="mb-2 block">Quantity ({getBaseUnit(materials.find((material) => material.id === entry.materialId)?.unit || "unit")})</span>
+                        <span className="mb-2 block">Quantity ({getBaseUnit(entry.usageUnit || materials.find((material) => material.id === entry.materialId)?.unit || "unit")})</span>
                         <input type="number" min="0" step="0.01" value={entry.usageQuantity} onChange={(e) => updateSelectedJobMaterialEntry(index, "usageQuantity", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                       </label>
                       <button type="button" onClick={() => removeSelectedJobMaterialEntry(index)} className="self-end rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">Remove</button>
