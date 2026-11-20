@@ -257,6 +257,8 @@ function App() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
+  const [jobCreationError, setJobCreationError] = useState("");
+  const [jobCreationStatus, setJobCreationStatus] = useState("");
   const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
   const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", labourTimeMinutes: "", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", labourTimeMinutes: "0", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
@@ -856,6 +858,7 @@ function App() {
   };
 
   const openNewJobEditor = () => {
+    setJobCreationError("");
     setJobEditorMode("create");
     setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "0", setupTimeMinutes: "0", labourTimeMinutes: "0", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
     setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "" }] : []);
@@ -868,6 +871,7 @@ function App() {
   };
 
   const applyEstimateTemplate = (template: Job) => {
+    setJobCreationError("");
     setActiveTab("jobs");
     setJobEditorMode("create");
     setNewJobForm({
@@ -994,6 +998,8 @@ function App() {
 
   const createJobFromJobsTab = async (e: FormEvent) => {
     e.preventDefault();
+    setJobCreationError("");
+    setJobCreationStatus("");
     let printTimeMinutes: number;
     let setupTimeMinutes: number;
     let labourTimeMinutes: number;
@@ -1002,7 +1008,7 @@ function App() {
       setupTimeMinutes = parsePrintTimeToMinutes(newJobForm.setupTimeMinutes);
       labourTimeMinutes = parsePrintTimeToMinutes(newJobForm.labourTimeMinutes);
     } catch (error) {
-      window.alert(handleError(error, "Invalid time.", "Parse job runtime"));
+      setJobCreationError(handleError(error, "Invalid time.", "Parse job runtime"));
       return;
     }
     const rawCustomerName = String(newJobForm.customer || "").trim();
@@ -1041,9 +1047,10 @@ function App() {
 
       });
     } catch (error) {
-      window.alert(handleError(error, "Failed to create job.", "Create job"));
+      setJobCreationError(handleError(error, "Failed to create job.", "Create job"));
       return;
     }
+    setJobCreationStatus(`Job ${created.jobNumber || created.name} created.`);
     setSelectedJobId(created.id);
     setExpandedJobId(created.id);
     await calculateJobCost(created);
@@ -2099,6 +2106,7 @@ function App() {
 
   return (
     <div className="app-theme min-h-screen bg-slate-950 text-slate-100" style={appThemeStyle}>
+      <p role="status" aria-live="polite" className="sr-only">{jobCreationStatus}</p>
       <div className="mx-auto max-w-7xl p-6">
         <header className="mb-8 flex items-center justify-between gap-4 no-print">
           <button
@@ -2142,9 +2150,9 @@ function App() {
         </header>
 
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 no-print">
-          <nav className="flex flex-wrap gap-3">
+          <nav aria-label="Main navigation" className="flex flex-wrap gap-3">
             {(["dashboard", "jobs", "materials", "machines", "customers", "suppliers", "billing", "reports", "admin", "help"] as const).map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
+              <button key={tab} type="button" aria-current={activeTab === tab ? "page" : undefined} onClick={() => setActiveTab(tab)} className={`rounded-full px-4 py-2 text-sm capitalize ${activeTab === tab ? "bg-cyan-600 text-white" : "bg-slate-900 text-slate-300"}`}>
                 {tab === "machines" ? "Equipment" : tab}
               </button>
             ))}
@@ -2311,6 +2319,7 @@ function App() {
                 jobEditorMode={jobEditorMode}
                 setJobEditorMode={setJobEditorMode}
                 addJobFormRef={addJobFormRef}
+                jobCreationError={jobCreationError}
                 createJobFromJobsTab={createJobFromJobsTab}
                 saveCurrentEstimateTemplate={saveCurrentEstimateTemplate}
                 setMakerWorldMessage={setMakerWorldMessage}
