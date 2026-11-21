@@ -107,10 +107,6 @@ export default function BillingPage({
                   <span className="w-56 shrink-0">Electricity markup %</span>
                   <NumberInput step="0.01" min="0" value={billingSettings.electricityMarkupPercent} onValue={(v) => updateBilling("electricityMarkupPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                 </label>
-                <label className="flex items-center gap-4 text-sm text-slate-300">
-                  <span className="w-56 shrink-0">Depreciation markup %</span>
-                  <NumberInput step="0.01" min="0" value={billingSettings.depreciationMarkupPercent} onValue={(v) => updateBilling("depreciationMarkupPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
-                </label>
               </div>
             </details>
 
@@ -184,6 +180,10 @@ export default function BillingPage({
                 <label className="flex items-center gap-4 text-sm text-slate-300">
                   <span className="w-56 shrink-0">Waste factor %</span>
                   <NumberInput step="0.01" min="0" value={billingSettings.wasteFactorPercent} onValue={(v) => updateBilling("wasteFactorPercent", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                </label>
+                <label className="flex items-center gap-4 text-sm text-slate-300">
+                  <span className="w-56 shrink-0">Round quote up to increment (£)</span>
+                  <NumberInput step="0.01" min="0" value={billingSettings.quoteRoundingIncrement} onValue={(v) => updateBilling("quoteRoundingIncrement", v)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                 </label>
               </div>
             </details>

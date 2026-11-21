@@ -3,6 +3,7 @@ import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import JobCombobox from "./JobCombobox";
 import PrintTimeInput from "./PrintTimeInput";
 import { formatMinutesAsPrintTime } from "./printTime";
+import { getBaseUnit } from "./materialsCatalog";
 import type { Customer, EstimateTemplate, Material } from "./types";
 
 interface NewJobForm {
@@ -34,6 +35,7 @@ interface NewJobForm {
 interface NewJobMaterialEntry {
   materialId: string;
   usageQuantity: string;
+  usageUnit?: string;
 }
 
 interface NewJobDialogProps {
@@ -61,7 +63,7 @@ interface NewJobDialogProps {
   newJobMaterialEntries: NewJobMaterialEntry[];
   materials: Material[];
   createMaterialForJob: (payload: Partial<Material>) => Promise<Material>;
-  updateNewJobMaterialEntry: (index: number, field: "materialId" | "usageQuantity", value: string) => void;
+  updateNewJobMaterialEntry: (index: number, field: "materialId" | "usageQuantity", value: string, usageUnit?: string) => void;
   removeNewJobMaterialEntry: (index: number) => void;
   jobStatusOptions: string[];
   paymentStatusOptions: string[];
@@ -98,7 +100,7 @@ export default function NewJobDialog({
   paymentStatusOptions,
 }: NewJobDialogProps) {
   const [materialBeingAdded, setMaterialBeingAdded] = useState<{ index: number; name: string } | null>(null);
-  const [materialDraft, setMaterialDraft] = useState({ name: "", type: "Other", unit: "g", color: "", costPerUnit: "0" });
+  const [materialDraft, setMaterialDraft] = useState({ name: "", type: "Other", unit: "unit", color: "", costPerUnit: "0" });
   const [materialError, setMaterialError] = useState("");
   const [savingMaterial, setSavingMaterial] = useState(false);
 
@@ -116,13 +118,13 @@ export default function NewJobDialog({
       const material = await createMaterialForJob({
         name: materialDraft.name.trim(),
         type: materialDraft.type.trim() || "Other",
-        unit: materialDraft.unit.trim() || "g",
+        unit: materialDraft.unit.trim() || "unit",
         color: materialDraft.color.trim(),
         costPerUnit: Number(materialDraft.costPerUnit || 0),
         stockLevel: 0,
         reorderThreshold: 0,
       });
-      updateNewJobMaterialEntry(materialBeingAdded.index, "materialId", material.id);
+      updateNewJobMaterialEntry(materialBeingAdded.index, "materialId", material.id, getBaseUnit(material.unit));
       setMaterialBeingAdded(null);
     } catch (error) {
       setMaterialError(error instanceof Error ? error.message : "Failed to add material");
@@ -267,8 +269,8 @@ export default function NewJobDialog({
                     />
                   </div>
                   <label className="text-sm text-slate-300">
-                    <span className="mb-2 block">Estimated amount (g)</span>
-                    <input type="number" min="0" step="0.01" placeholder="e.g. 85" value={entry.usageQuantity} onChange={(e) => updateNewJobMaterialEntry(index, "usageQuantity", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
+                    <span className="mb-2 block">Estimated amount ({getBaseUnit(entry.usageUnit || materials.find((material) => material.id === entry.materialId)?.unit || "unit")})</span>
+                    <input type="number" min="0" step="0.01" placeholder="e.g. 1" value={entry.usageQuantity} onChange={(e) => updateNewJobMaterialEntry(index, "usageQuantity", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2" />
                   </label>
                   <button type="button" onClick={() => removeNewJobMaterialEntry(index)} className="self-end rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">Remove</button>
                 </div>

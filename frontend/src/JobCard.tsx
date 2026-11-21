@@ -6,6 +6,7 @@ import type { InvoiceChargeBreakdown, RuntimeBreakdown } from "./invoicing";
 import PrintTimeInput from "./PrintTimeInput";
 import { formatMinutesAsPrintTime } from "./printTime";
 import { formatCurrency, formatDate } from "./format";
+import { getBaseUnit } from "./materialsCatalog";
 import type { BillingSettings, Customer, Job, Material } from "./types";
 
 interface JobForm {
@@ -37,6 +38,7 @@ interface JobForm {
 interface MaterialEntry {
   materialId: string;
   usageQuantity: string;
+  usageUnit?: string;
 }
 
 type JobEditorMode = "none" | "edit" | "create" | "invoice";
@@ -263,7 +265,7 @@ export default function JobCard({
                   return (
                     <>
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-300">Materials ({runtimeBreakdown.materialWeightGrams.toFixed(0)} g)</span>
+                        <span className="text-slate-300">Materials ({runtimeBreakdown.materialUsage})</span>
                         <span className="font-medium text-white">{formatCurrency(getInvoiceChargeBreakdown(job).materialCharge)}</span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -271,7 +273,7 @@ export default function JobCard({
                         <span className="font-medium text-white">{formatCurrency(electricityWithMarkup)}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-300">Depreciation ({runtimeOnly})</span>
+                        <span className="text-slate-300">Equipment depreciation ({runtimeOnly})</span>
                         <span className="font-medium text-white">{formatCurrency(depreciationWithMarkup)}</span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -502,7 +504,7 @@ export default function JobCard({
                         </select>
                       </label>
                       <label className="text-sm text-slate-300">
-                        <span className="mb-2 block">Quantity (g)</span>
+                        <span className="mb-2 block">Quantity ({getBaseUnit(entry.usageUnit || materials.find((material) => material.id === entry.materialId)?.unit || "unit")})</span>
                         <input type="number" min="0" step="0.01" value={entry.usageQuantity} onChange={(e) => updateSelectedJobMaterialEntry(index, "usageQuantity", e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2" />
                       </label>
                       <button type="button" onClick={() => removeSelectedJobMaterialEntry(index)} className="self-end rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">Remove</button>

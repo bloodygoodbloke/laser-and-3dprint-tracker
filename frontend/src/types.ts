@@ -59,6 +59,7 @@ export interface BillingSettings {
   depreciationCost: number;
   depreciationHours: number;
   depreciationMarkupPercent: number;
+  quoteRoundingIncrement: number;
   labourRate: number;
   workshopHourlyRate: number;
   minimumCharge: number;

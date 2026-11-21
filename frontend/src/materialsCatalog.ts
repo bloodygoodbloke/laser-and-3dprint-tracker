@@ -113,6 +113,18 @@ export const resolveUnit = (unit: string | undefined | null): UnitOption => {
 /** Unit shown next to job quantities; weight aliases collapse to "g" so existing jobs read exactly as before. */
 export const getBaseUnit = (unit: string | undefined | null) => resolveUnit(unit).baseUnit;
 
+export const formatJobMaterialUsage = (materials: Array<{ usageQuantity: number; usageUnit?: string; material?: { unit?: string } }>) => {
+  const usageByUnit = new Map<string, number>();
+  materials.forEach((entry) => {
+    const unit = getBaseUnit(entry.usageUnit || entry.material?.unit);
+    usageByUnit.set(unit, (usageByUnit.get(unit) || 0) + Number(entry.usageQuantity || 0));
+  });
+  if (!usageByUnit.size) return "0";
+  return Array.from(usageByUnit.entries())
+    .map(([unit, quantity]) => `${String(Number(quantity.toFixed(2)))} ${unit}`)
+    .join(", ");
+};
+
 export const getUnitOptions = (materials: Material[]): UnitOption[] => {
   const options = [...UNIT_OPTIONS];
   materials.forEach((material) => {

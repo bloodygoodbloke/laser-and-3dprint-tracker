@@ -120,7 +120,7 @@ router.post("/", async (req, res) => {
       create: materials.map((entry: any) => ({
         materialId: entry.materialId,
         usageQuantity: Number(entry.usageQuantity || 0),
-        usageUnit: entry.usageUnit || "g",
+        usageUnit: entry.usageUnit || entry.material?.unit || "g",
         usageUnitCost: Number(entry.usageUnitCost || 0),
       })),
     },
@@ -321,7 +321,7 @@ router.put("/:id", async (req, res) => {
         create: materials.map((entry: any) => ({
           materialId: entry.materialId,
           usageQuantity: Number(entry.usageQuantity || 0),
-          usageUnit: entry.usageUnit || "g",
+          usageUnit: entry.usageUnit || entry.material?.unit || "g",
           usageUnitCost: Number(entry.usageUnitCost || 0),
         })),
       },
@@ -538,7 +538,12 @@ router.post('/:id/calculate-cost', async (req, res) => {
     const customerSubtotalBeforeMinimum = preGuardrailCustomerCharge + setupFeeAmount + rushFeeAmount + deliveryFeeAmount + qaReworkCost;
     const minimumChargeTarget = Math.max(0, MINIMUM_CHARGE);
     const minimumChargeApplied = Math.max(0, minimumChargeTarget - customerSubtotalBeforeMinimum);
-    const customerCharge = customerSubtotalBeforeMinimum + minimumChargeApplied;
+    const subtotalWithMinimum = customerSubtotalBeforeMinimum + minimumChargeApplied;
+    const roundingIncrement = Math.max(0, Number(settings?.quoteRoundingIncrement || 0));
+    const quoteRoundingAmount = roundingIncrement > 0
+      ? Math.max(0, (Math.ceil((subtotalWithMinimum - 1e-9) / roundingIncrement) * roundingIncrement) - subtotalWithMinimum)
+      : 0;
+    const customerCharge = subtotalWithMinimum + quoteRoundingAmount;
 
     const existing = await prisma.jobCost.findUnique({ where: { jobId: id } });
 
@@ -560,6 +565,7 @@ router.post('/:id/calculate-cost', async (req, res) => {
       overheadCost,
       totalCost,
       customerCharge,
+      quoteRoundingAmount,
       materialCharge,
       electricityCharge,
       depreciationCharge,

@@ -33,6 +33,7 @@ model BillingSetting {
   depreciationCost        Float    @default(0)
   depreciationHours       Float    @default(0)
   depreciationMarkupPercent Float  @default(0)
+  quoteRoundingIncrement  Float    @default(0)
   labourRate              Float    @default(20)
   workshopHourlyRate      Float    @default(0)
   minimumCharge           Float    @default(0)
