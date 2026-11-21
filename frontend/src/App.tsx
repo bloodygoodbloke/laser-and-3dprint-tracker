@@ -26,6 +26,7 @@ import {
   saveBillingSettingsToLocalBackup,
 } from "./billingSettings";
 import { computeInvoiceChargeBreakdown, computeRuntimeBreakdown, openInvoicePrintWindow } from "./invoicing";
+import { getBaseUnit } from "./materialsCatalog";
 import HelpPage from "./HelpPage";
 import { parseMakerWorldUrl } from "./makerworldImport";
 import { fetchVersionInfo, formatVersionBadge, type VersionInfo } from "./version";
@@ -259,10 +260,10 @@ function App() {
   const [jobEditorMode, setJobEditorMode] = useState<"none" | "edit" | "create" | "invoice">("none");
   const [jobCreationError, setJobCreationError] = useState("");
   const [jobCreationStatus, setJobCreationStatus] = useState("");
-  const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
+  const [selectedJobMaterialEntries, setSelectedJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string; usageUnit?: string }>>([]);
   const [selectedJobForm, setSelectedJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "", setupTimeMinutes: "", labourTimeMinutes: "", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Pending" });
   const [newJobForm, setNewJobForm] = useState({ name: "", customer: "", sourceUrl: "", machineType: defaultMachineNames[0], machineRunTimeMinutes: "0", setupTimeMinutes: "0", labourTimeMinutes: "0", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
-  const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string }>>([]);
+  const [newJobMaterialEntries, setNewJobMaterialEntries] = useState<Array<{ materialId: string; usageQuantity: string; usageUnit?: string }>>([]);
   const [editingMachineName, setEditingMachineName] = useState<string | null>(null);
   const [showMachineEditor, setShowMachineEditor] = useState(false);
   const [machineForm, setMachineForm] = useState({ name: "", wattage: "0", purchaseDate: "", depreciationCost: "0", replacementRunHours: "0", manualRunHours: "0" });
@@ -370,7 +371,7 @@ function App() {
     setSavedEstimateTemplates(templatesData);
     setBillingAuditLogs(auditData);
     if (!jobMaterialEntries.length && finalMaterials.length) {
-      setJobMaterialEntries([{ materialId: finalMaterials[0].id, usageQuantity: "100" }]);
+      setJobMaterialEntries([{ materialId: finalMaterials[0].id, usageQuantity: "" }]);
     }
   };
 
@@ -550,12 +551,13 @@ function App() {
     setSelectedJobMaterialEntries((selectedJob.materials || []).map((entry) => ({
       materialId: entry.materialId,
       usageQuantity: String(entry.usageQuantity || 0),
+      usageUnit: entry.usageUnit || getBaseUnit(entry.material?.unit),
     })));
   }, [selectedJob?.id, selectedJob?.name, selectedJob?.customer, selectedJob?.sourceUrl, selectedJob?.machineType, selectedJob?.estTimeMinutes, selectedJob?.machineRunTimeMinutes, selectedJob?.setupTimeMinutes, selectedJob?.postProcessingMinutes, selectedJob?.labourTimeMinutes, selectedJob?.itemCount, selectedJob?.dueDate, selectedJob?.queuePosition, selectedJob?.qaChecklist, selectedJob?.qaPassed, selectedJob?.reworkCost, selectedJob?.reworkNotes, selectedJob?.failureReason, selectedJob?.failureWasteGrams, selectedJob?.failureCost, selectedJob?.isRush, selectedJob?.setupFee, selectedJob?.deliveryCharge, selectedJob?.paymentStatus, selectedJob?.depositPaidAmount, selectedJob?.status, selectedJob?.materials]);
 
   useEffect(() => {
     if (!newJobMaterialEntries.length && materials.length) {
-      setNewJobMaterialEntries([{ materialId: materials[0].id, usageQuantity: "" }]);
+      setNewJobMaterialEntries([{ materialId: materials[0].id, usageQuantity: "", usageUnit: getBaseUnit(materials[0].unit) }]);
     }
   }, [materials, newJobMaterialEntries.length]);
 
@@ -773,14 +775,14 @@ function App() {
     }
   }, [machineOptions, jobForm.machineType, newJobForm.machineType, selectedJobForm.machineType]);
 
-  const toApiJobMaterials = (entries: Array<{ materialId: string; usageQuantity: string }>) => entries
+  const toApiJobMaterials = (entries: Array<{ materialId: string; usageQuantity: string; usageUnit?: string }>) => entries
     .filter((entry) => entry.materialId)
     .map((entry) => {
       const selectedMaterial = materials.find((material) => material.id === entry.materialId);
       return {
         materialId: entry.materialId,
         usageQuantity: Number(entry.usageQuantity || 0),
-        usageUnit: "g",
+        usageUnit: entry.usageUnit || getBaseUnit(selectedMaterial?.unit),
         usageUnitCost: Number(selectedMaterial?.costPerUnit || 0),
       };
     });
@@ -861,7 +863,7 @@ function App() {
     setJobCreationError("");
     setJobEditorMode("create");
     setNewJobForm({ name: "", customer: "", sourceUrl: "", machineType: machineOptions[0] || "Other", machineRunTimeMinutes: "0", setupTimeMinutes: "0", labourTimeMinutes: "0", itemCount: "1", dueDate: "", queuePosition: "0", qaChecklistText: "", qaPassed: false, reworkCost: "0", reworkNotes: "", failureReason: "", failureWasteGrams: "0", failureCost: "0", isRush: false, setupFee: "0", deliveryCharge: "0", paymentStatus: "Unpaid", depositPaidAmount: "0", status: "Quote Draft" });
-    setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "" }] : []);
+    setNewJobMaterialEntries(materials.length ? [{ materialId: materials[0].id, usageQuantity: "", usageUnit: getBaseUnit(materials[0].unit) }] : []);
     setMakerWorldUrl("");
     setMakerWorldMessage("");
     setModelUrlMessage("");
@@ -901,8 +903,8 @@ function App() {
     });
     setNewJobMaterialEntries(
       (template.materials || []).length
-        ? (template.materials || []).map((entry) => ({ materialId: entry.materialId, usageQuantity: String(entry.usageQuantity || 0) }))
-        : (materials.length ? [{ materialId: materials[0].id, usageQuantity: "" }] : []),
+        ? (template.materials || []).map((entry) => ({ materialId: entry.materialId, usageQuantity: String(entry.usageQuantity || 0), usageUnit: entry.usageUnit || getBaseUnit(entry.material?.unit) }))
+        : (materials.length ? [{ materialId: materials[0].id, usageQuantity: "", usageUnit: getBaseUnit(materials[0].unit) }] : []),
     );
     setMakerWorldUrl(template.sourceUrl || "");
     setMakerWorldMessage("Estimate template loaded into Add Job. Add customer/details and create job.");
@@ -1092,14 +1094,26 @@ function App() {
         {
           materialId: selectedMaterial?.id || "",
           usageQuantity: "",
+          usageUnit: getBaseUnit(selectedMaterial?.unit || "unit"),
         },
       ];
     });
   };
 
-  const updateNewJobMaterialEntry = (index: number, field: "materialId" | "usageQuantity", value: string) => {
+  const updateNewJobMaterialEntry = (index: number, field: "materialId" | "usageQuantity", value: string, usageUnit?: string) => {
     setNewJobMaterialEntries((current) => current.map((entry, entryIndex) => {
       if (entryIndex !== index) return entry;
+      if (field === "materialId") {
+        const selectedMaterial = materials.find((material) => material.id === value);
+        const nextUnit = getBaseUnit(usageUnit || selectedMaterial?.unit || "unit");
+        const currentUnit = getBaseUnit(entry.usageUnit || materials.find((material) => material.id === entry.materialId)?.unit || "unit");
+        return {
+          ...entry,
+          materialId: value,
+          usageQuantity: currentUnit === nextUnit ? entry.usageQuantity : "",
+          usageUnit: nextUnit,
+        };
+      }
       return { ...entry, [field]: value };
     }));
   };
@@ -1283,7 +1297,8 @@ function App() {
         ...current,
         {
           materialId: selectedMaterial?.id || "",
-          usageQuantity: "100",
+          usageQuantity: "",
+          usageUnit: getBaseUnit(selectedMaterial?.unit || "unit"),
         },
       ];
     });
@@ -1292,6 +1307,17 @@ function App() {
   const updateSelectedJobMaterialEntry = (index: number, field: "materialId" | "usageQuantity", value: string) => {
     setSelectedJobMaterialEntries((current) => current.map((entry, entryIndex) => {
       if (entryIndex !== index) return entry;
+      if (field === "materialId") {
+        const selectedMaterial = materials.find((material) => material.id === value);
+        const nextUnit = getBaseUnit(selectedMaterial?.unit || "unit");
+        const currentUnit = getBaseUnit(entry.usageUnit || materials.find((material) => material.id === entry.materialId)?.unit || "unit");
+        return {
+          ...entry,
+          materialId: value,
+          usageQuantity: currentUnit === nextUnit ? entry.usageQuantity : "",
+          usageUnit: nextUnit,
+        };
+      }
       return { ...entry, [field]: value };
     }));
   };
@@ -1355,7 +1381,7 @@ function App() {
         ...current,
         {
           materialId: selectedMaterial?.id || "",
-          usageQuantity: "100",
+          usageQuantity: "",
         },
       ];
     });
@@ -1601,6 +1627,14 @@ function App() {
     await refreshBambuDashboard(true);
     setBambuMessage(`${eventType} event ingested.`);
   };
+  const applyGramMaterialEstimate = (amount: number) => {
+    const gramMaterial = materials.find((material) => getBaseUnit(material.unit) === "g");
+    if (!gramMaterial) return;
+    setNewJobMaterialEntries((current) => {
+      const estimate = { materialId: gramMaterial.id, usageQuantity: String(amount), usageUnit: "g" };
+      return current.length ? current.map((entry, index) => index === 0 ? estimate : entry) : [estimate];
+    });
+  };
   const importMakerWorldMetadata = async () => {
     const payload = await api.importMakerWorldMetadata(makerWorldUrl);
     setMakerWorldMetadata(payload);
@@ -1625,11 +1659,17 @@ function App() {
           machineRunTimeMinutes: data.printMinutes !== null ? String(data.printMinutes) : current.machineRunTimeMinutes,
         }));
         if (data.filaments.length && materials.length) {
-          // Unmatched filaments fall back to the default (first) material.
-          setNewJobMaterialEntries(data.filaments.map((filament) => ({
-            materialId: (findMatchingMaterial(materials, filament) || materials[0]).id,
-            usageQuantity: filament.grams !== null ? String(filament.grams) : "",
-          })));
+          setNewJobMaterialEntries(data.filaments.map((filament) => {
+            const matchedMaterial = findMatchingMaterial(materials, filament);
+            const gramMaterial = matchedMaterial && getBaseUnit(matchedMaterial.unit) === "g"
+              ? matchedMaterial
+              : materials.find((material) => getBaseUnit(material.unit) === "g");
+            return {
+              materialId: gramMaterial?.id || "",
+              usageQuantity: filament.grams !== null ? String(filament.grams) : "",
+              usageUnit: "g",
+            };
+          }));
         }
         setMakerWorldUrl(data.modelUrl || url);
         setMakerWorldImportPreview(data.previewImageUrl);
@@ -1695,12 +1735,7 @@ function App() {
       };
     });
     if (payload.jobDraft.suggestedMaterialGrams > 0) {
-      setNewJobMaterialEntries((current) => {
-        if (!current.length && materials.length) {
-          return [{ materialId: materials[0].id, usageQuantity: String(payload.jobDraft.suggestedMaterialGrams) }];
-        }
-        return current.map((entry, index) => index === 0 ? { ...entry, usageQuantity: String(payload.jobDraft.suggestedMaterialGrams) } : entry);
-      });
+      applyGramMaterialEstimate(payload.jobDraft.suggestedMaterialGrams);
     }
     setJobEditorMode("create");
     setMakerWorldMessage("MakerWorld job autofill applied to Add Job form.");
@@ -1728,12 +1763,7 @@ function App() {
       };
     });
     if (payload.profile.estimatedMaterialGrams > 0) {
-      setNewJobMaterialEntries((current) => {
-        if (!current.length && materials.length) {
-          return [{ materialId: materials[0].id, usageQuantity: String(payload.profile.estimatedMaterialGrams) }];
-        }
-        return current.map((entry, index) => index === 0 ? { ...entry, usageQuantity: String(payload.profile.estimatedMaterialGrams) } : entry);
-      });
+      applyGramMaterialEstimate(payload.profile.estimatedMaterialGrams);
     }
     setJobEditorMode("create");
     setMakerWorldMessage("MakerWorld print profile imported for costing estimation.");
@@ -1755,7 +1785,9 @@ function App() {
       setupTimeMinutes: Number(newJobForm.setupTimeMinutes || 0),
       postProcessingMinutes: 0,
       labourTimeMinutes: Number(newJobForm.labourTimeMinutes || 0),
-      suggestedMaterialGrams: Number(newJobMaterialEntries[0]?.usageQuantity || 0),
+      suggestedMaterialGrams: getBaseUnit(newJobMaterialEntries[0]?.usageUnit) === "g"
+        ? Number(newJobMaterialEntries[0]?.usageQuantity || 0)
+        : 0,
       notes: String(newJobForm.reworkNotes || ""),
       lastEstimatedBaseCost: base,
       lastEstimatedCharge: charge,
@@ -1779,12 +1811,7 @@ function App() {
     }));
 
     if (template.suggestedMaterialGrams > 0) {
-      setNewJobMaterialEntries((current) => {
-        if (!current.length && materials.length) {
-          return [{ materialId: materials[0].id, usageQuantity: String(template.suggestedMaterialGrams) }];
-        }
-        return current.map((entry, index) => index === 0 ? { ...entry, usageQuantity: String(template.suggestedMaterialGrams) } : entry);
-      });
+      applyGramMaterialEstimate(template.suggestedMaterialGrams);
     }
 
     await api.updateEstimateTemplate(template.id, { markUsed: true } as Partial<EstimateTemplate>);
@@ -2365,6 +2392,11 @@ function App() {
             startEditingMachine={startEditingMachine}
             removeMachine={removeMachine}
             machineMessage={machineMessage}
+            equipmentDepreciationMarkupPercent={billingSettings.depreciationMarkupPercent}
+            updateEquipmentDepreciationMarkup={(value) => updateBilling("depreciationMarkupPercent", value)}
+            saveEquipmentSettings={saveBilling}
+            savingEquipmentSettings={savingBilling}
+            equipmentSettingsSaveMessage={billingSaveMessage}
           />
         )}
 
