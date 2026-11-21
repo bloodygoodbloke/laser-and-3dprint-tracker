@@ -171,7 +171,7 @@ export default function DashboardPage({
         </section>
 
         <section className="lg:col-span-3 rounded-3xl border border-slate-800 bg-slate-900 p-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">Scheduling calendar (next {scheduleHorizonDays} days)</h2>
               <p className="mt-2 text-sm text-slate-400">Calendar view combines due dates with projected completion based on machine queue order and runtime.</p>

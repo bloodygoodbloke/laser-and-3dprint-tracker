@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import JobCombobox from "./JobCombobox";
 import PrintTimeInput from "./PrintTimeInput";
@@ -42,6 +42,7 @@ interface NewJobDialogProps {
   jobEditorMode: "none" | "edit" | "create" | "invoice";
   setJobEditorMode: (mode: "none" | "edit" | "create" | "invoice") => void;
   addJobFormRef: RefObject<HTMLFormElement | null>;
+  jobCreationError: string;
   createJobFromJobsTab: (event: FormEvent) => Promise<void>;
   saveCurrentEstimateTemplate: () => Promise<void>;
   setMakerWorldMessage: (message: string) => void;
@@ -73,6 +74,7 @@ export default function NewJobDialog({
   jobEditorMode,
   setJobEditorMode,
   addJobFormRef,
+  jobCreationError,
   createJobFromJobsTab,
   saveCurrentEstimateTemplate,
   setMakerWorldMessage,
@@ -103,8 +105,67 @@ export default function NewJobDialog({
   const [materialDraft, setMaterialDraft] = useState({ name: "", type: "Other", unit: "unit", color: "", costPerUnit: "0" });
   const [materialError, setMaterialError] = useState("");
   const [savingMaterial, setSavingMaterial] = useState(false);
+  const materialDialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const materialDialogOpenerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (jobEditorMode !== "create") {
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+      return;
+    }
+
+    if (!previousFocusRef.current && document.activeElement instanceof HTMLElement) {
+      previousFocusRef.current = document.activeElement;
+    }
+
+    const activeDialog = materialBeingAdded ? materialDialogRef.current : addJobFormRef.current;
+    if (!activeDialog) return;
+
+    if (!materialBeingAdded && materialDialogOpenerRef.current) {
+      materialDialogOpenerRef.current.focus();
+      materialDialogOpenerRef.current = null;
+    } else {
+      activeDialog.querySelector<HTMLElement>(
+        'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )?.focus();
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (materialBeingAdded) setMaterialBeingAdded(null);
+        else setJobEditorMode("none");
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(activeDialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [jobEditorMode, materialBeingAdded, setJobEditorMode]);
 
   const startAddingMaterial = (index: number, name: string) => {
+    materialDialogOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setMaterialBeingAdded({ index, name });
     setMaterialDraft((current) => ({ ...current, name }));
     setMaterialError("");
@@ -147,20 +208,22 @@ export default function NewJobDialog({
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-job-dialog-title"
-          className="w-full max-w-5xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl sm:p-6"
-          style={{ maxHeight: "92vh", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
+          aria-describedby="add-job-dialog-description"
+          className="quote-dialog w-full max-w-5xl rounded-2xl border border-slate-700 bg-slate-950 p-4 shadow-2xl sm:p-6"
+          style={{ maxHeight: "min(92dvh, calc(100dvh - 1.5rem))", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
         >
-          <div className="flex items-start justify-between gap-3">
+          <div className="quote-dialog-header flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm uppercase tracking-[0.3em] text-cyan-400">New quote</p>
               <h3 id="add-job-dialog-title" className="mt-2 text-xl font-semibold">Start with the basics</h3>
-              <p className="mt-1 text-sm text-slate-400">Add the key details for a quick price. You can fill in production tracking later.</p>
+              <p id="add-job-dialog-description" className="mt-1 text-sm text-slate-400">Add the key details for a quick price. You can fill in production tracking later.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setJobEditorMode("none")} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Cancel</button>
               <button type="submit" className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Save &amp; calculate price</button>
             </div>
           </div>
+          {jobCreationError ? <p role="alert" aria-live="assertive" className="mt-4 rounded-xl border border-rose-700/50 bg-rose-950/30 p-3 text-sm text-rose-300">{jobCreationError}</p> : null}
 
           <details className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
             <summary className="cursor-pointer text-sm font-semibold text-white">Use a saved estimate</summary>
@@ -248,7 +311,7 @@ export default function NewJobDialog({
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h4 className="text-sm font-semibold text-white">Materials for this job</h4>
                 <p className="mt-1 text-xs text-slate-400">Enter the estimated amount for a more useful price. Remove the row if no tracked material applies.</p>
@@ -377,7 +440,7 @@ export default function NewJobDialog({
       )}
       {materialBeingAdded ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-4" onClick={(event) => { event.stopPropagation(); setMaterialBeingAdded(null); }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="job-material-dialog-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-lg rounded-2xl border border-cyan-700/40 bg-slate-900 p-5">
+          <div ref={materialDialogRef} role="dialog" aria-modal="true" aria-labelledby="job-material-dialog-title" onClick={(event) => event.stopPropagation()} className="w-full max-w-lg rounded-2xl border border-cyan-700/40 bg-slate-900 p-5">
             <h3 id="job-material-dialog-title" className="text-lg font-semibold text-white">Add material</h3>
             <p className="mt-1 text-sm text-slate-400">Add this material to your catalog and attach it to the job.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">

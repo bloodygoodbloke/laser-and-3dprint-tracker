@@ -33,6 +33,17 @@ From the repository root:
 
 These checks fail with a non-zero exit code if something is broken.
 
+## Mobile And Accessibility Release Check
+
+Before release, review Dashboard, Production Jobs (including creating a quote), Materials, Billing settings, and an invoice at phone width (320–390 CSS px) and tablet width (768–1024 CSS px). Verify that:
+
+- There is no horizontal page scrolling; content and primary actions remain visible, and controls are comfortably tappable.
+- Keyboard-only users can reach every action, see focus, use and close dialogs with Escape, and return to the action that opened a dialog.
+- Screen-reader names and labels are clear; required fields, validation errors, and save/loading results are announced.
+- Text and controls maintain WCAG 2.2 AA contrast in the default theme.
+
+Record any intentional deferrals in the release notes. Manual contrast review of custom user-selected theme colors and exhaustive screen-reader/browser combinations remain deferred.
+
 ## Npm Script Shortcuts
 
 Run from each package folder:

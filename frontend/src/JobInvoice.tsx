@@ -31,7 +31,7 @@ export default function JobInvoice({
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-400">Invoice</p>
           <h3 className="mt-2 text-xl font-semibold">{selectedJob.name}</h3>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => calculateJobCost(selectedJob)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Refresh costs</button>
           <button type="button" onClick={() => printInvoice(selectedJob)} className="rounded-full border border-cyan-700 px-3 py-1 text-sm text-cyan-300">Print / Save PDF</button>
           <button type="button" onClick={closeInvoice} className="rounded-full border border-slate-700 px-3 py-1 text-sm text-slate-300">Close invoice</button>
